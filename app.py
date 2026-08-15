@@ -23,39 +23,30 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 모바일 친화적 CSS
+# 모바일 친화적 CSS (다크/라이트 모드 완벽 호환)
 st.markdown("""
     <style>
     .news-card {
-        background-color: #ffffff;
+        background-color: #1e293b;
+        color: #f8fafc;
         border-radius: 10px;
         padding: 14px;
         margin-bottom: 12px;
-        border: 1px solid #e2e8f0;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        border: 1px solid #334155;
     }
     .news-title {
         font-size: 15px;
         font-weight: 600;
-        color: #1e293b;
+        color: #60a5fa;
         text-decoration: none;
     }
     .news-title:hover {
-        color: #2563eb;
+        color: #93c5fd;
     }
     .news-meta {
         font-size: 12px;
-        color: #64748b;
+        color: #94a3b8;
         margin-top: 6px;
-    }
-    .briefing-box {
-        background: linear-gradient(135deg, #f8fafc, #f1f5f9);
-        border-left: 4px solid #3b82f6;
-        padding: 16px;
-        border-radius: 8px;
-        margin-top: 15px;
-        margin-bottom: 15px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
     </style>
 """, unsafe_allow_html=True)
@@ -191,7 +182,7 @@ def analyze_portfolio_image(image_bytes, api_key):
             
     return None, f"분석 오류: {last_err}"
 
-# 6. [신규] 실시간 뉴스 기반 맞춤형 AI 브리핑 생성 함수
+# 6. 실시간 맞춤형 AI 브리핑 생성 함수
 def generate_ai_briefing(news_headlines, portfolio_items, api_key):
     api_key = api_key.strip()
     headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
@@ -391,7 +382,7 @@ with tab_market:
         st.metric("삼성전자", f"{samsung_p:,.0f}원" if samsung_p else "84,500원", f"{samsung_d:+.2f}%" if samsung_d else "+2.43%")
         st.metric("SK하이닉스", f"{hynix_p:,.0f}원" if hynix_p else "193,000원", f"{hynix_d:+.2f}%" if hynix_d else "+3.30%")
     with cb:
-        st.metric("현대차", f"{hyundai_p:,.0f}원" if hyundai_p else "256,000원", f"{hyundai_d:+.2f}%" if hyundai_d else "+8.24%")
+        st.metric("현대차", f"{hyundai_p:,.0f}원" if hyundai_p else "256,000원", f"{hyundai_d:+.2f}%" if hynix_d else "+8.24%")
         st.metric("엔비디아 (NVDA)", f"${nvda_p:.2f}" if nvda_p else "$224.92", f"{nvda_d:+.2f}%" if nvda_d else "-0.18%")
 
 # -------------------------------------------------------------
@@ -456,14 +447,12 @@ with tab_chart:
             st.error(f"오류: {e}")
 
 # -------------------------------------------------------------
-# TAB 5: [업그레이드] 실시간 AI 브리핑 생성기
+# TAB 5: [선명하게 수정 완료] 실시간 AI 브리핑
 # -------------------------------------------------------------
 with tab_briefing:
     st.subheader("💡 실시간 맞춤형 AI 모닝 브리핑")
     
     user_portfolio = load_portfolio()
-    
-    # 실시간 뉴스 수집 (AI 분석용)
     recent_news = fetch_google_news("코스피 OR 반도체 OR 연준 금리 OR 엔비디아", max_results=12)
     
     api_key = st.secrets.get("GEMINI_API_KEY", None)
@@ -482,15 +471,11 @@ with tab_briefing:
                 else:
                     st.error(f"오류: {status}")
 
-    # 생성된 브리핑 출력
+    # [수정] 다크/라이트 모드 자동 호환 테두리 박스로 선명하게 출력
     if "ai_briefing_text" in st.session_state:
-        st.markdown(f"""
-        <div class="briefing-box">
-            {st.session_state.ai_briefing_text}
-        </div>
-        """, unsafe_allow_html=True)
+        with st.container(border=True):
+            st.markdown(st.session_state.ai_briefing_text)
     else:
-        # 기본 브리핑 안내
         st.info("💡 위의 **[✨ 오늘자 뉴스 기반 실시간 AI 브리핑 생성]** 버튼을 누르면 오늘 아침 최신 뉴스에 맞춘 맞춤형 리포트가 생성됩니다.")
         with st.expander("📌 기본 증시 체크포인트 요약", expanded=True):
             st.write("• **거시경제**: 7월 소매판매 및 소비자심리 하락으로 경기 둔화 우려 대두. 8월 28일 잭슨홀 주목.")
