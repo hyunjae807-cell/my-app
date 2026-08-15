@@ -51,7 +51,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 3. [영구 저장소] 정확한 ETF 종목 코드로 초기화
+# 3. [영구 저장소] 포트폴리오 파일 관리
 PORTFOLIO_FILE = "portfolio.json"
 
 DEFAULT_PORTFOLIO = [
@@ -141,15 +141,13 @@ function initAlarm() {
 </script>
 """
 
-# 5. 최신 AI 비전 이미지 분석 함수
+# 5. AI 비전 이미지 분석 함수
 def analyze_portfolio_image(image_bytes, api_key):
     api_key = api_key.strip()
     headers = {
         "Content-Type": "application/json",
         "x-goog-api-key": api_key
     }
-    
-    # 2026 최신 모델 탐색
     candidate_models = ["models/gemini-3.5-flash", "models/gemini-2.0-flash", "models/gemini-1.5-flash-latest"]
     try:
         m_res = requests.get("https://generativelanguage.googleapis.com/v1beta/models", headers=headers, timeout=5)
@@ -170,7 +168,6 @@ def analyze_portfolio_image(image_bytes, api_key):
         {"종목명": "KODEX 200타겟위클리커버드콜", "티커": "498400.KS", "매입단가": 13012.0, "보유수량": 863}
     ]
     """
-    
     payload = {
         "contents": [{
             "parts": [
@@ -197,7 +194,7 @@ def analyze_portfolio_image(image_bytes, api_key):
             
     return None, f"분석 오류: {last_err}"
 
-# 6. 실시간 주가 로딩 함수
+# 6. 실시간 주가 및 뉴스 로딩 함수
 @st.cache_data(ttl=60)
 def get_live_market_data(ticker_symbol):
     try:
@@ -215,7 +212,7 @@ def get_live_market_data(ticker_symbol):
         return None, None
 
 @st.cache_data(ttl=300)
-def fetch_google_news(query, max_results=7):
+def fetch_google_news(query, max_results=8):
     try:
         encoded_query = urllib.parse.quote(query)
         url = f"https://news.google.com/rss/search?q={encoded_query}&hl=ko&gl=KR&ceid=KR:ko"
@@ -254,7 +251,7 @@ tab_portfolio, tab_market, tab_news, tab_chart, tab_briefing = st.tabs(
 # TAB 1: 내 실제 포트폴리오
 # -------------------------------------------------------------
 with tab_portfolio:
-    st.subheader("💼 내 주식·ETF 포트폴리오 (실시간 연동)")
+    st.subheader("💼 내 주식·ETF 포트폴리오 (실시간 연동 & 영구 저장)")
     
     user_portfolio = load_portfolio()
 
@@ -304,7 +301,6 @@ with tab_portfolio:
     # 📸 캡처 사진 자동 업데이트
     st.markdown("---")
     st.subheader("📸 새 잔고 사진으로 포트폴리오 업데이트")
-    
     uploaded_file = st.file_uploader("증권사 잔고 캡처 사진 올리기", type=["png", "jpg", "jpeg"])
     
     if uploaded_file is not None:
@@ -356,26 +352,51 @@ with tab_market:
         st.metric("삼성전자", f"{samsung_p:,.0f}원" if samsung_p else "84,500원", f"{samsung_d:+.2f}%" if samsung_d else "+2.43%")
         st.metric("SK하이닉스", f"{hynix_p:,.0f}원" if hynix_p else "193,000원", f"{hynix_d:+.2f}%" if hynix_d else "+3.30%")
     with cb:
-        st.metric("현대차", f"{hyundai_p:,.0f}원" if hyundai_p else "256,000원", f"{hyundai_d:+.2f}%" if hyundai_d else "+8.24%")
+        st.metric("현대차", f"{hyundai_p:,.0f}원" if hyundai_p else "256,000원", f"{hyundai_d:+.2f}%" if hynix_d else "+8.24%")
         st.metric("엔비디아 (NVDA)", f"${nvda_p:.2f}" if nvda_p else "$224.92", f"{nvda_d:+.2f}%" if nvda_d else "-0.18%")
 
 # -------------------------------------------------------------
-# TAB 3: 주요 뉴스
+# TAB 3: [신규] 내 보유 종목 맞춤 뉴스 피드
 # -------------------------------------------------------------
 with tab_news:
-    st.subheader("📰 실시간 핵심 뉴스")
-    news_category = st.radio("카테고리", ["🇰🇷 국내 증시·경제", "🇺🇸 미국·글로벌 증시", "🤖 AI·반도체", "🔍 직접 검색"], horizontal=True)
-    if news_category == "🇰🇷 국내 증시·경제":
+    st.subheader("📰 실시간 뉴스 피드")
+    
+    user_portfolio = load_portfolio()
+    my_stock_names = [item["종목명"] for item in user_portfolio]
+    
+    # 내 보유 종목이 최우선으로 들어간 카테고리 목록
+    category_options = (
+        ["📌 [전체] 내 보유 종목 뉴스 모아보기"] + 
+        [f"🎯 {name}" for name in my_stock_names] + 
+        ["🇰🇷 국내 증시·경제", "🇺🇸 미국·글로벌 증시", "🤖 AI·반도체", "🔍 직접 검색"]
+    )
+    
+    selected_cat = st.selectbox("뉴스 카테고리 선택", category_options, index=0)
+    
+    # 검색 쿼리 매칭
+    if selected_cat == "📌 [전체] 내 보유 종목 뉴스 모아보기":
+        # 보유 종목들의 핵심 키워드 결합
+        query = " OR ".join([f'"{name}"' for name in my_stock_names]) + " OR AI반도체 OR 커버드콜"
+    elif selected_cat.startswith("🎯 "):
+        stock_name = selected_cat.replace("🎯 ", "")
+        # 종목별 맞춤 키워드 매칭
+        if "AI반도체" in stock_name:
+            query = f'"{stock_name}" OR "AI반도체" OR "삼성전자 반도체"'
+        elif "커버드콜" in stock_name:
+            query = f'"{stock_name}" OR "커버드콜" OR "코스피200 분배금"'
+        else:
+            query = f'"{stock_name}"'
+    elif selected_cat == "🇰🇷 국내 증시·경제":
         query = "코스피 OR 국내증시 OR 환율"
-    elif news_category == "🇺🇸 미국·글로벌 증시":
+    elif selected_cat == "🇺🇸 미국·글로벌 증시":
         query = "뉴욕증시 OR 연준 금리 OR S&P500"
-    elif news_category == "🤖 AI·반도체":
+    elif selected_cat == "🤖 AI·반도체":
         query = "엔비디아 OR 반도체 HBM OR 인공지능"
     else:
-        query = st.text_input("검색 키워드", value="KODEX")
+        query = st.text_input("검색 키워드", value="삼성전자")
     
     if query:
-        news_list = fetch_google_news(query, max_results=7)
+        news_list = fetch_google_news(query, max_results=8)
         if news_list:
             for item in news_list:
                 st.markdown(f"""
@@ -384,6 +405,8 @@ with tab_news:
                     <div class="news-meta">📰 {item['source']} &nbsp;|&nbsp; 🕒 {item['date']}</div>
                 </div>
                 """, unsafe_allow_html=True)
+        else:
+            st.info("최신 관련 뉴스를 불러오는 중입니다...")
 
 # -------------------------------------------------------------
 # TAB 4: 종목 차트
