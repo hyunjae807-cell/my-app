@@ -52,13 +52,6 @@ st.markdown("""
         color: #64748b;
         margin-top: 6px;
     }
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 6px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        padding: 8px 12px;
-        font-size: 14px;
-    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -126,7 +119,15 @@ function initAlarm() {
 </script>
 """
 
-# 4. 실시간 주가 및 뉴스 로딩 함수
+# 4. 서버 공인 IP 확인 함수
+@st.cache_data(ttl=3600)
+def get_current_server_ip():
+    try:
+        return requests.get("https://api.ipify.org", timeout=3).text
+    except Exception:
+        return "확인 불가"
+
+# 5. 실시간 주가 및 뉴스 로딩 함수
 @st.cache_data(ttl=60)
 def get_live_market_data(ticker_symbol):
     try:
@@ -165,7 +166,7 @@ def fetch_google_news(query, max_results=7):
     except Exception:
         return []
 
-# 5. [수정] 토스증권 공식 OAuth2 토큰 발급 및 보유 종목 조회 함수
+# 6. 토스증권 연동 함수
 @st.cache_data(ttl=60)
 def fetch_toss_portfolio():
     if "TOSS_API_KEY" in st.secrets and "TOSS_SECRET_KEY" in st.secrets and "TOSS_ACCOUNT_NO" in st.secrets:
@@ -174,7 +175,7 @@ def fetch_toss_portfolio():
             secret_key = st.secrets["TOSS_SECRET_KEY"]
             account_no = st.secrets["TOSS_ACCOUNT_NO"]
 
-            # 1단계: OAuth2 토큰 발급 (공식 규격)
+            # OAuth2 토큰 발급
             token_url = "https://openapi.tossinvest.com/oauth2/token"
             token_payload = {
                 "grant_type": "client_credentials",
@@ -185,11 +186,11 @@ def fetch_toss_portfolio():
             token_res = requests.post(token_url, data=token_payload, headers=token_headers, timeout=5)
             
             if token_res.status_code != 200:
-                return None, f"토큰 발급 실패 ({token_res.status_code}): {token_res.text}"
+                return None, f"IP 차단 또는 인증 오류: {token_res.text}"
             
             access_token = token_res.json().get("access_token")
 
-            # 2단계: 공식 보유 주식 엔드포인트 호출 (/api/v1/holdings)
+            # 공식 holdings 호출
             holdings_url = "https://openapi.tossinvest.com/api/v1/holdings"
             headers = {
                 "Authorization": f"Bearer {access_token}",
@@ -201,7 +202,7 @@ def fetch_toss_portfolio():
             if holdings_res.status_code == 200:
                 return holdings_res.json(), "SUCCESS"
             else:
-                return None, f"보유 종목 조회 실패 ({holdings_res.status_code}): {holdings_res.text}"
+                return None, f"조회 오류: {holdings_res.text}"
         except Exception as e:
             return None, str(e)
     return None, "NOT_CONFIGURED"
@@ -220,35 +221,72 @@ tab_portfolio, tab_market, tab_news, tab_chart, tab_briefing = st.tabs(
     ["💼 내 포트폴리오", "📊 실시간 시황", "📰 주요 뉴스", "🔍 종목 차트", "💡 AI 브리핑"]
 )
 
-# TAB 1: 토스증권 내 포트폴리오
+# TAB 1: 내 포트폴리오
 with tab_portfolio:
-    st.subheader("💼 토스증권 내 보유 종목")
+    st.subheader("💼 내 주식 포트폴리오")
     
+    server_ip = get_current_server_ip()
     portfolio_data, status = fetch_toss_portfolio()
     
     if status == "SUCCESS" and portfolio_data:
-        holdings = portfolio_data if isinstance(portfolio_data, list) else portfolio_data.get("holdings", portfolio_data.get("items", []))
-        
+        st.success("✅ 토스증권 실시간 계좌 연동 중")
+        holdings = portfolio_data if isinstance(portfolio_data, list) else portfolio_data.get("holdings", [])
         if holdings:
-            df_holdings = pd.DataFrame(holdings)
-            st.success("✅ 토스증권 계좌 연동 성공!")
-            st.dataframe(df_holdings, use_container_width=True)
+            st.dataframe(pd.DataFrame(holdings), use_container_width=True)
         else:
             st.info("현재 보유 중인 종목이 없습니다.")
-            
-    elif status == "NOT_CONFIGURED":
-        st.info("💡 **토스증권 Open API 키를 등록하면 실제 보유 종목이 여기에 자동으로 표시됩니다.**")
-        with st.expander("🔑 키 등록 안내", expanded=True):
-            st.markdown("""
-            Streamlit Cloud ➡️ **`Settings`** ➡️ **`Secrets`**에 등록:
-            ```toml
-            TOSS_API_KEY = "발급받은_API_KEY"
-            TOSS_SECRET_KEY = "발급받은_SECRET_KEY"
-            TOSS_ACCOUNT_NO = "본인_계좌번호"
-            ```
-            """)
     else:
-        st.error(f"계좌 조회 안내: {status}")
+        # IP 등록 안내 카드
+        st.warning(f"🔒 **토스증권 IP 등록이 필요합니다**\n\n현재 앱 서버의 공인 IP: **`{server_ip}`**")
+        st.info("👉 [토스증권 Open API 콘솔](https://corp.tossinvest.com/ko/open-api)의 **[허용 IP 목록]**에 위 IP 주소를 등록하시면 바로 실시간 연동됩니다.")
+        
+        st.markdown("---")
+        st.subheader("✍️ 내 보유 종목 간편 관리 (실시간 시세 자동 추적)")
+        
+        # 기본 예시 종목 (직접 수정 가능)
+        if "my_stocks" not in st.session_state:
+            st.session_state.my_stocks = [
+                {"종목명": "삼성전자", "티커": "005930.KS", "매입단가": 80000, "보유수량": 50},
+                {"종목명": "SK하이닉스", "티커": "000660.KS", "매입단가": 180000, "보유수량": 20},
+                {"종목명": "엔비디아", "티커": "NVDA", "매입단가": 210.0, "보유수량": 15},
+            ]
+        
+        total_eval = 0
+        total_buy = 0
+        portfolio_rows = []
+        
+        for item in st.session_state.my_stocks:
+            cur_price, _ = get_live_market_data(item["티커"])
+            if cur_price is None:
+                cur_price = item["매입단가"]
+                
+            is_krw = ".KS" in item["티커"] or ".KQ" in item["티커"]
+            eval_amt = cur_price * item["보유수량"]
+            buy_amt = item["매입단가"] * item["보유수량"]
+            profit_amt = eval_amt - buy_amt
+            profit_rate = (profit_amt / buy_amt) * 100 if buy_amt > 0 else 0
+            
+            if is_krw:
+                total_eval += eval_amt
+                total_buy += buy_amt
+                
+            portfolio_rows.append({
+                "종목명": item["종목명"],
+                "보유수량": f"{item['보유수량']}주",
+                "매입단가": f"{item['매입단가']:,.0f}원" if is_krw else f"${item['매입단가']:.2f}",
+                "현재가": f"{cur_price:,.0f}원" if is_krw else f"${cur_price:.2f}",
+                "수익률": f"{profit_rate:+.2f}%"
+            })
+            
+        total_profit_rate = ((total_eval - total_buy) / total_buy) * 100 if total_buy > 0 else 0
+        
+        c1, c2 = st.columns(2)
+        with c1:
+            st.metric("국내 보유 총 평가금액", f"{total_eval:,.0f}원", f"{total_profit_rate:+.2f}%")
+        with c2:
+            st.metric("국내 총 평가손익", f"{total_eval - total_buy:+,.0f}원")
+            
+        st.dataframe(pd.DataFrame(portfolio_rows), use_container_width=True)
 
 # TAB 2: 실시간 시황
 with tab_market:
