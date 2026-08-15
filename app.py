@@ -51,8 +51,9 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 3. [영구 저장소] 포트폴리오 파일 관리
+# 3. [영구 저장소] 포트폴리오 및 AI 브리핑 파일 관리
 PORTFOLIO_FILE = "portfolio.json"
+BRIEFING_FILE = "briefing.json"
 
 DEFAULT_PORTFOLIO = [
     {"종목명": "KODEX AI반도체TOP2플러스", "티커": "395160.KS", "매입단가": 13234.0, "보유수량": 126},
@@ -75,7 +76,24 @@ def save_portfolio(data):
         with open(PORTFOLIO_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
     except Exception as e:
-        st.error(f"저장 오류: {e}")
+        st.error(f"포트폴리오 저장 오류: {e}")
+
+def load_briefing():
+    if os.path.exists(BRIEFING_FILE):
+        try:
+            with open(BRIEFING_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data.get("text"), data.get("generated_at")
+        except Exception:
+            return None, None
+    return None, None
+
+def save_briefing(text, generated_at_str):
+    try:
+        with open(BRIEFING_FILE, "w", encoding="utf-8") as f:
+            json.dump({"text": text, "generated_at": generated_at_str}, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        st.error(f"브리핑 저장 오류: {e}")
 
 # 4. 아침 7시 시스템 알람 컴포넌트
 alarm_component = """
@@ -141,37 +159,24 @@ function initAlarm() {
 </script>
 """
 
-# 5. 종목별 맞춤 캘린더 일정 자동 생성 함수
+# 5. 종목별 맞춤 캘린더 일정 함수
 def get_stock_calendar_events(portfolio_items):
     events = [
         {"날짜": "2026-08-28", "구분": "🌐 거시경제", "이벤트": "미국 잭슨홀 심포지엄 (파월 연준의장 기조연설)", "중요도": "🔴 높음"},
         {"날짜": "2026-09-16", "구분": "🌐 거시경제", "이벤트": "미국 9월 FOMC 기준금리 결정 회의", "중요도": "🔴 높음"}
     ]
-    
-    # 보유 종목에 따른 맞춤 일정 동적 매칭
     for item in portfolio_items:
         name = item["종목명"]
         ticker = item["티커"]
-        
         if "AI반도체" in name or "395160" in ticker or "NVDA" in ticker or "삼성전자" in name or "하이닉스" in name:
             events.append({"날짜": "2026-08-26", "구분": f"🎯 {name}", "이벤트": "엔비디아(NVDA) 2분기 실적 발표 (미국 현지시간)", "중요도": "🔴 핵심"})
             events.append({"날짜": "2026-09-04", "구분": f"🎯 {name}", "이벤트": "글로벌 세미콘 반도체 컨퍼런스 & HBM 서밋", "중요도": "🟡 보통"})
             events.append({"날짜": "2026-10-08", "구분": f"🎯 {name}", "이벤트": "삼성전자 3분기 잠정 실적 발표", "중요도": "🔴 높음"})
-            
         if "커버드콜" in name or "498400" in ticker or "200" in name:
             events.append({"날짜": "2026-08-19", "구분": f"🎯 {name}", "이벤트": "8월 월분배금(배당금) 계좌 지급일", "중요도": "🟢 배당"})
             events.append({"날짜": "2026-09-10", "구분": f"🎯 {name}", "이벤트": "국내 선물·옵션 동시 만기일 (네 마녀의 날)", "중요도": "🔴 변동성"})
             events.append({"날짜": "매주 목요일", "구분": f"🎯 {name}", "이벤트": "위클리 옵션 만기 및 프리미엄 정산", "중요도": "🟡 정기"})
-            
-        if "AAPL" in ticker or "애플" in name:
-            events.append({"날짜": "2026-09-10", "구분": "🎯 애플", "이벤트": "애플 신제품 공개 이벤트 (Apple Event)", "중요도": "🔴 높음"})
-            
-        if "TSLA" in ticker or "테슬라" in name:
-            events.append({"날짜": "2026-10-02", "구분": "🎯 테슬라", "이벤트": "3분기 차량 인도량(Deliveries) 발표", "중요도": "🔴 높음"})
-
-    # 중복 제거 및 데이터프레임 변환
-    df_events = pd.DataFrame(events).drop_duplicates(subset=["날짜", "이벤트"])
-    return df_events
+    return pd.DataFrame(events).drop_duplicates(subset=["날짜", "이벤트"])
 
 # 6. AI 비전 이미지 분석 함수
 def analyze_portfolio_image(image_bytes, api_key):
@@ -211,7 +216,6 @@ def analyze_portfolio_image(image_bytes, api_key):
                 last_err = f"{clean_model}: {res.text}"
         except Exception as e:
             last_err = str(e)
-            
     return None, f"분석 오류: {last_err}"
 
 # 7. 실시간 맞춤형 AI 브리핑 생성 함수
@@ -256,7 +260,6 @@ def generate_ai_briefing(news_headlines, portfolio_items, api_key):
             if res.status_code == 200:
                 return res.json()['candidates'][0]['content']['parts'][0]['text'], "SUCCESS"
         except Exception: pass
-            
     return None, "브리핑 생성에 실패했습니다."
 
 # 8. 실시간 주가 및 뉴스 로딩 함수
@@ -479,7 +482,7 @@ with tab_chart:
             st.error(f"오류: {e}")
 
 # -------------------------------------------------------------
-# TAB 5: 실시간 AI 브리핑 & [신규] 종목별 맞춤 캘린더
+# TAB 5: [영구 보존 적용] 실시간 AI 브리핑 & 종목별 캘린더
 # -------------------------------------------------------------
 with tab_briefing:
     st.subheader("💡 실시간 맞춤형 AI 모닝 브리핑")
@@ -498,19 +501,24 @@ with tab_briefing:
             with st.spinner("구글 Gemini AI가 최신 뉴스와 내 포트폴리오를 종합 분석 중입니다..."):
                 briefing_result, status = generate_ai_briefing(recent_news, user_portfolio, api_key)
                 if status == "SUCCESS" and briefing_result:
-                    st.session_state.ai_briefing_text = briefing_result
-                    st.success("✅ AI 모닝 브리핑 생성이 완료되었습니다!")
+                    now_str = datetime.now(KST).strftime('%Y년 %m월 %d일 %H:%M:%S')
+                    save_briefing(briefing_result, now_str)
+                    st.success("✅ AI 모닝 브리핑이 성공적으로 생성 및 영구 저장되었습니다!")
+                    st.rerun()
                 else:
                     st.error(f"오류: {status}")
 
-    # 브리핑 내용 선명하게 출력
-    if "ai_briefing_text" in st.session_state:
-        with st.container(border=True):
-            st.markdown(st.session_state.ai_briefing_text)
-    else:
-        st.info("💡 위의 **[✨ 오늘자 뉴스 기반 실시간 AI 브리핑 생성]** 버튼을 누르면 오늘 아침 최신 뉴스에 맞춘 맞춤형 리포트가 생성됩니다.")
+    # [영구 저장소에서 불러오기]
+    saved_briefing_text, saved_time = load_briefing()
 
-    # 📅 [신규] 내 보유 종목 맞춤형 이벤트 캘린더 표
+    if saved_briefing_text:
+        st.caption(f"🕒 **마지막 브리핑 생성 시각**: {saved_time} (새 브리핑을 만들려면 위 버튼을 터치하세요)")
+        with st.container(border=True):
+            st.markdown(saved_briefing_text)
+    else:
+        st.info("💡 위의 **[✨ 오늘자 뉴스 기반 실시간 AI 브리핑 생성]** 버튼을 누르면 오늘 아침 최신 뉴스에 맞춘 리포트가 생성되어 영구 저장됩니다.")
+
+    # 📅 내 보유 종목 맞춤형 이벤트 캘린더 표
     st.markdown("---")
     st.subheader("📅 내 보유 종목 맞춤형 이벤트 캘린더")
     df_stock_events = get_stock_calendar_events(user_portfolio)
