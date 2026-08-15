@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import yfinance as yf
 import pandas as pd
 import plotly.graph_objects as go
@@ -32,9 +33,6 @@ st.markdown("""
         color: #1a202c;
         text-decoration: none;
     }
-    .news-title:hover {
-        color: #3182ce;
-    }
     .news-meta {
         font-size: 12px;
         color: #718096;
@@ -43,7 +41,76 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 2. 실시간 주가/지수 데이터 조회 함수 (1분 캐싱)
+# 2. 시스템 알람 및 소리 알림 웹 컴포넌트 (JavaScript)
+alarm_component = """
+<div style="background: linear-gradient(135deg, #1e293b, #0f172a); padding: 16px; border-radius: 12px; color: white; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+    <div style="font-weight: 700; font-size: 15px; margin-bottom: 6px;">⏰ 매일 아침 7시 시스템 알람 설정</div>
+    <div style="font-size: 12px; color: #94a3b8; margin-bottom: 12px;">스마트폰 상단바 시스템 팝업 알림과 소리 알람을 활성화합니다.</div>
+    <button id="alarmBtn" onclick="initAlarm()" style="background-color: #3b82f6; color: white; border: none; padding: 9px 15px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; width: 100%;">
+        🔔 시스템 알람 및 소리 켜기
+    </button>
+    <div id="alarmStatus" style="margin-top: 8px; font-size: 12px; color: #4ade80; text-align: center;"></div>
+</div>
+
+<script>
+function playAlarmSound() {
+    try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.6, audioCtx.currentTime);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 1.2);
+    } catch(e) { console.log(e); }
+}
+
+function triggerSystemNotification() {
+    playAlarmSound();
+    if (Notification.permission === "granted") {
+        new Notification("🌅 [증시 비서] 오늘의 모닝 브리핑 도착!", {
+            body: "코스피 및 뉴욕증시 최신 시황과 핵심 뉴스를 확인하세요.",
+            icon: "https://img.icons8.com/color/96/bullish.png"
+        });
+    }
+}
+
+function checkTimeForAlarm() {
+    const now = new Date();
+    // 매일 오전 7시 00분 정각에 알람 발동
+    if (now.getHours() === 7 && now.getMinutes() === 0 && now.getSeconds() === 0) {
+        triggerSystemNotification();
+    }
+}
+
+function initAlarm() {
+    if (!("Notification" in window)) {
+        alert("현재 브라우저에서 시스템 알림이 지원되지 않습니다.");
+        return;
+    }
+    
+    Notification.requestPermission().then(permission => {
+        if (permission === "granted") {
+            document.getElementById("alarmStatus").innerText = "✅ 매일 아침 7시 시스템 알람 활성화 완료!";
+            document.getElementById("alarmBtn").style.backgroundColor = "#16a34a";
+            document.getElementById("alarmBtn").innerText = "🔔 알람 작동 중 (매일 오전 7:00)";
+            
+            // 연동 확인용 테스트 알림 즉시 1회 발송
+            triggerSystemNotification();
+            
+            setInterval(checkTimeForAlarm, 1000);
+        } else {
+            alert("알림 권한이 허용되지 않았습니다. 브라우저 설정에서 알림을 켜주세요.");
+        }
+    });
+}
+</script>
+"""
+
+# 3. 데이터 로딩 함수들
 @st.cache_data(ttl=60)
 def get_live_market_data(ticker_symbol):
     try:
@@ -60,7 +127,6 @@ def get_live_market_data(ticker_symbol):
     except Exception:
         return None, None
 
-# 3. 실시간 구글 뉴스 파싱 함수 (5분 캐싱)
 @st.cache_data(ttl=300)
 def fetch_google_news(query, max_results=7):
     try:
@@ -76,16 +142,9 @@ def fetch_google_news(query, max_results=7):
                 link = item.find('link').text if item.find('link') is not None else "#"
                 pub_date = item.find('pubDate').text if item.find('pubDate') is not None else ""
                 source = item.find('source').text if item.find('source') is not None else "언론사"
-                
                 if pub_date:
                     pub_date = pub_date[:16]
-
-                news_items.append({
-                    "title": title,
-                    "link": link,
-                    "source": source,
-                    "date": pub_date
-                })
+                news_items.append({"title": title, "link": link, "source": source, "date": pub_date})
             return news_items
     except Exception:
         return []
@@ -94,20 +153,17 @@ def fetch_google_news(query, max_results=7):
 st.title("📱 Daily Stock Assistant")
 st.caption(f"최근 조회 시각: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
-if st.button("🔄 실시간 데이터 새로고침"):
-    st.cache_data.clear()
-    st.rerun()
+# 시스템 알람 설정 바 삽입
+components.html(alarm_component, height=130)
 
 # 4개 탭 구성
 tab1, tab2, tab3, tab4 = st.tabs(["📊 실시간 시황", "📰 주요 뉴스", "🔍 종목 차트", "💡 AI 브리핑"])
 
 # -------------------------------------------------------------
-# TAB 1: 실시간 주요 지수 및 대형주 시황 (API 자동 연동)
+# TAB 1: 실시간 시황
 # -------------------------------------------------------------
 with tab1:
-    st.subheader("🌐 글로벌 & 국내 주요 지수 (실시간)")
-    
-    # 지수 데이터 실시간 호출
+    st.subheader("🌐 글로벌 & 국내 주요 지수")
     kospi_p, kospi_d = get_live_market_data("^KS11")
     sp500_p, sp500_d = get_live_market_data("^GSPC")
     nasdaq_p, nasdaq_d = get_live_market_data("^IXIC")
@@ -122,9 +178,7 @@ with tab1:
         st.metric("브렌트유 (Brent Oil)", f"${oil_p:.2f}" if oil_p else "$88.59", f"{oil_d:+.2f}%" if oil_d else "+1.75%")
 
     st.markdown("---")
-    st.subheader("🏢 주요 대형주 시세 (실시간)")
-    
-    # 종목 데이터 실시간 호출
+    st.subheader("🏢 주요 대형주 시세")
     samsung_p, samsung_d = get_live_market_data("005930.KS")
     hynix_p, hynix_d = get_live_market_data("000660.KS")
     hyundai_p, hyundai_d = get_live_market_data("005380.KS")
@@ -139,16 +193,11 @@ with tab1:
         st.metric("엔비디아 (NVDA)", f"${nvda_p:.2f}" if nvda_p else "$224.92", f"{nvda_d:+.2f}%" if nvda_d else "-0.18%")
 
 # -------------------------------------------------------------
-# TAB 2: 실시간 주요 뉴스 피드
+# TAB 2: 주요 뉴스
 # -------------------------------------------------------------
 with tab2:
     st.subheader("📰 실시간 핵심 뉴스")
-    news_category = st.radio(
-        "카테고리", 
-        ["🇰🇷 국내 증시·경제", "🇺🇸 미국·글로벌 증시", "🤖 AI·반도체", "🔍 직접 검색"], 
-        horizontal=True
-    )
-    
+    news_category = st.radio("카테고리", ["🇰🇷 국내 증시·경제", "🇺🇸 미국·글로벌 증시", "🤖 AI·반도체", "🔍 직접 검색"], horizontal=True)
     if news_category == "🇰🇷 국내 증시·경제":
         query = "코스피 OR 국내증시 OR 환율"
     elif news_category == "🇺🇸 미국·글로벌 증시":
@@ -168,63 +217,22 @@ with tab2:
                     <div class="news-meta">📰 {item['source']} &nbsp;|&nbsp; 🕒 {item['date']}</div>
                 </div>
                 """, unsafe_allow_html=True)
-        else:
-            st.info("최신 뉴스를 가져오는 중입니다...")
 
 # -------------------------------------------------------------
-# TAB 3: 종목 실시간 차트 검색
+# TAB 3: 종목 차트
 # -------------------------------------------------------------
 with tab3:
     st.subheader("🔍 글로벌 종목 차트 분석")
     ticker_input = st.text_input("티커 입력 (예: AAPL, NVDA, TSLA, 005930.KS)", value="NVDA").upper()
-    
     if st.button("차트 조회"):
         try:
             stock = yf.Ticker(ticker_input)
             hist = stock.history(period="1mo")
-            
             if not hist.empty:
                 current_price = hist['Close'].iloc[-1]
                 prev_price = hist['Close'].iloc[-2]
                 change_pct = ((current_price - prev_price) / prev_price) * 100
-                
-                currency_symbol = "원" if ".KS" in ticker_input or ".KQ" in ticker_input else "$"
-                st.metric(
-                    label=f"{ticker_input} 현재/최근가", 
-                    value=f"{currency_symbol}{current_price:,.2f}" if currency_symbol == "$" else f"{current_price:,.0f}원", 
-                    delta=f"{change_pct:+.2f}%"
-                )
-                
+                currency = "원" if ".KS" in ticker_input or ".KQ" in ticker_input else "$"
+                st.metric(label=f"{ticker_input} 현재/최근가", value=f"{currency}{current_price:,.2f}" if currency == "$" else f"{current_price:,.0f}원", delta=f"{change_pct:+.2f}%")
                 fig = go.Figure()
-                fig.add_trace(go.Scatter(
-                    x=hist.index, 
-                    y=hist['Close'], 
-                    mode='lines+markers',
-                    name='Close',
-                    line=dict(color='#0066cc', width=2)
-                ))
-                fig.update_layout(
-                    title=f"{ticker_input} 최근 1개월 주가 추이",
-                    margin=dict(l=10, r=10, t=40, b=10),
-                    height=300,
-                    xaxis_rangeslider_visible=False
-                )
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.warning("데이터를 찾을 수 없습니다. 티커를 확인해 주세요.")
-        except Exception as e:
-            st.error(f"오류: {e}")
-
-# -------------------------------------------------------------
-# TAB 4: 주요 일정 & AI 브리핑
-# -------------------------------------------------------------
-with tab4:
-    st.subheader("📌 증시 핵심 체크포인트")
-    st.info("📅 **주요 일정**\n• **8월 26일**: 엔비디아 2분기 실적 발표\n• **8월 28일**: 잭슨홀 심포지엄 (파월 연준의장 기조연설)")
-    
-    with st.expander("1. 미국 매크로: 인플레이션 안정 vs 소비 둔화", expanded=True):
-        st.write("7월 소매판매(-0.6%) 및 소비자심리지수 하락으로 경기 둔화 우려 대두. 8월 28일 잭슨홀 미팅 주목.")
-    with st.expander("2. AI 반도체: 엔비디아 실적(8/26) & 데이터센터"):
-        st.write("블랙웰 출하 일정 및 AI ROI 검증 국면 진입. 오픈AI 데이터센터 보증 축소 이슈 점검.")
-    with st.expander("3. 국내 증시: 외국인 수급 지속성"):
-        st.write("외국인 매수세의 코스닥 및 소부장 중소형주 확산 여부 관찰 필요.")
+                fig.add_trace(go.Scatter(x=hist.index, y=hist['Close'], mode='lines+markers', name
