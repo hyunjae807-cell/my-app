@@ -17,64 +17,133 @@ KST = timezone(timedelta(hours=9))
 
 # 2. 모바일 최적화 페이지 설정
 st.set_page_config(
-    page_title="나만의 올인원 비서",
-    page_icon="🦁",
+    page_title="MORI",
+    page_icon="✨",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# 모바일 친화적 CSS
+# 3. 프리미엄 다크 테마 커스텀 CSS (Glassmorphism & Neon Gradient Accent)
 st.markdown("""
     <style>
-    .summary-card {
-        background-color: #1e293b;
-        border-radius: 12px;
-        padding: 16px;
-        margin-bottom: 12px;
-        border: 1px solid #334155;
-        color: #f8fafc;
+    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+    * {
+        font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
     }
-    .news-card {
-        background-color: #1e293b;
+    
+    /* MORI 메인 헤더 */
+    .mori-header {
+        margin-top: -10px;
+        margin-bottom: 20px;
+        padding-bottom: 14px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .mori-title {
+        font-size: 34px;
+        font-weight: 900;
+        letter-spacing: -0.03em;
+        background: linear-gradient(135deg, #60a5fa 0%, #a855f7 50%, #38bdf8 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin: 0;
+        line-height: 1.2;
+    }
+    .mori-subtitle {
+        font-size: 14px;
+        font-weight: 400;
+        color: #94a3b8;
+        margin-top: 5px;
+        letter-spacing: -0.01em;
+    }
+    .mori-time {
+        font-size: 11px;
+        color: #64748b;
+        margin-top: 6px;
+    }
+
+    /* 다크 글래스 카드 */
+    .summary-card {
+        background: rgba(30, 41, 59, 0.7);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 14px;
+        padding: 16px;
+        margin-bottom: 14px;
         color: #f8fafc;
-        border-radius: 10px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+    }
+    
+    .news-card {
+        background: rgba(30, 41, 59, 0.6);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 12px;
         padding: 14px;
-        margin-bottom: 12px;
-        border: 1px solid #334155;
+        margin-bottom: 10px;
+        transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+    .news-card:hover {
+        transform: translateY(-2px);
+        border-color: rgba(96, 165, 250, 0.4);
     }
     .news-title {
         font-size: 15px;
         font-weight: 600;
-        color: #60a5fa;
+        color: #f1f5f9;
         text-decoration: none;
+        line-height: 1.4;
     }
     .news-title:hover {
-        color: #93c5fd;
+        color: #60a5fa;
     }
     .news-meta {
-        font-size: 12px;
+        font-size: 11px;
         color: #94a3b8;
         margin-top: 6px;
     }
-    .weather-card {
-        background: linear-gradient(135deg, #0284c7, #0369a1);
+    
+    .weather-gradient {
+        background: linear-gradient(135deg, #0f766e 0%, #0369a1 50%, #1e1b4b 100%);
+        border: 1px solid rgba(56, 189, 248, 0.3);
+        border-radius: 14px;
         padding: 16px;
-        border-radius: 12px;
         color: white;
-        margin-bottom: 15px;
+        margin-bottom: 14px;
+        box-shadow: 0 4px 20px rgba(3, 105, 161, 0.2);
     }
+
     .sports-card {
-        background: linear-gradient(135deg, #1e293b, #0f172a);
-        border: 1px solid #3b82f6;
+        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+        border: 1px solid rgba(147, 51, 234, 0.3);
+        border-radius: 14px;
         padding: 16px;
-        border-radius: 12px;
         color: white;
-        margin-bottom: 15px;
+        margin-bottom: 14px;
+    }
+
+    /* 탭 스타일 고급화 */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 6px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        height: 42px;
+        border-radius: 8px;
+        padding: 6px 14px;
+        font-size: 13px;
+        font-weight: 600;
+        color: #94a3b8;
+        background-color: transparent;
+        border: none;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: rgba(59, 130, 246, 0.15) !important;
+        color: #60a5fa !important;
+        border-bottom: 2px solid #3b82f6 !important;
     }
     </style>
 """, unsafe_allow_html=True)
 
-# 3. [영구 저장소 파일 관리]
+# 4. [영구 저장소 파일 관리]
 PORTFOLIO_FILE = "portfolio.json"
 BRIEFING_FILE = "briefing.json"
 TODOS_FILE = "todos.json"
@@ -179,22 +248,20 @@ def save_sports_briefings(briefings):
     except Exception as e:
         pass
 
-# 4. 아침 7시 시스템 알람 컴포넌트
+# 5. 아침 7시 시스템 알람 컴포넌트
 alarm_component = """
-<div id="alarmCard" style="background: linear-gradient(135deg, #1e293b, #0f172a); padding: 14px; border-radius: 12px; color: white; margin-bottom: 12px; transition: all 0.3s ease;">
-    <div style="font-weight: 700; font-size: 14px; margin-bottom: 4px;">⏰ 매일 한국 시간 아침 7시 시스템 알람</div>
-    <div style="font-size: 11px; color: #94a3b8; margin-bottom: 10px;">버튼을 누르면 테스트 알람이 울린 후 이 설정창은 자동으로 사라집니다.</div>
-    <button id="alarmBtn" onclick="initAlarm()" style="background-color: #3b82f6; color: white; border: none; padding: 8px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; width: 100%;">
-        🔔 시스템 알람 켜기 & 테스트 알람
+<div id="alarmCard" style="background: rgba(30, 41, 59, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(59, 130, 246, 0.3); padding: 14px; border-radius: 12px; color: white; margin-bottom: 12px; transition: all 0.3s ease;">
+    <div style="font-weight: 700; font-size: 13px; color: #60a5fa; margin-bottom: 2px;">시스템 알람 설정 (오전 7:00 KST)</div>
+    <div style="font-size: 11px; color: #94a3b8; margin-bottom: 8px;">버튼을 누르면 테스트 알람이 울리고 설정창이 자동으로 닫힙니다.</div>
+    <button id="alarmBtn" onclick="initAlarm()" style="background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border: none; padding: 7px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; width: 100%;">
+        알람 켜기 & 테스트
     </button>
 </div>
 
 <script>
 function hideCard() {
     const card = document.getElementById("alarmCard");
-    if (card) {
-        card.style.display = "none";
-    }
+    if (card) card.style.display = "none";
 }
 
 function playAlarmSound() {
@@ -215,7 +282,7 @@ function playAlarmSound() {
 function triggerSystemNotification() {
     playAlarmSound();
     if (Notification.permission === "granted") {
-        new Notification("🌅 [증시 비서] 오늘의 모닝 브리핑 도착!", {
+        new Notification("🌅 [MORI] 오늘의 모닝 브리핑 도착!", {
             body: "코스피 및 뉴욕증시 최신 시황과 핵심 뉴스를 확인하세요.",
             icon: "https://img.icons8.com/color/96/bullish.png"
         });
@@ -230,18 +297,13 @@ function checkTimeForAlarm() {
 }
 
 function initAlarm() {
-    if (!("Notification" in window)) {
-        alert("알림을 지원하지 않는 브라우저입니다.");
-        return;
-    }
+    if (!("Notification" in window)) return alert("알림을 지원하지 않는 브라우저입니다.");
     Notification.requestPermission().then(permission => {
         if (permission === "granted") {
             localStorage.setItem("alarm_enabled", "true");
             triggerSystemNotification();
             setInterval(checkTimeForAlarm, 1000);
             setTimeout(hideCard, 500);
-        } else {
-            alert("알림 권한이 허용되지 않았습니다.");
         }
     });
 }
@@ -253,7 +315,7 @@ if (Notification.permission === "granted" || localStorage.getItem("alarm_enabled
 </script>
 """
 
-# 5. 실시간 날씨 데이터 조회 (용인시 기준)
+# 6. 실시간 날씨 데이터 조회 (용인시 기준)
 @st.cache_data(ttl=1800)
 def get_yongin_weather():
     try:
@@ -278,7 +340,7 @@ def get_yongin_weather():
     except Exception:
         return "28.0°C", "맑음 ☀️", "60%"
 
-# 6. 실시간 주가 및 뉴스 로딩 함수
+# 7. 실시간 주가 및 뉴스 로딩 함수
 @st.cache_data(ttl=60)
 def get_live_market_data(ticker_symbol):
     try:
@@ -317,7 +379,7 @@ def fetch_google_news(query, max_results=8):
     except Exception:
         return []
 
-# 7. AI 비전 이미지 분석 및 브리핑 함수
+# 8. AI 비전 이미지 분석 및 브리핑 함수
 def analyze_portfolio_image(image_bytes, api_key):
     api_key = api_key.strip()
     headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
@@ -404,7 +466,7 @@ def generate_ai_briefing(news_headlines, portfolio_items, api_key):
             pass
     return None, "브리핑 생성 실패"
 
-# 8. [한국 시간 KST 기준 통일] 실시간 구단 경기 일정 및 AI 브리핑 함수
+# 9. 실시간 구단 경기 일정 및 AI 브리핑 함수 (한국 시간 KST 기준)
 def generate_team_briefing(team_name, sports_type, league, team_news, api_key):
     api_key = api_key.strip()
     headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
@@ -450,7 +512,7 @@ def generate_team_briefing(team_name, sports_type, league, team_news, api_key):
             pass
     return None
 
-# 9. 1:1 대화형 AI 투자 챗봇 함수
+# 10. 1:1 대화형 AI 투자 챗봇 함수
 def ask_gemini_chat(chat_history, user_msg, portfolio_items, api_key):
     api_key = api_key.strip()
     headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
@@ -490,35 +552,40 @@ def ask_gemini_chat(chat_history, user_msg, portfolio_items, api_key):
 
 
 # =============================================================
-# 메인 UI 렌더링
+# 메인 UI 렌더링 (MORI 프리미엄 헤더)
 # =============================================================
 
-st.title("🦁 My Personal Assistant")
-st.caption(f"기준 시각: {datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S (한국 시간)')}")
+st.markdown("""
+<div class="mori-header">
+    <div class="mori-title">MORI</div>
+    <div class="mori-subtitle">Everything about you, in one place.</div>
+    <div class="mori-time">대한민국 표준시(KST) : """ + datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S') + """</div>
+</div>
+""", unsafe_allow_html=True)
 
-components.html(alarm_component, height=95)
+components.html(alarm_component, height=85)
 
 if "saved_gemini_key" not in st.session_state:
     st.session_state.saved_gemini_key = st.secrets.get("GEMINI_API_KEY", "")
 
-# 8개 탭 구성 (맨 앞에 [🏠 데일리 요약] 대시보드 추가)
+# 8개 탭 구성
 tab_home, tab_portfolio, tab_market, tab_news, tab_briefing, tab_chat, tab_sports, tab_daily = st.tabs(
     ["🏠 데일리 요약", "💼 포트폴리오", "📊 실시간 시황", "📰 주요 뉴스", "💡 AI 브리핑", "🤖 AI 챗봇", "⚽ 스포츠 허브", "📋 데일리 & 날씨"]
 )
 
 # -------------------------------------------------------------
-# TAB 0: [신규 맨 앞] 🏠 데일리 요약
+# TAB 0: 🏠 데일리 요약 (Home Dashboard)
 # -------------------------------------------------------------
 with tab_home:
-    st.subheader("🌅 오늘의 핵심 데일리 요약")
+    st.subheader("오늘의 핵심 데일리 요약")
     
     # 1) 날씨 요약 카드
     temp_val, weather_val, humid_val = get_yongin_weather()
     st.markdown(f"""
-    <div class="summary-card" style="background: linear-gradient(135deg, #0369a1, #0f172a); border-color: #38bdf8;">
-        <div style="font-size: 13px; color: #bae6fd; font-weight: 600;">📍 경기도 용인시 오늘 날씨</div>
-        <div style="font-size: 24px; font-weight: 800; margin-top: 4px;">{weather_val} {temp_val}</div>
-        <div style="font-size: 12px; color: #e0f2fe; margin-top: 2px;">습도: {humid_val} | 외출 및 출퇴근 추천 날씨</div>
+    <div class="weather-gradient">
+        <div style="font-size: 13px; color: #bae6fd; font-weight: 600;">📍 경기도 용인시 날씨</div>
+        <div style="font-size: 26px; font-weight: 800; margin-top: 4px; letter-spacing: -0.02em;">{weather_val} {temp_val}</div>
+        <div style="font-size: 12px; color: #e0f2fe; margin-top: 2px;">습도 {humid_val} | 외출 및 출퇴근 추천 날씨</div>
     </div>
     """, unsafe_allow_html=True)
 
