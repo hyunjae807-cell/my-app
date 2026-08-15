@@ -54,10 +54,6 @@ def get_mori_app_icon():
 
 mori_icon_image = get_mori_app_icon()
 
-buf = io.BytesIO()
-mori_icon_image.save(buf, format="PNG")
-icon_b64_str = base64.b64encode(buf.getvalue()).decode("utf-8")
-
 # 3. 모바일 최적화 페이지 설정
 st.set_page_config(
     page_title="MORI",
@@ -66,12 +62,18 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 4. 다크 테마 커스텀 CSS
+# 4. 갤럭시 폴드(커버화면 & 펼친화면) 반응형 폰트 확대 & 다크 테마 커스텀 CSS
 st.markdown("""
 <style>
 @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
 * {
     font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+}
+
+/* 기본 폰트 크기 및 줄간격 시원하게 확대 */
+html, body, p, span, div, label, li {
+    font-size: 16px;
+    line-height: 1.6;
 }
 
 .mori-header {
@@ -81,7 +83,7 @@ st.markdown("""
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 .mori-title {
-    font-size: 34px;
+    font-size: 36px;
     font-weight: 900;
     letter-spacing: -0.03em;
     background: linear-gradient(135deg, #60a5fa 0%, #a855f7 50%, #38bdf8 100%);
@@ -91,25 +93,26 @@ st.markdown("""
     line-height: 1.2;
 }
 .mori-subtitle {
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 400;
     color: #94a3b8;
     margin-top: 5px;
     letter-spacing: -0.01em;
 }
 .mori-time {
-    font-size: 11px;
+    font-size: 12px;
     color: #64748b;
     margin-top: 6px;
 }
 
+/* 다크 글래스 카드 텍스트 가독성 */
 .summary-card {
     background: rgba(30, 41, 59, 0.7);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 14px;
-    padding: 16px;
+    padding: 18px;
     margin-bottom: 14px;
     color: #f8fafc;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
@@ -119,8 +122,8 @@ st.markdown("""
     background: rgba(30, 41, 59, 0.6);
     border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 12px;
-    padding: 14px;
-    margin-bottom: 10px;
+    padding: 16px;
+    margin-bottom: 12px;
     transition: transform 0.2s ease, border-color 0.2s ease;
 }
 .news-card:hover {
@@ -128,17 +131,17 @@ st.markdown("""
     border-color: rgba(96, 165, 250, 0.4);
 }
 .news-title {
-    font-size: 15px;
-    font-weight: 600;
+    font-size: 16px;
+    font-weight: 700;
     color: #f1f5f9;
     text-decoration: none;
-    line-height: 1.4;
+    line-height: 1.5;
 }
 .news-title:hover {
     color: #60a5fa;
 }
 .news-meta {
-    font-size: 11px;
+    font-size: 12px;
     color: #94a3b8;
     margin-top: 6px;
 }
@@ -147,7 +150,7 @@ st.markdown("""
     background: linear-gradient(135deg, #0f766e 0%, #0369a1 50%, #1e1b4b 100%);
     border: 1px solid rgba(56, 189, 248, 0.3);
     border-radius: 14px;
-    padding: 16px;
+    padding: 18px;
     color: white;
     margin-bottom: 14px;
     box-shadow: 0 4px 20px rgba(3, 105, 161, 0.2);
@@ -157,20 +160,32 @@ st.markdown("""
     background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
     border: 1px solid rgba(147, 51, 234, 0.3);
     border-radius: 14px;
-    padding: 16px;
+    padding: 18px;
     color: white;
     margin-bottom: 14px;
 }
 
+/* 스트림릿 기본 지표(Metric) 글씨 크기 대폭 확대 */
+[data-testid="stMetricValue"] {
+    font-size: 26px !important;
+    font-weight: 800 !important;
+}
+[data-testid="stMetricLabel"] {
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    color: #94a3b8 !important;
+}
+
+/* 탭 스타일 고급화 & 글자 크기 확대 */
 .stTabs [data-baseweb="tab-list"] {
     gap: 6px;
 }
 .stTabs [data-baseweb="tab"] {
-    height: 42px;
+    height: 46px;
     border-radius: 8px;
-    padding: 6px 14px;
-    font-size: 13px;
-    font-weight: 600;
+    padding: 8px 14px;
+    font-size: 14px;
+    font-weight: 700;
     color: #94a3b8;
     background-color: transparent;
     border: none;
@@ -180,49 +195,36 @@ st.markdown("""
     color: #60a5fa !important;
     border-bottom: 2px solid #3b82f6 !important;
 }
+
+/* 갤럭시 폴드 커버 화면(좁은 화면 <= 500px) 전용 고해상도 최적화 */
+@media screen and (max-width: 500px) {
+    html, body, p, span, div, label, li {
+        font-size: 16px !important;
+    }
+    .mori-title {
+        font-size: 32px !important;
+    }
+    .mori-subtitle {
+        font-size: 14px !important;
+    }
+    [data-testid="stMetricValue"] {
+        font-size: 24px !important;
+    }
+    [data-testid="stMetricLabel"] {
+        font-size: 14px !important;
+    }
+    .news-title {
+        font-size: 16px !important;
+    }
+    .stTabs [data-baseweb="tab"] {
+        font-size: 14px !important;
+        padding: 6px 10px !important;
+    }
+}
 </style>
 """, unsafe_allow_html=True)
 
-# 5. 브라우저 PWA 매니페스트 및 타이틀 MORI 강제 주입
-components.html(f"""
-<script>
-try {{
-    const topDoc = window.top.document;
-    topDoc.title = "MORI";
-    
-    // 파비콘 및 앱 아이콘 강제 교체
-    let linkIcon = topDoc.querySelector("link[rel*='icon']") || topDoc.createElement('link');
-    linkIcon.type = 'image/png';
-    linkIcon.rel = 'shortcut icon';
-    linkIcon.href = 'data:image/png;base64,{icon_b64_str}';
-    topDoc.getElementsByTagName('head')[0].appendChild(linkIcon);
-
-    let appleIcon = topDoc.querySelector("link[rel*='apple-touch-icon']") || topDoc.createElement('link');
-    appleIcon.rel = 'apple-touch-icon';
-    appleIcon.href = 'data:image/png;base64,{icon_b64_str}';
-    topDoc.getElementsByTagName('head')[0].appendChild(appleIcon);
-
-    // PWA Manifest 강제 오버라이드
-    const moriManifest = {{
-        "name": "MORI",
-        "short_name": "MORI",
-        "start_url": window.top.location.href,
-        "display": "standalone",
-        "background_color": "#0f172a",
-        "theme_color": "#0f172a",
-        "icons": [{{ "src": "data:image/png;base64,{icon_b64_str}", "sizes": "256x256", "type": "image/png" }}]
-    }};
-    const blob = new Blob([JSON.stringify(moriManifest)], {{type: 'application/json'}});
-    const manifestURL = URL.createObjectURL(blob);
-    let manLink = topDoc.querySelector("link[rel='manifest']") || topDoc.createElement('link');
-    manLink.rel = 'manifest';
-    manLink.href = manifestURL;
-    topDoc.getElementsByTagName('head')[0].appendChild(manLink);
-}} catch(e) {{}}
-</script>
-""", height=0)
-
-# 6. [영구 저장소 파일 관리]
+# 5. [영구 저장소 파일 관리]
 PORTFOLIO_FILE = "portfolio.json"
 BRIEFING_FILE = "briefing.json"
 TODOS_FILE = "todos.json"
@@ -314,7 +316,7 @@ def save_sports_briefings(briefings):
             json.dump(briefings, f, ensure_ascii=False, indent=2)
     except Exception as e: pass
 
-# 7. 아침 7시 시스템 알람 컴포넌트
+# 6. 아침 7시 시스템 알람 컴포넌트
 alarm_component = """
 <div id="alarmCard" style="background: rgba(30, 41, 59, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(59, 130, 246, 0.3); padding: 14px; border-radius: 12px; color: white; margin-bottom: 12px; transition: all 0.3s ease;">
     <div style="font-weight: 700; font-size: 13px; color: #60a5fa; margin-bottom: 2px;">시스템 알람 설정 (오전 7:00 KST)</div>
@@ -381,7 +383,7 @@ if (Notification.permission === "granted" || localStorage.getItem("alarm_enabled
 </script>
 """
 
-# 8. 실시간 날씨 데이터 조회 (용인시 기준)
+# 7. 실시간 날씨 데이터 조회 (용인시 기준)
 @st.cache_data(ttl=1800)
 def get_yongin_weather():
     try:
@@ -402,7 +404,7 @@ def get_yongin_weather():
     except Exception:
         return "28.0°C", "맑음 ☀️", "60%"
 
-# 9. 실시간 주가 및 뉴스 로딩 함수
+# 8. 실시간 주가 및 뉴스 로딩 함수
 @st.cache_data(ttl=60)
 def get_live_market_data(ticker_symbol):
     try:
@@ -440,7 +442,7 @@ def fetch_google_news(query, max_results=8):
     except Exception:
         return []
 
-# 10. AI 비전 이미지 분석 및 브리핑 함수
+# 9. AI 비전 이미지 분석 및 브리핑 함수
 def analyze_portfolio_image(image_bytes, api_key):
     api_key = api_key.strip()
     headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
@@ -520,7 +522,7 @@ def generate_ai_briefing(news_headlines, portfolio_items, api_key):
         except Exception: pass
     return None, "브리핑 생성 실패"
 
-# 11. 실시간 구단 경기 일정 및 AI 브리핑 함수 (한국 시간 KST 기준)
+# 10. 실시간 구단 경기 일정 및 AI 브리핑 함수 (한국 시간 KST 기준)
 def generate_team_briefing(team_name, sports_type, league, team_news, api_key):
     api_key = api_key.strip()
     headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
@@ -563,7 +565,7 @@ def generate_team_briefing(team_name, sports_type, league, team_news, api_key):
         except Exception: pass
     return None
 
-# 12. 1:1 대화형 AI 투자 챗봇 함수
+# 11. 1:1 대화형 AI 투자 챗봇 함수
 def ask_gemini_chat(chat_history, user_msg, portfolio_items, api_key):
     api_key = api_key.strip()
     headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
