@@ -48,6 +48,15 @@ st.markdown("""
         color: #64748b;
         margin-top: 6px;
     }
+    .briefing-box {
+        background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+        border-left: 4px solid #3b82f6;
+        padding: 16px;
+        border-radius: 8px;
+        margin-top: 15px;
+        margin-bottom: 15px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -144,19 +153,14 @@ function initAlarm() {
 # 5. AI 비전 이미지 분석 함수
 def analyze_portfolio_image(image_bytes, api_key):
     api_key = api_key.strip()
-    headers = {
-        "Content-Type": "application/json",
-        "x-goog-api-key": api_key
-    }
+    headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
     candidate_models = ["models/gemini-3.5-flash", "models/gemini-2.0-flash", "models/gemini-1.5-flash-latest"]
     try:
         m_res = requests.get("https://generativelanguage.googleapis.com/v1beta/models", headers=headers, timeout=5)
         if m_res.status_code == 200:
             active_models = [m['name'] for m in m_res.json().get('models', []) if 'generateContent' in m.get('supportedGenerationMethods', [])]
-            if active_models:
-                candidate_models = active_models
-    except Exception:
-        pass
+            if active_models: candidate_models = active_models
+    except Exception: pass
 
     base64_img = base64.b64encode(image_bytes).decode('utf-8')
     prompt = """
@@ -168,14 +172,7 @@ def analyze_portfolio_image(image_bytes, api_key):
         {"종목명": "KODEX 200타겟위클리커버드콜", "티커": "498400.KS", "매입단가": 13012.0, "보유수량": 863}
     ]
     """
-    payload = {
-        "contents": [{
-            "parts": [
-                {"text": prompt},
-                {"inline_data": {"mime_type": "image/jpeg", "data": base64_img}}
-            ]
-        }]
-    }
+    payload = {"contents": [{"parts": [{"text": prompt}, {"inline_data": {"mime_type": "image/jpeg", "data": base64_img}}]}]}
     
     last_err = ""
     for model_path in candidate_models:
@@ -194,7 +191,52 @@ def analyze_portfolio_image(image_bytes, api_key):
             
     return None, f"분석 오류: {last_err}"
 
-# 6. 실시간 주가 및 뉴스 로딩 함수
+# 6. [신규] 실시간 뉴스 기반 맞춤형 AI 브리핑 생성 함수
+def generate_ai_briefing(news_headlines, portfolio_items, api_key):
+    api_key = api_key.strip()
+    headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
+    candidate_models = ["models/gemini-3.5-flash", "models/gemini-2.0-flash", "models/gemini-1.5-flash-latest"]
+    try:
+        m_res = requests.get("https://generativelanguage.googleapis.com/v1beta/models", headers=headers, timeout=5)
+        if m_res.status_code == 200:
+            active_models = [m['name'] for m in m_res.json().get('models', []) if 'generateContent' in m.get('supportedGenerationMethods', [])]
+            if active_models: candidate_models = active_models
+    except Exception: pass
+
+    stock_list_str = ", ".join([f"{item['종목명']} ({item['티커']})" for item in portfolio_items])
+    news_text = "\n".join([f"- {h['title']} ({h.get('source', '')})" for h in news_headlines[:15]])
+    
+    prompt = f"""
+    당신은 수석 증시 애널리스트 AI 어시스턴트입니다.
+    오늘자 실시간 주요 금융/경제 뉴스 헤드라인과 투자자의 보유 포트폴리오를 바탕으로, 모바일에서 읽기 편한 [오늘자 맞춤형 모닝 증시 브리핑]을 작성해주세요.
+
+    [투자자 보유 종목]
+    {stock_list_str}
+
+    [오늘의 실시간 주요 뉴스 헤드라인]
+    {news_text}
+
+    [작성 가이드라인]
+    1. 🌐 오늘의 글로벌 & 국내 증시 핵심 요약 (핵심 3줄)
+    2. 🎯 내 보유 종목에 미치는 영향 및 시사점 (KODEX AI반도체 및 커버드콜 등 보유 종목별 맞춤 분석)
+    3. 💡 오늘 장 시작 전 투자 전략 및 관전 포인트 (간결하고 실용적인 가이드)
+    
+    이모지와 함께 모바일 화면에서 한눈에 들어오도록 명확하고 간결하게 마크다운으로 작성해주세요.
+    """
+    payload = {"contents": [{"parts": [{"text": prompt}]}]}
+    
+    for model_path in candidate_models:
+        clean_model = model_path if model_path.startswith("models/") else f"models/{model_path}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/{clean_model}:generateContent"
+        try:
+            res = requests.post(url, json=payload, headers=headers, timeout=25)
+            if res.status_code == 200:
+                return res.json()['candidates'][0]['content']['parts'][0]['text'], "SUCCESS"
+        except Exception: pass
+            
+    return None, "브리핑 생성에 실패했습니다."
+
+# 7. 실시간 주가 및 뉴스 로딩 함수
 @st.cache_data(ttl=60)
 def get_live_market_data(ticker_symbol):
     try:
@@ -226,8 +268,7 @@ def fetch_google_news(query, max_results=8):
                 link = item.find('link').text if item.find('link') is not None else "#"
                 pub_date = item.find('pubDate').text if item.find('pubDate') is not None else ""
                 source = item.find('source').text if item.find('source') is not None else "언론사"
-                if pub_date:
-                    pub_date = pub_date[:16]
+                if pub_date: pub_date = pub_date[:16]
                 news_items.append({"title": title, "link": link, "source": source, "date": pub_date})
             return news_items
     except Exception:
@@ -254,15 +295,13 @@ with tab_portfolio:
     st.subheader("💼 내 주식·ETF 포트폴리오 (실시간 연동 & 영구 저장)")
     
     user_portfolio = load_portfolio()
-
     total_eval_krw = 0
     total_buy_krw = 0
     calculated_rows = []
 
     for item in user_portfolio:
         cur_p, _ = get_live_market_data(item["티커"])
-        if cur_p is None:
-            cur_p = item["매입단가"]
+        if cur_p is None: cur_p = item["매입단가"]
 
         is_krw = ".KS" in item["티커"] or ".KQ" in item["티커"]
         eval_amount = cur_p * item["보유수량"]
@@ -352,48 +391,35 @@ with tab_market:
         st.metric("삼성전자", f"{samsung_p:,.0f}원" if samsung_p else "84,500원", f"{samsung_d:+.2f}%" if samsung_d else "+2.43%")
         st.metric("SK하이닉스", f"{hynix_p:,.0f}원" if hynix_p else "193,000원", f"{hynix_d:+.2f}%" if hynix_d else "+3.30%")
     with cb:
-        st.metric("현대차", f"{hyundai_p:,.0f}원" if hyundai_p else "256,000원", f"{hyundai_d:+.2f}%" if hynix_d else "+8.24%")
+        st.metric("현대차", f"{hyundai_p:,.0f}원" if hyundai_p else "256,000원", f"{hyundai_d:+.2f}%" if hyundai_d else "+8.24%")
         st.metric("엔비디아 (NVDA)", f"${nvda_p:.2f}" if nvda_p else "$224.92", f"{nvda_d:+.2f}%" if nvda_d else "-0.18%")
 
 # -------------------------------------------------------------
-# TAB 3: [신규] 내 보유 종목 맞춤 뉴스 피드
+# TAB 3: 내 보유 종목 맞춤 뉴스 피드
 # -------------------------------------------------------------
 with tab_news:
     st.subheader("📰 실시간 뉴스 피드")
-    
     user_portfolio = load_portfolio()
     my_stock_names = [item["종목명"] for item in user_portfolio]
     
-    # 내 보유 종목이 최우선으로 들어간 카테고리 목록
     category_options = (
         ["📌 [전체] 내 보유 종목 뉴스 모아보기"] + 
         [f"🎯 {name}" for name in my_stock_names] + 
         ["🇰🇷 국내 증시·경제", "🇺🇸 미국·글로벌 증시", "🤖 AI·반도체", "🔍 직접 검색"]
     )
-    
     selected_cat = st.selectbox("뉴스 카테고리 선택", category_options, index=0)
     
-    # 검색 쿼리 매칭
     if selected_cat == "📌 [전체] 내 보유 종목 뉴스 모아보기":
-        # 보유 종목들의 핵심 키워드 결합
         query = " OR ".join([f'"{name}"' for name in my_stock_names]) + " OR AI반도체 OR 커버드콜"
     elif selected_cat.startswith("🎯 "):
         stock_name = selected_cat.replace("🎯 ", "")
-        # 종목별 맞춤 키워드 매칭
-        if "AI반도체" in stock_name:
-            query = f'"{stock_name}" OR "AI반도체" OR "삼성전자 반도체"'
-        elif "커버드콜" in stock_name:
-            query = f'"{stock_name}" OR "커버드콜" OR "코스피200 분배금"'
-        else:
-            query = f'"{stock_name}"'
-    elif selected_cat == "🇰🇷 국내 증시·경제":
-        query = "코스피 OR 국내증시 OR 환율"
-    elif selected_cat == "🇺🇸 미국·글로벌 증시":
-        query = "뉴욕증시 OR 연준 금리 OR S&P500"
-    elif selected_cat == "🤖 AI·반도체":
-        query = "엔비디아 OR 반도체 HBM OR 인공지능"
-    else:
-        query = st.text_input("검색 키워드", value="삼성전자")
+        if "AI반도체" in stock_name: query = f'"{stock_name}" OR "AI반도체" OR "삼성전자 반도체"'
+        elif "커버드콜" in stock_name: query = f'"{stock_name}" OR "커버드콜" OR "코스피200 분배금"'
+        else: query = f'"{stock_name}"'
+    elif selected_cat == "🇰🇷 국내 증시·경제": query = "코스피 OR 국내증시 OR 환율"
+    elif selected_cat == "🇺🇸 미국·글로벌 증시": query = "뉴욕증시 OR 연준 금리 OR S&P500"
+    elif selected_cat == "🤖 AI·반도체": query = "엔비디아 OR 반도체 HBM OR 인공지능"
+    else: query = st.text_input("검색 키워드", value="삼성전자")
     
     if query:
         news_list = fetch_google_news(query, max_results=8)
@@ -405,8 +431,6 @@ with tab_news:
                     <div class="news-meta">📰 {item['source']} &nbsp;|&nbsp; 🕒 {item['date']}</div>
                 </div>
                 """, unsafe_allow_html=True)
-        else:
-            st.info("최신 관련 뉴스를 불러오는 중입니다...")
 
 # -------------------------------------------------------------
 # TAB 4: 종목 차트
@@ -432,14 +456,46 @@ with tab_chart:
             st.error(f"오류: {e}")
 
 # -------------------------------------------------------------
-# TAB 5: AI 브리핑
+# TAB 5: [업그레이드] 실시간 AI 브리핑 생성기
 # -------------------------------------------------------------
 with tab_briefing:
-    st.subheader("📌 증시 핵심 체크포인트")
-    st.info("📅 **주요 일정**\n• **8월 26일**: 엔비디아 2분기 실적 발표\n• **8월 28일**: 잭슨홀 심포지엄 (파월 연준의장 연설)")
-    with st.expander("1. 미국 매크로: 인플레이션 안정 vs 소비 둔화", expanded=True):
-        st.write("7월 소매판매(-0.6%) 및 소비자심리지수 하락으로 경기 둔화 우려 대두. 8월 28일 잭슨홀 미팅 주목.")
-    with st.expander("2. AI 반도체: 엔비디아 실적(8/26) & 데이터센터"):
-        st.write("블랙웰 출하 일정 및 AI ROI 검증 국면 진입. 오픈AI 데이터센터 보증 축소 이슈 점검.")
-    with st.expander("3. 국내 증시: 외국인 수급 지속성"):
-        st.write("외국인 매수세의 코스닥 및 소부장 중소형주 확산 여부 관찰 필요.")
+    st.subheader("💡 실시간 맞춤형 AI 모닝 브리핑")
+    
+    user_portfolio = load_portfolio()
+    
+    # 실시간 뉴스 수집 (AI 분석용)
+    recent_news = fetch_google_news("코스피 OR 반도체 OR 연준 금리 OR 엔비디아", max_results=12)
+    
+    api_key = st.secrets.get("GEMINI_API_KEY", None)
+    if not api_key:
+        api_key = st.text_input("Gemini API Key 입력 (실시간 브리핑 생성용)", type="password", key="briefing_key")
+        
+    if st.button("✨ 오늘자 뉴스 기반 실시간 AI 브리핑 생성"):
+        if not api_key:
+            st.warning("API Key를 입력해 주세요.")
+        else:
+            with st.spinner("구글 Gemini AI가 최신 뉴스와 내 포트폴리오를 종합 분석 중입니다..."):
+                briefing_result, status = generate_ai_briefing(recent_news, user_portfolio, api_key)
+                if status == "SUCCESS" and briefing_result:
+                    st.session_state.ai_briefing_text = briefing_result
+                    st.success("✅ AI 모닝 브리핑 생성이 완료되었습니다!")
+                else:
+                    st.error(f"오류: {status}")
+
+    # 생성된 브리핑 출력
+    if "ai_briefing_text" in st.session_state:
+        st.markdown(f"""
+        <div class="briefing-box">
+            {st.session_state.ai_briefing_text}
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        # 기본 브리핑 안내
+        st.info("💡 위의 **[✨ 오늘자 뉴스 기반 실시간 AI 브리핑 생성]** 버튼을 누르면 오늘 아침 최신 뉴스에 맞춘 맞춤형 리포트가 생성됩니다.")
+        with st.expander("📌 기본 증시 체크포인트 요약", expanded=True):
+            st.write("• **거시경제**: 7월 소매판매 및 소비자심리 하락으로 경기 둔화 우려 대두. 8월 28일 잭슨홀 주목.")
+            st.write("• **AI/반도체**: 엔비디아 2분기 실적(8/26) 대기 속 블랙웰 출하 및 CAPEX 지속성 점검.")
+            st.write("• **내 종목 포인트**: KODEX AI반도체(삼성전자·SK하이닉스 수급) 및 커버드콜 월분배금 일정 점검.")
+
+    st.markdown("---")
+    st.info("📅 **주요 캘린더**\n• **8월 26일**: 엔비디아 2분기 실적 발표\n• **8월 28일**: 잭슨홀 심포지엄 (파월 연준의장 연설)")
