@@ -71,6 +71,7 @@ PORTFOLIO_FILE = "portfolio.json"
 BRIEFING_FILE = "briefing.json"
 TODOS_FILE = "todos.json"
 SPORTS_FILE = "sports_teams.json"
+SPORTS_BRIEFINGS_FILE = "sports_briefings.json"
 
 DEFAULT_PORTFOLIO = [
     {"종목명": "KODEX AI반도체TOP2플러스", "티커": "395160.KS", "매입단가": 13234.0, "보유수량": 126},
@@ -153,6 +154,22 @@ def save_sports_teams(teams):
             json.dump(teams, f, ensure_ascii=False, indent=2)
     except Exception as e:
         st.error(f"스포츠 설정 저장 오류: {e}")
+
+def load_sports_briefings():
+    if os.path.exists(SPORTS_BRIEFINGS_FILE):
+        try:
+            with open(SPORTS_BRIEFINGS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+def save_sports_briefings(briefings):
+    try:
+        with open(SPORTS_BRIEFINGS_FILE, "w", encoding="utf-8") as f:
+            json.dump(briefings, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        pass
 
 # 4. 아침 7시 시스템 알람 컴포넌트
 alarm_component = """
@@ -379,7 +396,50 @@ def generate_ai_briefing(news_headlines, portfolio_items, api_key):
             pass
     return None, "브리핑 생성 실패"
 
-# 8. 1:1 대화형 AI 투자 챗봇 함수
+# 8. [신규] 실시간 구단 경기 일정 및 AI 브리핑 생성 함수
+def generate_team_briefing(team_name, sports_type, league, team_news, api_key):
+    api_key = api_key.strip()
+    headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
+    news_text = "\n".join([f"- {h['title']} ({h.get('source', '')})" for h in team_news[:10]])
+    
+    prompt = f"""
+    당신은 스포츠 전문 기자이자 분석가 AI입니다.
+    현재 시점(2026년 8월)을 기준으로 [{sports_type} - {team_name} ({league})] 구단의 최신 경기 일정, 최근 경기 결과, 구단 핵심 이슈를 브리핑해주세요.
+
+    [최신 관련 뉴스 데이터]
+    {news_text}
+
+    [작성 가이드라인]
+    1. 📅 **다가오는 다음 경기 일정**: (상대팀, 경기 날짜/시간, 홈/원정)
+    2. 🏆 **최근 경기 결과 & 스코어**: (최근 경기 승패, 스코어, 주요 활약 선수)
+    3. 📰 **구단 핵심 뉴스 & 라인업 이슈**: (부상자, 주요 선수 폼, 최근 팀 분위기 3줄 요약)
+
+    이모지와 함께 모바일 화면에서 한눈에 보기 좋게 마크다운으로 명확하고 간결하게 작성해주세요.
+    """
+    payload = {"contents": [{"parts": [{"text": prompt}]}]}
+
+    candidate_models = ["models/gemini-3.5-flash", "models/gemini-2.0-flash", "models/gemini-1.5-flash-latest"]
+    try:
+        m_res = requests.get("https://generativelanguage.googleapis.com/v1beta/models", headers=headers, timeout=5)
+        if m_res.status_code == 200:
+            active = [m['name'] for m in m_res.json().get('models', []) if 'generateContent' in m.get('supportedGenerationMethods', [])]
+            if active:
+                candidate_models = active
+    except Exception:
+        pass
+
+    for model_path in candidate_models:
+        clean_model = model_path if model_path.startswith("models/") else f"models/{model_path}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/{clean_model}:generateContent"
+        try:
+            res = requests.post(url, json=payload, headers=headers, timeout=20)
+            if res.status_code == 200:
+                return res.json()['candidates'][0]['content']['parts'][0]['text']
+        except Exception:
+            pass
+    return None
+
+# 9. 1:1 대화형 AI 투자 챗봇 함수
 def ask_gemini_chat(chat_history, user_msg, portfolio_items, api_key):
     api_key = api_key.strip()
     headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
@@ -425,10 +485,8 @@ def ask_gemini_chat(chat_history, user_msg, portfolio_items, api_key):
 st.title("🦁 My Personal Assistant")
 st.caption(f"기준 시각: {datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S (한국 시간)')}")
 
-# 알람 컴포넌트 삽입 (설정 완료 시 스스로 사라짐)
 components.html(alarm_component, height=95)
 
-# API 키 공유 관리
 if "saved_gemini_key" not in st.session_state:
     st.session_state.saved_gemini_key = st.secrets.get("GEMINI_API_KEY", "")
 
@@ -711,32 +769,55 @@ with tab_chat:
                     st.session_state.chat_messages.append({"role": "assistant", "content": bot_reply})
 
 # -------------------------------------------------------------
-# TAB 6: [맞춤형 검색 & 다종목 지원] 스포츠 허브
+# TAB 6: [실시간 경기 일정 & AI 브리핑 탑재] 스포츠 허브
 # -------------------------------------------------------------
 with tab_sports:
     st.subheader("🏆 내 응원팀 스포츠 허브")
     
-    # 영구 저장된 내 응원팀 목록 로드
     my_teams = load_sports_teams()
+    sports_briefings = load_sports_briefings()
     
-    # 팀 선택 셀렉트박스
     team_names = [f"{t['종목']} {t['팀명']} ({t['리그']})" for t in my_teams]
     selected_team_idx = st.selectbox("응원하는 팀 선택", range(len(team_names)), format_func=lambda x: team_names[x])
     
     current_team = my_teams[selected_team_idx]
-    
-    # 선택된 팀 안내 카드
-    st.markdown(f"""
-    <div class="sports-card">
-        <div style="font-size: 18px; font-weight: 800;">{current_team['종목']} {current_team['팀명']}</div>
-        <div style="font-size: 14px; margin-top: 6px; color: #93c5fd;">🏆 {current_team['리그']}</div>
-        <div style="font-size: 12px; color: #cbd5e1; margin-top: 6px;">실시간 최신 경기 결과 및 구단 뉴스 브리핑</div>
-    </div>
-    """, unsafe_allow_html=True)
+    team_key = current_team["팀명"]
 
-    # 해당 팀 실시간 뉴스 피드
-    st.write(f"📰 **{current_team['팀명']} 실시간 뉴스**")
-    team_news = fetch_google_news(current_team["키워드"], max_results=6)
+    # 실시간 구단 뉴스 수집 (경기 일정/결과 집중 검색)
+    search_query = f'"{current_team["팀명"]}" AND (경기 OR 일정 OR 결과 OR 승리 OR 패배 OR 하이라이트)'
+    team_news = fetch_google_news(search_query, max_results=8)
+
+    # ⚡ [실시간 AI 구단 브리핑 생성 버튼]
+    c_s1, c_s2 = st.columns([0.65, 0.35])
+    with c_s1:
+        st.write(f"### {current_team['종목']} {current_team['팀명']} ({current_team['리그']})")
+    with c_s2:
+        if st.button("⚡ 실시간 경기 & 구단 브리핑 생성", key=f"btn_sb_{team_key}"):
+            if not st.session_state.saved_gemini_key:
+                st.warning("API Key가 필요합니다.")
+            else:
+                with st.spinner(f"{team_key}의 최신 경기 일정과 결과를 AI가 분석 중입니다..."):
+                    briefing_text = generate_team_briefing(
+                        current_team['팀명'], current_team['종목'], current_team['리그'], team_news, st.session_state.saved_gemini_key
+                    )
+                    if briefing_text:
+                        now_str = datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S')
+                        sports_briefings[team_key] = {"text": briefing_text, "updated_at": now_str}
+                        save_sports_briefings(sports_briefings)
+                        st.success("구단 브리핑이 성공적으로 업데이트되었습니다!")
+                        st.rerun()
+
+    # 구단 브리핑 출력
+    if team_key in sports_briefings:
+        b_data = sports_briefings[team_key]
+        st.caption(f"🕒 **마지막 업데이트 시각**: {b_data.get('updated_at', '')}")
+        with st.container(border=True):
+            st.markdown(b_data.get("text", ""))
+    else:
+        st.info(f"💡 우측 상단의 **[⚡ 실시간 경기 & 구단 브리핑 생성]** 버튼을 누르면 AI가 {team_key}의 **다음 경기 일정, 최근 스코어, 구단 이슈**를 실시간으로 분석해 드립니다.")
+
+    st.markdown("---")
+    st.write(f"📰 **{current_team['팀명']} 실시간 경기 뉴스**")
     if team_news:
         for n in team_news:
             st.markdown(f"""
@@ -753,9 +834,9 @@ with tab_sports:
     with st.expander("➕ 새 응원팀 직접 검색 및 추가하기 (축구, 야구, 농구, e스포츠 등)"):
         with st.form("add_team_form"):
             sports_type = st.selectbox("종목 선택", ["⚽ 축구", "⚾ 야구", "🏀 농구", "🏐 배구", "🎮 e스포츠", "🏎️ 모터스포츠/기타"])
-            new_team_name = st.text_input("팀명 입력 (예: 토트넘, 한화 이글스, T1, 골든스테이트)", value="토트넘")
-            new_league = st.text_input("리그명 (예: EPL, KBO, LCK, NBA)", value="EPL")
-            new_keyword = st.text_input("뉴스 검색 키워드 (예: 토트넘 OR 손흥민)", value="토트넘")
+            new_team_name = st.text_input("팀명 입력 (예: 토트넘, 한화 이글스, T1, 골든스테이트)", value="한화 이글스")
+            new_league = st.text_input("리그명 (예: KBO, EPL, LCK, NBA)", value="KBO")
+            new_keyword = st.text_input("뉴스 검색 키워드", value="한화 이글스")
             
             if st.form_submit_button("내 응원팀에 추가하기"):
                 if new_team_name.strip():
@@ -769,13 +850,15 @@ with tab_sports:
                     st.success(f"'{new_team_name}' 팀이 성공적으로 추가되었습니다!")
                     st.rerun()
 
-        # 팀 삭제 옵션
         if len(my_teams) > 1:
             st.write("🗑️ **등록된 팀 삭제**")
             del_idx = st.selectbox("삭제할 팀 선택", range(len(my_teams)), format_func=lambda x: f"{my_teams[x]['종목']} {my_teams[x]['팀명']}", key="del_team_sel")
             if st.button("선택한 팀 삭제", key="btn_del_team"):
                 removed = my_teams.pop(del_idx)
                 save_sports_teams(my_teams)
+                if removed['팀명'] in sports_briefings:
+                    sports_briefings.pop(removed['팀명'])
+                    save_sports_briefings(sports_briefings)
                 st.success(f"'{removed['팀명']}' 팀이 삭제되었습니다.")
                 st.rerun()
 
