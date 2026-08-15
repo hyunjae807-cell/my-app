@@ -3,7 +3,6 @@ import streamlit.components.v1 as components
 import yfinance as yf
 import pandas as pd
 import plotly.graph_objects as go
-import requests
 from datetime import datetime, timezone, timedelta
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -20,16 +19,9 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 모바일 친화적 CSS 스타일링
+# 모바일 친화적 CSS
 st.markdown("""
     <style>
-    .metric-card {
-        background-color: #f8fafc;
-        border-radius: 10px;
-        padding: 14px;
-        margin-bottom: 10px;
-        border: 1px solid #e2e8f0;
-    }
     .news-card {
         background-color: #ffffff;
         border-radius: 10px;
@@ -55,7 +47,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 3. 아침 7시 시스템 알람 & 소리 컴포넌트
+# 3. 아침 7시 시스템 알람 컴포넌트
 alarm_component = """
 <div style="background: linear-gradient(135deg, #1e293b, #0f172a); padding: 15px; border-radius: 12px; color: white; margin-bottom: 15px;">
     <div style="font-weight: 700; font-size: 14px; margin-bottom: 4px;">⏰ 매일 한국 시간 아침 7시 시스템 알람</div>
@@ -119,15 +111,7 @@ function initAlarm() {
 </script>
 """
 
-# 4. 서버 공인 IP 확인 함수
-@st.cache_data(ttl=3600)
-def get_current_server_ip():
-    try:
-        return requests.get("https://api.ipify.org", timeout=3).text
-    except Exception:
-        return "확인 불가"
-
-# 5. 실시간 주가 및 뉴스 로딩 함수
+# 4. 실시간 주가 및 뉴스 로딩 함수
 @st.cache_data(ttl=60)
 def get_live_market_data(ticker_symbol):
     try:
@@ -166,50 +150,9 @@ def fetch_google_news(query, max_results=7):
     except Exception:
         return []
 
-# 6. 토스증권 연동 함수
-@st.cache_data(ttl=60)
-def fetch_toss_portfolio():
-    if "TOSS_API_KEY" in st.secrets and "TOSS_SECRET_KEY" in st.secrets and "TOSS_ACCOUNT_NO" in st.secrets:
-        try:
-            api_key = st.secrets["TOSS_API_KEY"]
-            secret_key = st.secrets["TOSS_SECRET_KEY"]
-            account_no = st.secrets["TOSS_ACCOUNT_NO"]
-
-            # OAuth2 토큰 발급
-            token_url = "https://openapi.tossinvest.com/oauth2/token"
-            token_payload = {
-                "grant_type": "client_credentials",
-                "client_id": api_key,
-                "client_secret": secret_key
-            }
-            token_headers = {"Content-Type": "application/x-www-form-urlencoded"}
-            token_res = requests.post(token_url, data=token_payload, headers=token_headers, timeout=5)
-            
-            if token_res.status_code != 200:
-                return None, f"IP 차단 또는 인증 오류: {token_res.text}"
-            
-            access_token = token_res.json().get("access_token")
-
-            # 공식 holdings 호출
-            holdings_url = "https://openapi.tossinvest.com/api/v1/holdings"
-            headers = {
-                "Authorization": f"Bearer {access_token}",
-                "X-Tossinvest-Account": str(account_no),
-                "Content-Type": "application/json"
-            }
-            holdings_res = requests.get(holdings_url, headers=headers, timeout=5)
-            
-            if holdings_res.status_code == 200:
-                return holdings_res.json(), "SUCCESS"
-            else:
-                return None, f"조회 오류: {holdings_res.text}"
-        except Exception as e:
-            return None, str(e)
-    return None, "NOT_CONFIGURED"
-
 
 # =============================================================
-# UI 렌더링
+# 메인 UI 화면
 # =============================================================
 
 st.title("📱 Daily Stock Assistant")
@@ -221,76 +164,89 @@ tab_portfolio, tab_market, tab_news, tab_chart, tab_briefing = st.tabs(
     ["💼 내 포트폴리오", "📊 실시간 시황", "📰 주요 뉴스", "🔍 종목 차트", "💡 AI 브리핑"]
 )
 
-# TAB 1: 내 포트폴리오
+# -------------------------------------------------------------
+# TAB 1: 실시간 내 포트폴리오 관리 (100% 안정 연동)
+# -------------------------------------------------------------
 with tab_portfolio:
-    st.subheader("💼 내 주식 포트폴리오")
+    st.subheader("💼 실시간 내 주식 포트폴리오")
+    st.caption("보유 종목을 등록해 두면 실시간 현재가와 총 수익률을 자동으로 추적합니다.")
     
-    server_ip = get_current_server_ip()
-    portfolio_data, status = fetch_toss_portfolio()
-    
-    if status == "SUCCESS" and portfolio_data:
-        st.success("✅ 토스증권 실시간 계좌 연동 중")
-        holdings = portfolio_data if isinstance(portfolio_data, list) else portfolio_data.get("holdings", [])
-        if holdings:
-            st.dataframe(pd.DataFrame(holdings), use_container_width=True)
-        else:
-            st.info("현재 보유 중인 종목이 없습니다.")
-    else:
-        # IP 등록 안내 카드
-        st.warning(f"🔒 **토스증권 IP 등록이 필요합니다**\n\n현재 앱 서버의 공인 IP: **`{server_ip}`**")
-        st.info("👉 [토스증권 Open API 콘솔](https://corp.tossinvest.com/ko/open-api)의 **[허용 IP 목록]**에 위 IP 주소를 등록하시면 바로 실시간 연동됩니다.")
-        
-        st.markdown("---")
-        st.subheader("✍️ 내 보유 종목 간편 관리 (실시간 시세 자동 추적)")
-        
-        # 기본 예시 종목 (직접 수정 가능)
-        if "my_stocks" not in st.session_state:
-            st.session_state.my_stocks = [
-                {"종목명": "삼성전자", "티커": "005930.KS", "매입단가": 80000, "보유수량": 50},
-                {"종목명": "SK하이닉스", "티커": "000660.KS", "매입단가": 180000, "보유수량": 20},
-                {"종목명": "엔비디아", "티커": "NVDA", "매입단가": 210.0, "보유수량": 15},
-            ]
-        
-        total_eval = 0
-        total_buy = 0
-        portfolio_rows = []
-        
-        for item in st.session_state.my_stocks:
-            cur_price, _ = get_live_market_data(item["티커"])
-            if cur_price is None:
-                cur_price = item["매입단가"]
-                
-            is_krw = ".KS" in item["티커"] or ".KQ" in item["티커"]
-            eval_amt = cur_price * item["보유수량"]
-            buy_amt = item["매입단가"] * item["보유수량"]
-            profit_amt = eval_amt - buy_amt
-            profit_rate = (profit_amt / buy_amt) * 100 if buy_amt > 0 else 0
-            
-            if is_krw:
-                total_eval += eval_amt
-                total_buy += buy_amt
-                
-            portfolio_rows.append({
-                "종목명": item["종목명"],
-                "보유수량": f"{item['보유수량']}주",
-                "매입단가": f"{item['매입단가']:,.0f}원" if is_krw else f"${item['매입단가']:.2f}",
-                "현재가": f"{cur_price:,.0f}원" if is_krw else f"${cur_price:.2f}",
-                "수익률": f"{profit_rate:+.2f}%"
-            })
-            
-        total_profit_rate = ((total_eval - total_buy) / total_buy) * 100 if total_buy > 0 else 0
-        
-        c1, c2 = st.columns(2)
-        with c1:
-            st.metric("국내 보유 총 평가금액", f"{total_eval:,.0f}원", f"{total_profit_rate:+.2f}%")
-        with c2:
-            st.metric("국내 총 평가손익", f"{total_eval - total_buy:+,.0f}원")
-            
-        st.dataframe(pd.DataFrame(portfolio_rows), use_container_width=True)
+    # 기본 보유 종목 초기화
+    if "user_portfolio" not in st.session_state:
+        st.session_state.user_portfolio = [
+            {"종목명": "삼성전자", "티커": "005930.KS", "매입단가": 80000.0, "보유수량": 50},
+            {"종목명": "SK하이닉스", "티커": "000660.KS", "매입단가": 185000.0, "보유수량": 20},
+            {"종목명": "엔비디아", "티커": "NVDA", "매입단가": 210.0, "보유수량": 15},
+        ]
 
+    # 실시간 시세 매칭 및 손익 계산
+    total_eval_krw = 0
+    total_buy_krw = 0
+    calculated_rows = []
+
+    for item in st.session_state.user_portfolio:
+        cur_p, _ = get_live_market_data(item["티커"])
+        if cur_p is None:
+            cur_p = item["매입단가"]
+
+        is_krw = ".KS" in item["티커"] or ".KQ" in item["티커"]
+        eval_amount = cur_p * item["보유수량"]
+        buy_amount = item["매입단가"] * item["보유수량"]
+        profit_amount = eval_amount - buy_amount
+        profit_rate = (profit_amount / buy_amount) * 100 if buy_amount > 0 else 0
+
+        if is_krw:
+            total_eval_krw += eval_amount
+            total_buy_krw += buy_amount
+
+        calculated_rows.append({
+            "종목명": item["종목명"],
+            "티커": item["티커"],
+            "보유수량": f"{item['보유수량']}주",
+            "매입단가": f"{item['매입단가']:,.0f}원" if is_krw else f"${item['매입단가']:.2f}",
+            "현재가 (실시간)": f"{cur_p:,.0f}원" if is_krw else f"${cur_p:.2f}",
+            "평가손익": f"{profit_amount:+,.0f}원" if is_krw else f"${profit_amount:+.2f}",
+            "수익률": f"{profit_rate:+.2f}%"
+        })
+
+    # 상단 총 요약 카드
+    total_profit_krw = total_eval_krw - total_buy_krw
+    total_rate_krw = (total_profit_krw / total_buy_krw) * 100 if total_buy_krw > 0 else 0
+
+    c1, c2 = st.columns(2)
+    with c1:
+        st.metric("국내 보유 총 평가금액", f"{total_eval_krw:,.0f}원", f"{total_rate_krw:+.2f}%")
+    with c2:
+        st.metric("국내 총 평가손익", f"{total_profit_krw:+,.0f}원")
+
+    st.markdown("---")
+    st.write("📋 **보유 종목 실시간 현황표**")
+    st.dataframe(pd.DataFrame(calculated_rows), use_container_width=True)
+
+    # 종목 추가/수정 인터페이스
+    with st.expander("➕ 새 종목 추가 / 포트폴리오 관리"):
+        with st.form("add_stock_form"):
+            f_name = st.text_input("종목명 (예: 현대차, 애플)", value="현대차")
+            f_ticker = st.text_input("티커 (국내: 005380.KS / 미국: AAPL)", value="005380.KS")
+            f_price = st.number_input("매입단가 (원 또는 달러)", value=240000.0)
+            f_qty = st.number_input("보유 수량 (주)", value=10, min_value=1)
+            
+            submitted = st.form_submit_button("포트폴리오에 추가하기")
+            if submitted:
+                st.session_state.user_portfolio.append({
+                    "종목명": f_name,
+                    "티커": f_ticker.upper(),
+                    "매입단가": f_price,
+                    "보유수량": int(f_qty)
+                })
+                st.success(f"'{f_name}' 종목이 추가되었습니다!")
+                st.rerun()
+
+# -------------------------------------------------------------
 # TAB 2: 실시간 시황
+# -------------------------------------------------------------
 with tab_market:
-    st.subheader("🌐 글로벌 & 국내 주요 지수")
+    st.subheader("🌐 글로벌 & 국내 주요 지수 (실시간)")
     kospi_p, kospi_d = get_live_market_data("^KS11")
     sp500_p, sp500_d = get_live_market_data("^GSPC")
     nasdaq_p, nasdaq_d = get_live_market_data("^IXIC")
@@ -305,7 +261,7 @@ with tab_market:
         st.metric("브렌트유 (Oil)", f"${oil_p:.2f}" if oil_p else "$88.59", f"{oil_d:+.2f}%" if oil_d else "+1.75%")
 
     st.markdown("---")
-    st.subheader("🏢 주요 대형주 시세")
+    st.subheader("🏢 주요 대형주 시세 (실시간)")
     samsung_p, samsung_d = get_live_market_data("005930.KS")
     hynix_p, hynix_d = get_live_market_data("000660.KS")
     hyundai_p, hyundai_d = get_live_market_data("005380.KS")
@@ -319,7 +275,9 @@ with tab_market:
         st.metric("현대차", f"{hyundai_p:,.0f}원" if hyundai_p else "256,000원", f"{hyundai_d:+.2f}%" if hyundai_d else "+8.24%")
         st.metric("엔비디아 (NVDA)", f"${nvda_p:.2f}" if nvda_p else "$224.92", f"{nvda_d:+.2f}%" if nvda_d else "-0.18%")
 
+# -------------------------------------------------------------
 # TAB 3: 주요 뉴스
+# -------------------------------------------------------------
 with tab_news:
     st.subheader("📰 실시간 핵심 뉴스")
     news_category = st.radio("카테고리", ["🇰🇷 국내 증시·경제", "🇺🇸 미국·글로벌 증시", "🤖 AI·반도체", "🔍 직접 검색"], horizontal=True)
@@ -343,7 +301,9 @@ with tab_news:
                 </div>
                 """, unsafe_allow_html=True)
 
+# -------------------------------------------------------------
 # TAB 4: 종목 차트
+# -------------------------------------------------------------
 with tab_chart:
     st.subheader("🔍 글로벌 종목 차트 분석")
     ticker_input = st.text_input("티커 입력 (예: AAPL, NVDA, TSLA, 005930.KS)", value="NVDA").upper()
@@ -359,18 +319,4 @@ with tab_chart:
                 st.metric(label=f"{ticker_input} 현재/최근가", value=f"{currency}{current_price:,.2f}" if currency == "$" else f"{current_price:,.0f}원", delta=f"{change_pct:+.2f}%")
                 fig = go.Figure()
                 fig.add_trace(go.Scatter(x=hist.index, y=hist['Close'], mode='lines+markers', name='Close', line=dict(color='#0066cc', width=2)))
-                fig.update_layout(title=f"{ticker_input} 최근 1개월 주가 추이", margin=dict(l=10, r=10, t=40, b=10), height=300, xaxis_rangeslider_visible=False)
-                st.plotly_chart(fig, use_container_width=True)
-        except Exception as e:
-            st.error(f"오류: {e}")
-
-# TAB 5: AI 브리핑
-with tab_briefing:
-    st.subheader("📌 증시 핵심 체크포인트")
-    st.info("📅 **주요 일정**\n• **8월 26일**: 엔비디아 2분기 실적 발표\n• **8월 28일**: 잭슨홀 심포지엄 (파월 연준의장 연설)")
-    with st.expander("1. 미국 매크로: 인플레이션 안정 vs 소비 둔화", expanded=True):
-        st.write("7월 소매판매(-0.6%) 및 소비자심리지수 하락으로 경기 둔화 우려 대두. 8월 28일 잭슨홀 미팅 주목.")
-    with st.expander("2. AI 반도체: 엔비디아 실적(8/26) & 데이터센터"):
-        st.write("블랙웰 출하 일정 및 AI ROI 검증 국면 진입. 오픈AI 데이터센터 보증 축소 이슈 점검.")
-    with st.expander("3. 국내 증시: 외국인 수급 지속성"):
-        st.write("외국인 매수세의 코스닥 및 소부장 중소형주 확산 여부 관찰 필요.")
+                fig.update_layout(title=f"{ticker_input} 최근 1개월 주가 추이", margin=dict(l
