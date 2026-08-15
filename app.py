@@ -80,15 +80,18 @@ def load_portfolio():
         try:
             with open(PORTFOLIO_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                if data: return data
-        except Exception: pass
+                if data:
+                    return data
+        except Exception:
+            pass
     return DEFAULT_PORTFOLIO
 
 def save_portfolio(data):
     try:
         with open(PORTFOLIO_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
-    except Exception as e: st.error(f"저장 오류: {e}")
+    except Exception as e:
+        st.error(f"저장 오류: {e}")
 
 def load_briefing():
     if os.path.exists(BRIEFING_FILE):
@@ -96,29 +99,34 @@ def load_briefing():
             with open(BRIEFING_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 return data.get("text"), data.get("generated_at")
-        except Exception: pass
+        except Exception:
+            pass
     return None, None
 
 def save_briefing(text, generated_at_str):
     try:
         with open(BRIEFING_FILE, "w", encoding="utf-8") as f:
             json.dump({"text": text, "generated_at": generated_at_str}, f, ensure_ascii=False, indent=2)
-    except Exception as e: st.error(f"저장 오류: {e}")
+    except Exception as e:
+        st.error(f"저장 오류: {e}")
 
 def load_todos():
     if os.path.exists(TODOS_FILE):
         try:
             with open(TODOS_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                if data: return data
-        except Exception: pass
+                if data:
+                    return data
+        except Exception:
+            pass
     return ["주요 증시 캘린더 확인하기", "맨유 경기 일정 체크하기"]
 
 def save_todos(todos):
     try:
         with open(TODOS_FILE, "w", encoding="utf-8") as f:
             json.dump(todos, f, ensure_ascii=False, indent=2)
-    except Exception as e: st.error(f"저장 오류: {e}")
+    except Exception as e:
+        st.error(f"저장 오류: {e}")
 
 # 4. 아침 7시 시스템 알람 컴포넌트
 alarm_component = """
@@ -178,7 +186,7 @@ function initAlarm() {
 </script>
 """
 
-# 5. [수정 완료] 실시간 날씨 데이터 조회 (용인시 기준)
+# 5. 실시간 날씨 데이터 조회 (용인시 기준)
 @st.cache_data(ttl=1800)
 def get_yongin_weather():
     try:
@@ -235,7 +243,8 @@ def fetch_google_news(query, max_results=8):
                 link = item.find('link').text if item.find('link') is not None else "#"
                 pub_date = item.find('pubDate').text if item.find('pubDate') is not None else ""
                 source = item.find('source').text if item.find('source') is not None else "언론사"
-                if pub_date: pub_date = pub_date[:16]
+                if pub_date:
+                    pub_date = pub_date[:16]
                 news_items.append({"title": title, "link": link, "source": source, "date": pub_date})
             return news_items
     except Exception:
@@ -250,8 +259,10 @@ def analyze_portfolio_image(image_bytes, api_key):
         m_res = requests.get("https://generativelanguage.googleapis.com/v1beta/models", headers=headers, timeout=5)
         if m_res.status_code == 200:
             active = [m['name'] for m in m_res.json().get('models', []) if 'generateContent' in m.get('supportedGenerationMethods', [])]
-            if active: candidate_models = active
-    except Exception: pass
+            if active:
+                candidate_models = active
+    except Exception:
+        pass
 
     base64_img = base64.b64encode(image_bytes).decode('utf-8')
     prompt = """
@@ -275,8 +286,10 @@ def analyze_portfolio_image(image_bytes, api_key):
                 raw = res.json()['candidates'][0]['content']['parts'][0]['text']
                 raw = raw.replace("```json", "").replace("```", "").strip()
                 return json.loads(raw), "SUCCESS"
-            else: last_err = f"{clean_model}: {res.text}"
-        except Exception as e: last_err = str(e)
+            else:
+                last_err = f"{clean_model}: {res.text}"
+        except Exception as e:
+            last_err = str(e)
     return None, f"분석 오류: {last_err}"
 
 def generate_ai_briefing(news_headlines, portfolio_items, api_key):
@@ -287,8 +300,10 @@ def generate_ai_briefing(news_headlines, portfolio_items, api_key):
         m_res = requests.get("https://generativelanguage.googleapis.com/v1beta/models", headers=headers, timeout=5)
         if m_res.status_code == 200:
             active = [m['name'] for m in m_res.json().get('models', []) if 'generateContent' in m.get('supportedGenerationMethods', [])]
-            if active: candidate_models = active
-    except Exception: pass
+            if active:
+                candidate_models = active
+    except Exception:
+        pass
 
     stock_list_str = ", ".join([f"{item['종목명']} ({item['티커']})" for item in portfolio_items])
     news_text = "\n".join([f"- {h['title']} ({h.get('source', '')})" for h in news_headlines[:15]])
@@ -318,7 +333,8 @@ def generate_ai_briefing(news_headlines, portfolio_items, api_key):
             res = requests.post(url, json=payload, headers=headers, timeout=25)
             if res.status_code == 200:
                 return res.json()['candidates'][0]['content']['parts'][0]['text'], "SUCCESS"
-        except Exception: pass
+        except Exception:
+            pass
     return None, "브리핑 생성 실패"
 
 # 8. 1:1 대화형 AI 투자 챗봇 함수
@@ -343,7 +359,8 @@ def ask_gemini_chat(chat_history, user_msg, portfolio_items, api_key):
             res = requests.post(url, json={"contents": contents}, headers=headers, timeout=20)
             if res.status_code == 200:
                 return res.json()['candidates'][0]['content']['parts'][0]['text']
-        except Exception: pass
+        except Exception:
+            pass
     return "답변을 불러오는 중 오류가 발생했습니다."
 
 
@@ -373,7 +390,8 @@ with tab_portfolio:
 
     for item in user_portfolio:
         cur_p, _ = get_live_market_data(item["티커"])
-        if cur_p is None: cur_p = item["매입단가"]
+        if cur_p is None:
+            cur_p = item["매입단가"]
 
         is_krw = ".KS" in item["티커"] or ".KQ" in item["티커"]
         eval_amount = cur_p * item["보유수량"]
@@ -399,8 +417,10 @@ with tab_portfolio:
     total_rate_krw = (total_profit_krw / total_buy_krw) * 100 if total_buy_krw > 0 else 0
 
     c1, c2 = st.columns(2)
-    with c1: st.metric("총 평가금액", f"{total_eval_krw:,.0f}원", f"{total_rate_krw:+.2f}%")
-    with c2: st.metric("총 평가손익", f"{total_profit_krw:+,.0f}원", f"매입총액: {total_buy_krw:,.0f}원")
+    with c1:
+        st.metric("총 평가금액", f"{total_eval_krw:,.0f}원", f"{total_rate_krw:+.2f}%")
+    with c2:
+        st.metric("총 평가손익", f"{total_profit_krw:+,.0f}원", f"매입총액: {total_buy_krw:,.0f}원")
 
     st.markdown("---")
     st.write("📋 **보유 종목 실시간 현황표**")
@@ -417,8 +437,10 @@ with tab_portfolio:
         annual_div = monthly_div * 12
         
         cd1, cd2 = st.columns(2)
-        with cd1: st.metric("예상 월 분배금", f"{monthly_div:,.0f}원")
-        with cd2: st.metric("예상 연간 배당 소득", f"{annual_div:,.0f}원")
+        with cd1:
+            st.metric("예상 월 분배금", f"{monthly_div:,.0f}원")
+        with cd2:
+            st.metric("예상 연간 배당 소득", f"{annual_div:,.0f}원")
 
     # 📸 캡처 사진 자동 업데이트
     st.markdown("---")
@@ -427,9 +449,11 @@ with tab_portfolio:
         if uploaded_file is not None:
             st.image(uploaded_file, use_container_width=True)
             api_key = st.secrets.get("GEMINI_API_KEY", "")
-            if not api_key: api_key = st.text_input("Gemini API Key 입력", type="password")
+            if not api_key:
+                api_key = st.text_input("Gemini API Key 입력", type="password")
             if st.button("✨ AI로 잔고 사진 분석 및 저장"):
-                if not api_key: st.warning("API Key를 입력해 주세요.")
+                if not api_key:
+                    st.warning("API Key를 입력해 주세요.")
                 else:
                     with st.spinner("AI 분석 중..."):
                         parsed, status = analyze_portfolio_image(uploaded_file.getvalue(), api_key)
@@ -437,7 +461,8 @@ with tab_portfolio:
                             save_portfolio(parsed)
                             st.success("🎉 포트폴리오가 영구 저장되었습니다!")
                             st.rerun()
-                        else: st.error(f"오류: {status}")
+                        else:
+                            st.error(f"오류: {status}")
 
 # -------------------------------------------------------------
 # TAB 2: 실시간 시황
@@ -469,7 +494,7 @@ with tab_market:
         st.metric("삼성전자", f"{samsung_p:,.0f}원" if samsung_p else "84,500원", f"{samsung_d:+.2f}%" if samsung_d else "+2.43%")
         st.metric("SK하이닉스", f"{hynix_p:,.0f}원" if hynix_p else "193,000원", f"{hynix_d:+.2f}%" if hynix_d else "+3.30%")
     with cb:
-        st.metric("현대차", f"{hyundai_p:,.0f}원" if hyundai_p else "256,000원", f"{hyundai_d:+.2f}%" if hynix_d else "+8.24%")
+        st.metric("현대차", f"{hyundai_p:,.0f}원" if hyundai_p else "256,000원", f"{hyundai_d:+.2f}%" if hyundai_d else "+8.24%")
         st.metric("엔비디아 (NVDA)", f"${nvda_p:.2f}" if nvda_p else "$224.92", f"{nvda_d:+.2f}%" if nvda_d else "-0.18%")
 
 # -------------------------------------------------------------
@@ -491,13 +516,20 @@ with tab_news:
         query = " OR ".join([f'"{name}"' for name in my_stock_names]) + " OR AI반도체 OR 커버드콜"
     elif selected_cat.startswith("🎯 "):
         stock_name = selected_cat.replace("🎯 ", "")
-        if "AI반도체" in stock_name: query = f'"{stock_name}" OR "AI반도체" OR "삼성전자 반도체"'
-        elif "커버드콜" in stock_name: query = f'"{stock_name}" OR "커버드콜" OR "코스피200 분배금"'
-        else: query = f'"{stock_name}"'
-    elif selected_cat == "🇰🇷 국내 증시·경제": query = "코스피 OR 국내증시 OR 환율"
-    elif selected_cat == "🇺🇸 미국·글로벌 증시": query = "뉴욕증시 OR 연준 금리 OR S&P500"
-    elif selected_cat == "🤖 AI·반도체": query = "엔비디아 OR 반도체 HBM OR 인공지능"
-    else: query = st.text_input("검색 키워드", value="삼성전자")
+        if "AI반도체" in stock_name:
+            query = f'"{stock_name}" OR "AI반도체" OR "삼성전자 반도체"'
+        elif "커버드콜" in stock_name:
+            query = f'"{stock_name}" OR "커버드콜" OR "코스피200 분배금"'
+        else:
+            query = f'"{stock_name}"'
+    elif selected_cat == "🇰🇷 국내 증시·경제":
+        query = "코스피 OR 국내증시 OR 환율"
+    elif selected_cat == "🇺🇸 미국·글로벌 증시":
+        query = "뉴욕증시 OR 연준 금리 OR S&P500"
+    elif selected_cat == "🤖 AI·반도체":
+        query = "엔비디아 OR 반도체 HBM OR 인공지능"
+    else:
+        query = st.text_input("검색 키워드", value="삼성전자")
     
     if query:
         news_list = fetch_google_news(query, max_results=8)
@@ -526,7 +558,8 @@ with tab_briefing:
     c_btn1, c_btn2 = st.columns(2)
     with c_btn1:
         if st.button("✨ 오늘자 AI 브리핑 생성"):
-            if not api_key: st.warning("API Key를 입력해 주세요.")
+            if not api_key:
+                st.warning("API Key를 입력해 주세요.")
             else:
                 with st.spinner("구글 Gemini AI가 종합 분석 중입니다..."):
                     briefing_result, status = generate_ai_briefing(recent_news, user_portfolio, api_key)
@@ -535,7 +568,8 @@ with tab_briefing:
                         save_briefing(briefing_result, now_str)
                         st.success("✅ AI 모닝 브리핑 생성 및 저장 완료!")
                         st.rerun()
-                    else: st.error(f"오류: {status}")
+                    else:
+                        st.error(f"오류: {status}")
 
     saved_briefing_text, saved_time = load_briefing()
 
