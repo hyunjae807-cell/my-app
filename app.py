@@ -114,23 +114,39 @@ function initAlarm() {
 </script>
 """
 
-# 4. [수정 완료] AQ. 키 및 AIza 키 100% 지원 Gemini Vision 함수
+# 4. [완벽 개선] 구글 서버에서 실시간 활성 모델을 자동 탐색하는 AI 비전 함수
 def analyze_portfolio_image(image_bytes, api_key):
     api_key = api_key.strip()
-    
-    # AQ. 키를 위한 x-goog-api-key 헤더 인증
     headers = {
         "Content-Type": "application/json",
         "x-goog-api-key": api_key
     }
     
-    models_to_try = [
-        "gemini-1.5-flash",
-        "gemini-1.5-flash-latest",
-        "gemini-2.0-flash",
-        "gemini-2.5-flash"
-    ]
-    
+    # 1단계: 구글 API에서 현재 내 키로 사용 가능한 실제 모델 목록을 실시간으로 가져옴
+    candidate_models = []
+    try:
+        models_url = "https://generativelanguage.googleapis.com/v1beta/models"
+        m_res = requests.get(models_url, headers=headers, timeout=8)
+        if m_res.status_code == 200:
+            for m in m_res.json().get("models", []):
+                methods = m.get("supportedGenerationMethods", [])
+                if "generateContent" in methods:
+                    m_name = m.get("name", "")
+                    if "flash" in m_name:
+                        candidate_models.insert(0, m_name)
+                    else:
+                        candidate_models.append(m_name)
+    except Exception:
+        pass
+        
+    if not candidate_models:
+        candidate_models = [
+            "models/gemini-3.5-flash",
+            "models/gemini-2.5-flash-lite",
+            "models/gemini-2.0-flash",
+            "models/gemini-1.5-flash"
+        ]
+
     base64_img = base64.b64encode(image_bytes).decode('utf-8')
     prompt = """
     이 이미지는 증권사 주식/ETF 잔고 화면입니다.
@@ -152,23 +168,18 @@ def analyze_portfolio_image(image_bytes, api_key):
     }
     
     last_error = ""
-    for model_name in models_to_try:
+    for model_path in candidate_models:
+        clean_model = model_path if model_path.startswith("models/") else f"models/{model_path}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/{clean_model}:generateContent"
+        
         try:
-            # 1. 헤더 인증 방식 호출
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
-            res = requests.post(url, json=payload, headers=headers, timeout=20)
-            
-            # 2. 파라미터 방식 fallback
-            if res.status_code != 200:
-                url_fallback = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
-                res = requests.post(url_fallback, json=payload, headers={"Content-Type": "application/json"}, timeout=20)
-                
+            res = requests.post(url, json=payload, headers=headers, timeout=25)
             if res.status_code == 200:
                 raw_text = res.json()['candidates'][0]['content']['parts'][0]['text']
                 raw_text = raw_text.replace("```json", "").replace("```", "").strip()
                 return json.loads(raw_text), "SUCCESS"
             else:
-                last_error = f"{model_name} ({res.status_code}): {res.text}"
+                last_error = f"{clean_model} ({res.status_code}): {res.text}"
         except Exception as e:
             last_error = str(e)
             
@@ -233,14 +244,12 @@ tab_portfolio, tab_market, tab_news, tab_chart, tab_briefing = st.tabs(
 with tab_portfolio:
     st.subheader("💼 내 주식·ETF 포트폴리오 (실시간 연동)")
     
-    # 캡처 사진의 실제 보유 종목 기본 적용
     if "user_portfolio" not in st.session_state:
         st.session_state.user_portfolio = [
             {"종목명": "KODEX AI반도체TOP2플러스", "티커": "466920.KS", "매입단가": 13234.0, "보유수량": 126},
             {"종목명": "KODEX 200타겟위클리커버드콜", "티커": "476800.KS", "매입단가": 13012.0, "보유수량": 863}
         ]
 
-    # 실시간 손익 계산
     total_eval_krw = 0
     total_buy_krw = 0
     calculated_rows = []
@@ -270,7 +279,6 @@ with tab_portfolio:
             "수익률": f"{profit_rate:+.2f}%"
         })
 
-    # 상단 요약 메트릭
     total_profit_krw = total_eval_krw - total_buy_krw
     total_rate_krw = (total_profit_krw / total_buy_krw) * 100 if total_buy_krw > 0 else 0
 
@@ -301,7 +309,7 @@ with tab_portfolio:
             if not api_key:
                 st.warning("API Key를 입력해 주세요.")
             else:
-                with st.spinner("AI가 잔고 이미지를 정밀 분석 중입니다..."):
+                with st.spinner("구글 AI가 사용 가능한 최신 모델로 이미지를 정밀 분석 중입니다..."):
                     parsed_stocks, status = analyze_portfolio_image(uploaded_file.getvalue(), api_key)
                     if status == "SUCCESS" and parsed_stocks:
                         st.session_state.user_portfolio = parsed_stocks
