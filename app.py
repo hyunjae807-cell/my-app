@@ -51,12 +51,12 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 3. [영구 저장소 관리] 포트폴리오 파일 저장 및 불러오기 함수
+# 3. [영구 저장소] 정확한 ETF 종목 코드로 초기화
 PORTFOLIO_FILE = "portfolio.json"
 
 DEFAULT_PORTFOLIO = [
-    {"종목명": "KODEX AI반도체TOP2플러스", "티커": "466920.KS", "매입단가": 13234.0, "보유수량": 126},
-    {"종목명": "KODEX 200타겟위클리커버드콜", "티커": "476800.KS", "매입단가": 13012.0, "보유수량": 863}
+    {"종목명": "KODEX AI반도체TOP2플러스", "티커": "395160.KS", "매입단가": 13234.0, "보유수량": 126},
+    {"종목명": "KODEX 200타겟위클리커버드콜", "티커": "498400.KS", "매입단가": 13012.0, "보유수량": 863}
 ]
 
 def load_portfolio():
@@ -75,7 +75,7 @@ def save_portfolio(data):
         with open(PORTFOLIO_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
     except Exception as e:
-        st.error(f"저장 중 오류 발생: {e}")
+        st.error(f"저장 오류: {e}")
 
 # 4. 아침 7시 시스템 알람 컴포넌트
 alarm_component = """
@@ -141,7 +141,7 @@ function initAlarm() {
 </script>
 """
 
-# 5. AI 비전 이미지 분석 함수 (구글 실시간 모델 자동 탐색)
+# 5. 최신 AI 비전 이미지 분석 함수
 def analyze_portfolio_image(image_bytes, api_key):
     api_key = api_key.strip()
     headers = {
@@ -149,38 +149,25 @@ def analyze_portfolio_image(image_bytes, api_key):
         "x-goog-api-key": api_key
     }
     
-    candidate_models = []
+    # 2026 최신 모델 탐색
+    candidate_models = ["models/gemini-3.5-flash", "models/gemini-2.0-flash", "models/gemini-1.5-flash-latest"]
     try:
-        models_url = "https://generativelanguage.googleapis.com/v1beta/models"
-        m_res = requests.get(models_url, headers=headers, timeout=8)
+        m_res = requests.get("https://generativelanguage.googleapis.com/v1beta/models", headers=headers, timeout=5)
         if m_res.status_code == 200:
-            for m in m_res.json().get("models", []):
-                methods = m.get("supportedGenerationMethods", [])
-                if "generateContent" in methods:
-                    m_name = m.get("name", "")
-                    if "flash" in m_name:
-                        candidate_models.insert(0, m_name)
-                    else:
-                        candidate_models.append(m_name)
+            active_models = [m['name'] for m in m_res.json().get('models', []) if 'generateContent' in m.get('supportedGenerationMethods', [])]
+            if active_models:
+                candidate_models = active_models
     except Exception:
         pass
-        
-    if not candidate_models:
-        candidate_models = [
-            "models/gemini-3.5-flash",
-            "models/gemini-2.5-flash-lite",
-            "models/gemini-2.0-flash",
-            "models/gemini-1.5-flash"
-        ]
 
     base64_img = base64.b64encode(image_bytes).decode('utf-8')
     prompt = """
     이 이미지는 증권사 주식/ETF 잔고 화면입니다.
-    이미지에서 보유 중인 모든 종목명, 야후파이낸스 티커(국내 종목/ETF는 6자리코드.KS 또는 .KQ, 미국 주식은 알파벳 티커), 평균 매입단가(숫자), 보유 수량(정수)을 추출해주세요.
-    반드시 아래와 같은 순수 JSON 배열 형식으로만 응답해주세요 (코드블록 마크다운 없이 JSON 텍스트만 출력):
+    보유 중인 종목명, 야후파이낸스 티커(국내 종목/ETF는 6자리코드.KS 또는 .KQ, 미국 주식은 알파벳), 평균 매입단가(숫자), 보유 수량(정수)을 추출해주세요.
+    반드시 순수 JSON 배열 형식으로만 응답해주세요:
     [
-        {"종목명": "KODEX AI반도체TOP2플러스", "티커": "466920.KS", "매입단가": 13234.0, "보유수량": 126},
-        {"종목명": "KODEX 200타겟위클리커버드콜", "티커": "476800.KS", "매입단가": 13012.0, "보유수량": 863}
+        {"종목명": "KODEX AI반도체TOP2플러스", "티커": "395160.KS", "매입단가": 13234.0, "보유수량": 126},
+        {"종목명": "KODEX 200타겟위클리커버드콜", "티커": "498400.KS", "매입단가": 13012.0, "보유수량": 863}
     ]
     """
     
@@ -193,24 +180,24 @@ def analyze_portfolio_image(image_bytes, api_key):
         }]
     }
     
-    last_error = ""
+    last_err = ""
     for model_path in candidate_models:
         clean_model = model_path if model_path.startswith("models/") else f"models/{model_path}"
         url = f"https://generativelanguage.googleapis.com/v1beta/{clean_model}:generateContent"
         try:
-            res = requests.post(url, json=payload, headers=headers, timeout=25)
+            res = requests.post(url, json=payload, headers=headers, timeout=20)
             if res.status_code == 200:
-                raw_text = res.json()['candidates'][0]['content']['parts'][0]['text']
-                raw_text = raw_text.replace("```json", "").replace("```", "").strip()
-                return json.loads(raw_text), "SUCCESS"
+                raw = res.json()['candidates'][0]['content']['parts'][0]['text']
+                raw = raw.replace("```json", "").replace("```", "").strip()
+                return json.loads(raw), "SUCCESS"
             else:
-                last_error = f"{clean_model} ({res.status_code}): {res.text}"
+                last_err = f"{clean_model}: {res.text}"
         except Exception as e:
-            last_error = str(e)
+            last_err = str(e)
             
-    return None, f"분석 실패: {last_error}"
+    return None, f"분석 오류: {last_err}"
 
-# 6. 실시간 주가 및 뉴스 로딩 함수
+# 6. 실시간 주가 로딩 함수
 @st.cache_data(ttl=60)
 def get_live_market_data(ticker_symbol):
     try:
@@ -264,12 +251,11 @@ tab_portfolio, tab_market, tab_news, tab_chart, tab_briefing = st.tabs(
 )
 
 # -------------------------------------------------------------
-# TAB 1: 내 실제 포트폴리오 (영구 저장 연동)
+# TAB 1: 내 실제 포트폴리오
 # -------------------------------------------------------------
 with tab_portfolio:
-    st.subheader("💼 내 주식·ETF 포트폴리오 (실시간 연동 & 영구 저장)")
+    st.subheader("💼 내 주식·ETF 포트폴리오 (실시간 연동)")
     
-    # 영구 저장 파일에서 불러오기
     user_portfolio = load_portfolio()
 
     total_eval_krw = 0
@@ -294,9 +280,10 @@ with tab_portfolio:
         calculated_rows.append({
             "종목명": item["종목명"],
             "티커": item["티커"],
-            "보유수량": f"{item['보유수량']}주",
+            "보유수량": f"{item['보유수량']:,}주",
             "매입단가": f"{item['매입단가']:,.0f}원" if is_krw else f"${item['매입단가']:.2f}",
             "현재가 (실시간)": f"{cur_p:,.0f}원" if is_krw else f"${cur_p:.2f}",
+            "평가금액": f"{eval_amount:,.0f}원" if is_krw else f"${eval_amount:,.2f}",
             "평가손익": f"{profit_amount:+,.0f}원" if is_krw else f"${profit_amount:+.2f}",
             "수익률": f"{profit_rate:+.2f}%"
         })
@@ -308,7 +295,7 @@ with tab_portfolio:
     with c1:
         st.metric("총 평가금액", f"{total_eval_krw:,.0f}원", f"{total_rate_krw:+.2f}%")
     with c2:
-        st.metric("총 평가손익", f"{total_profit_krw:+,.0f}원")
+        st.metric("총 평가손익", f"{total_profit_krw:+,.0f}원", f"매입총액: {total_buy_krw:,.0f}원")
 
     st.markdown("---")
     st.write("📋 **보유 종목 실시간 현황표**")
@@ -316,25 +303,23 @@ with tab_portfolio:
 
     # 📸 캡처 사진 자동 업데이트
     st.markdown("---")
-    st.subheader("📸 캡처 사진으로 포트폴리오 자동 업데이트")
+    st.subheader("📸 새 잔고 사진으로 포트폴리오 업데이트")
     
-    uploaded_file = st.file_uploader("새로운 잔고 캡처 사진 올리기", type=["png", "jpg", "jpeg"])
+    uploaded_file = st.file_uploader("증권사 잔고 캡처 사진 올리기", type=["png", "jpg", "jpeg"])
     
     if uploaded_file is not None:
         st.image(uploaded_file, caption="업로드된 잔고 캡처", use_container_width=True)
-        
         api_key = st.secrets.get("GEMINI_API_KEY", None)
         if not api_key:
             api_key = st.text_input("Google AI Studio (Gemini) API Key 입력", type="password")
             
-        if st.button("✨ AI로 잔고 사진 분석 및 영구 저장"):
+        if st.button("✨ AI로 잔고 사진 분석 및 저장"):
             if not api_key:
                 st.warning("API Key를 입력해 주세요.")
             else:
-                with st.spinner("AI가 잔고 이미지를 정밀 분석 중입니다..."):
+                with st.spinner("AI가 이미지를 정밀 분석 중입니다..."):
                     parsed_stocks, status = analyze_portfolio_image(uploaded_file.getvalue(), api_key)
                     if status == "SUCCESS" and parsed_stocks:
-                        # 영구 파일에 저장
                         save_portfolio(parsed_stocks)
                         st.success(f"🎉 총 {len(parsed_stocks)}개 종목이 인식되어 영구 저장되었습니다!")
                         st.rerun()
@@ -405,7 +390,7 @@ with tab_news:
 # -------------------------------------------------------------
 with tab_chart:
     st.subheader("🔍 글로벌 종목 차트 분석")
-    ticker_input = st.text_input("티커 입력 (예: 466920.KS, 476800.KS, NVDA)", value="466920.KS").upper()
+    ticker_input = st.text_input("티커 입력 (예: 395160.KS, 498400.KS, NVDA)", value="395160.KS").upper()
     if st.button("차트 조회"):
         try:
             stock = yf.Ticker(ticker_input)
