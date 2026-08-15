@@ -183,13 +183,14 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# 브라우저에 MORI 타이틀 및 아이콘 강제 주입 스크립트
+# 5. 브라우저 PWA 매니페스트 및 타이틀 MORI 강제 주입
 components.html(f"""
 <script>
 try {{
     const topDoc = window.top.document;
     topDoc.title = "MORI";
     
+    // 파비콘 및 앱 아이콘 강제 교체
     let linkIcon = topDoc.querySelector("link[rel*='icon']") || topDoc.createElement('link');
     linkIcon.type = 'image/png';
     linkIcon.rel = 'shortcut icon';
@@ -200,11 +201,28 @@ try {{
     appleIcon.rel = 'apple-touch-icon';
     appleIcon.href = 'data:image/png;base64,{icon_b64_str}';
     topDoc.getElementsByTagName('head')[0].appendChild(appleIcon);
+
+    // PWA Manifest 강제 오버라이드
+    const moriManifest = {{
+        "name": "MORI",
+        "short_name": "MORI",
+        "start_url": window.top.location.href,
+        "display": "standalone",
+        "background_color": "#0f172a",
+        "theme_color": "#0f172a",
+        "icons": [{{ "src": "data:image/png;base64,{icon_b64_str}", "sizes": "256x256", "type": "image/png" }}]
+    }};
+    const blob = new Blob([JSON.stringify(moriManifest)], {{type: 'application/json'}});
+    const manifestURL = URL.createObjectURL(blob);
+    let manLink = topDoc.querySelector("link[rel='manifest']") || topDoc.createElement('link');
+    manLink.rel = 'manifest';
+    manLink.href = manifestURL;
+    topDoc.getElementsByTagName('head')[0].appendChild(manLink);
 }} catch(e) {{}}
 </script>
 """, height=0)
 
-# 5. [영구 저장소 파일 관리]
+# 6. [영구 저장소 파일 관리]
 PORTFOLIO_FILE = "portfolio.json"
 BRIEFING_FILE = "briefing.json"
 TODOS_FILE = "todos.json"
@@ -296,7 +314,7 @@ def save_sports_briefings(briefings):
             json.dump(briefings, f, ensure_ascii=False, indent=2)
     except Exception as e: pass
 
-# 6. 아침 7시 시스템 알람 컴포넌트
+# 7. 아침 7시 시스템 알람 컴포넌트
 alarm_component = """
 <div id="alarmCard" style="background: rgba(30, 41, 59, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(59, 130, 246, 0.3); padding: 14px; border-radius: 12px; color: white; margin-bottom: 12px; transition: all 0.3s ease;">
     <div style="font-weight: 700; font-size: 13px; color: #60a5fa; margin-bottom: 2px;">시스템 알람 설정 (오전 7:00 KST)</div>
@@ -363,7 +381,7 @@ if (Notification.permission === "granted" || localStorage.getItem("alarm_enabled
 </script>
 """
 
-# 7. 실시간 날씨 데이터 조회 (용인시 기준)
+# 8. 실시간 날씨 데이터 조회 (용인시 기준)
 @st.cache_data(ttl=1800)
 def get_yongin_weather():
     try:
@@ -384,7 +402,7 @@ def get_yongin_weather():
     except Exception:
         return "28.0°C", "맑음 ☀️", "60%"
 
-# 8. 실시간 주가 및 뉴스 로딩 함수
+# 9. 실시간 주가 및 뉴스 로딩 함수
 @st.cache_data(ttl=60)
 def get_live_market_data(ticker_symbol):
     try:
@@ -422,7 +440,7 @@ def fetch_google_news(query, max_results=8):
     except Exception:
         return []
 
-# 9. AI 비전 이미지 분석 및 브리핑 함수
+# 10. AI 비전 이미지 분석 및 브리핑 함수
 def analyze_portfolio_image(image_bytes, api_key):
     api_key = api_key.strip()
     headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
@@ -502,7 +520,7 @@ def generate_ai_briefing(news_headlines, portfolio_items, api_key):
         except Exception: pass
     return None, "브리핑 생성 실패"
 
-# 10. 실시간 구단 경기 일정 및 AI 브리핑 함수 (한국 시간 KST 기준)
+# 11. 실시간 구단 경기 일정 및 AI 브리핑 함수 (한국 시간 KST 기준)
 def generate_team_briefing(team_name, sports_type, league, team_news, api_key):
     api_key = api_key.strip()
     headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
@@ -545,7 +563,7 @@ def generate_team_briefing(team_name, sports_type, league, team_news, api_key):
         except Exception: pass
     return None
 
-# 11. 1:1 대화형 AI 투자 챗봇 함수
+# 12. 1:1 대화형 AI 투자 챗봇 함수
 def ask_gemini_chat(chat_history, user_msg, portfolio_items, api_key):
     api_key = api_key.strip()
     headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
