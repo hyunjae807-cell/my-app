@@ -5,6 +5,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import requests
 import json
+import os
 import base64
 from datetime import datetime, timezone, timedelta
 import urllib.request
@@ -50,7 +51,33 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 3. 아침 7시 시스템 알람 컴포넌트
+# 3. [영구 저장소 관리] 포트폴리오 파일 저장 및 불러오기 함수
+PORTFOLIO_FILE = "portfolio.json"
+
+DEFAULT_PORTFOLIO = [
+    {"종목명": "KODEX AI반도체TOP2플러스", "티커": "466920.KS", "매입단가": 13234.0, "보유수량": 126},
+    {"종목명": "KODEX 200타겟위클리커버드콜", "티커": "476800.KS", "매입단가": 13012.0, "보유수량": 863}
+]
+
+def load_portfolio():
+    if os.path.exists(PORTFOLIO_FILE):
+        try:
+            with open(PORTFOLIO_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if data:
+                    return data
+        except Exception:
+            return DEFAULT_PORTFOLIO
+    return DEFAULT_PORTFOLIO
+
+def save_portfolio(data):
+    try:
+        with open(PORTFOLIO_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        st.error(f"저장 중 오류 발생: {e}")
+
+# 4. 아침 7시 시스템 알람 컴포넌트
 alarm_component = """
 <div style="background: linear-gradient(135deg, #1e293b, #0f172a); padding: 15px; border-radius: 12px; color: white; margin-bottom: 15px;">
     <div style="font-weight: 700; font-size: 14px; margin-bottom: 4px;">⏰ 매일 한국 시간 아침 7시 시스템 알람</div>
@@ -114,7 +141,7 @@ function initAlarm() {
 </script>
 """
 
-# 4. [완벽 개선] 구글 서버에서 실시간 활성 모델을 자동 탐색하는 AI 비전 함수
+# 5. AI 비전 이미지 분석 함수 (구글 실시간 모델 자동 탐색)
 def analyze_portfolio_image(image_bytes, api_key):
     api_key = api_key.strip()
     headers = {
@@ -122,7 +149,6 @@ def analyze_portfolio_image(image_bytes, api_key):
         "x-goog-api-key": api_key
     }
     
-    # 1단계: 구글 API에서 현재 내 키로 사용 가능한 실제 모델 목록을 실시간으로 가져옴
     candidate_models = []
     try:
         models_url = "https://generativelanguage.googleapis.com/v1beta/models"
@@ -171,7 +197,6 @@ def analyze_portfolio_image(image_bytes, api_key):
     for model_path in candidate_models:
         clean_model = model_path if model_path.startswith("models/") else f"models/{model_path}"
         url = f"https://generativelanguage.googleapis.com/v1beta/{clean_model}:generateContent"
-        
         try:
             res = requests.post(url, json=payload, headers=headers, timeout=25)
             if res.status_code == 200:
@@ -185,7 +210,7 @@ def analyze_portfolio_image(image_bytes, api_key):
             
     return None, f"분석 실패: {last_error}"
 
-# 5. 실시간 주가 및 뉴스 로딩 함수
+# 6. 실시간 주가 및 뉴스 로딩 함수
 @st.cache_data(ttl=60)
 def get_live_market_data(ticker_symbol):
     try:
@@ -239,22 +264,19 @@ tab_portfolio, tab_market, tab_news, tab_chart, tab_briefing = st.tabs(
 )
 
 # -------------------------------------------------------------
-# TAB 1: 내 실제 포트폴리오
+# TAB 1: 내 실제 포트폴리오 (영구 저장 연동)
 # -------------------------------------------------------------
 with tab_portfolio:
-    st.subheader("💼 내 주식·ETF 포트폴리오 (실시간 연동)")
+    st.subheader("💼 내 주식·ETF 포트폴리오 (실시간 연동 & 영구 저장)")
     
-    if "user_portfolio" not in st.session_state:
-        st.session_state.user_portfolio = [
-            {"종목명": "KODEX AI반도체TOP2플러스", "티커": "466920.KS", "매입단가": 13234.0, "보유수량": 126},
-            {"종목명": "KODEX 200타겟위클리커버드콜", "티커": "476800.KS", "매입단가": 13012.0, "보유수량": 863}
-        ]
+    # 영구 저장 파일에서 불러오기
+    user_portfolio = load_portfolio()
 
     total_eval_krw = 0
     total_buy_krw = 0
     calculated_rows = []
 
-    for item in st.session_state.user_portfolio:
+    for item in user_portfolio:
         cur_p, _ = get_live_market_data(item["티커"])
         if cur_p is None:
             cur_p = item["매입단가"]
@@ -305,15 +327,16 @@ with tab_portfolio:
         if not api_key:
             api_key = st.text_input("Google AI Studio (Gemini) API Key 입력", type="password")
             
-        if st.button("✨ AI로 잔고 사진 분석 및 갱신"):
+        if st.button("✨ AI로 잔고 사진 분석 및 영구 저장"):
             if not api_key:
                 st.warning("API Key를 입력해 주세요.")
             else:
-                with st.spinner("구글 AI가 사용 가능한 최신 모델로 이미지를 정밀 분석 중입니다..."):
+                with st.spinner("AI가 잔고 이미지를 정밀 분석 중입니다..."):
                     parsed_stocks, status = analyze_portfolio_image(uploaded_file.getvalue(), api_key)
                     if status == "SUCCESS" and parsed_stocks:
-                        st.session_state.user_portfolio = parsed_stocks
-                        st.success(f"🎉 총 {len(parsed_stocks)}개 종목이 성공적으로 인식되어 포트폴리오가 갱신되었습니다!")
+                        # 영구 파일에 저장
+                        save_portfolio(parsed_stocks)
+                        st.success(f"🎉 총 {len(parsed_stocks)}개 종목이 인식되어 영구 저장되었습니다!")
                         st.rerun()
                     else:
                         st.error(f"오류: {status}")
@@ -348,7 +371,7 @@ with tab_market:
         st.metric("삼성전자", f"{samsung_p:,.0f}원" if samsung_p else "84,500원", f"{samsung_d:+.2f}%" if samsung_d else "+2.43%")
         st.metric("SK하이닉스", f"{hynix_p:,.0f}원" if hynix_p else "193,000원", f"{hynix_d:+.2f}%" if hynix_d else "+3.30%")
     with cb:
-        st.metric("현대차", f"{hyundai_p:,.0f}원" if hyundai_p else "256,000원", f"{hyundai_d:+.2f}%" if hynix_d else "+8.24%")
+        st.metric("현대차", f"{hyundai_p:,.0f}원" if hyundai_p else "256,000원", f"{hyundai_d:+.2f}%" if hyundai_d else "+8.24%")
         st.metric("엔비디아 (NVDA)", f"${nvda_p:.2f}" if nvda_p else "$224.92", f"{nvda_d:+.2f}%" if nvda_d else "-0.18%")
 
 # -------------------------------------------------------------
