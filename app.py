@@ -7,6 +7,7 @@ import requests
 import json
 import os
 import base64
+import io
 from PIL import Image, ImageDraw
 from datetime import datetime, timezone, timedelta
 import urllib.request
@@ -53,7 +54,11 @@ def get_mori_app_icon():
 
 mori_icon_image = get_mori_app_icon()
 
-# 3. 모바일 최적화 페이지 설정 (이름: MORI, 아이콘: 커스텀 MORI 심볼)
+buf = io.BytesIO()
+mori_icon_image.save(buf, format="PNG")
+icon_b64_str = base64.b64encode(buf.getvalue()).decode("utf-8")
+
+# 3. 모바일 최적화 페이지 설정
 st.set_page_config(
     page_title="MORI",
     page_icon=mori_icon_image,
@@ -61,7 +66,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 4. 다크 테마 커스텀 CSS (순수 CSS 선언으로 상단 텍스트 노출 원천 차단)
+# 4. 다크 테마 커스텀 CSS
 st.markdown("""
 <style>
 @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
@@ -177,6 +182,27 @@ st.markdown("""
 }
 </style>
 """, unsafe_allow_html=True)
+
+# 브라우저에 MORI 타이틀 및 아이콘 강제 주입 스크립트
+components.html(f"""
+<script>
+try {{
+    const topDoc = window.top.document;
+    topDoc.title = "MORI";
+    
+    let linkIcon = topDoc.querySelector("link[rel*='icon']") || topDoc.createElement('link');
+    linkIcon.type = 'image/png';
+    linkIcon.rel = 'shortcut icon';
+    linkIcon.href = 'data:image/png;base64,{icon_b64_str}';
+    topDoc.getElementsByTagName('head')[0].appendChild(linkIcon);
+
+    let appleIcon = topDoc.querySelector("link[rel*='apple-touch-icon']") || topDoc.createElement('link');
+    appleIcon.rel = 'apple-touch-icon';
+    appleIcon.href = 'data:image/png;base64,{icon_b64_str}';
+    topDoc.getElementsByTagName('head')[0].appendChild(appleIcon);
+}} catch(e) {{}}
+</script>
+""", height=0)
 
 # 5. [영구 저장소 파일 관리]
 PORTFOLIO_FILE = "portfolio.json"
@@ -764,7 +790,7 @@ with tab_market:
         st.metric("삼성전자", f"{samsung_p:,.0f}원" if samsung_p else "84,500원", f"{samsung_d:+.2f}%" if samsung_d else "+2.43%")
         st.metric("SK하이닉스", f"{hynix_p:,.0f}원" if hynix_p else "193,000원", f"{hynix_d:+.2f}%" if hynix_d else "+3.30%")
     with cb:
-        st.metric("현대차", f"{hyundai_p:,.0f}원" if hynix_p else "256,000원", f"{hyundai_d:+.2f}%" if hynix_d else "+8.24%")
+        st.metric("현대차", f"{hyundai_p:,.0f}원" if hyundai_p else "256,000원", f"{hyundai_d:+.2f}%" if hynix_d else "+8.24%")
         st.metric("엔비디아 (NVDA)", f"${nvda_p:.2f}" if nvda_p else "$224.92", f"{nvda_d:+.2f}%" if nvda_d else "-0.18%")
 
 # -------------------------------------------------------------
