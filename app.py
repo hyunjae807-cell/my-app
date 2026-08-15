@@ -3,6 +3,7 @@ import streamlit.components.v1 as components
 import yfinance as yf
 import pandas as pd
 import plotly.graph_objects as go
+import requests
 from datetime import datetime, timezone, timedelta
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -19,9 +20,16 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 모바일 친화적 CSS
+# 모바일 친화적 CSS 스타일링
 st.markdown("""
     <style>
+    .metric-card {
+        background-color: #f8fafc;
+        border-radius: 10px;
+        padding: 14px;
+        margin-bottom: 10px;
+        border: 1px solid #e2e8f0;
+    }
     .news-card {
         background-color: #ffffff;
         border-radius: 10px;
@@ -33,26 +41,36 @@ st.markdown("""
     .news-title {
         font-size: 15px;
         font-weight: 600;
-        color: #1a202c;
+        color: #1e293b;
         text-decoration: none;
+    }
+    .news-title:hover {
+        color: #2563eb;
     }
     .news-meta {
         font-size: 12px;
-        color: #718096;
+        color: #64748b;
         margin-top: 6px;
+    }
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 6px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        padding: 8px 12px;
+        font-size: 14px;
     }
     </style>
 """, unsafe_allow_html=True)
 
-# 3. 시스템 알람 및 소리 알림 컴포넌트 (스마트폰 현지 시간 기준)
+# 3. 아침 7시 시스템 알람 & 소리 컴포넌트
 alarm_component = """
-<div style="background: linear-gradient(135deg, #1e293b, #0f172a); padding: 16px; border-radius: 12px; color: white; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-    <div style="font-weight: 700; font-size: 15px; margin-bottom: 6px;">⏰ 매일 아침 7시 시스템 알람 설정</div>
-    <div style="font-size: 12px; color: #94a3b8; margin-bottom: 12px;">스마트폰 상단바 시스템 팝업 알림과 소리 알람을 활성화합니다.</div>
-    <button id="alarmBtn" onclick="initAlarm()" style="background-color: #3b82f6; color: white; border: none; padding: 9px 15px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; width: 100%;">
+<div style="background: linear-gradient(135deg, #1e293b, #0f172a); padding: 15px; border-radius: 12px; color: white; margin-bottom: 15px;">
+    <div style="font-weight: 700; font-size: 14px; margin-bottom: 4px;">⏰ 매일 한국 시간 아침 7시 시스템 알람</div>
+    <div style="font-size: 11px; color: #94a3b8; margin-bottom: 10px;">스마트폰 상단바 알림과 소리 알람을 활성화합니다.</div>
+    <button id="alarmBtn" onclick="initAlarm()" style="background-color: #3b82f6; color: white; border: none; padding: 8px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; width: 100%;">
         🔔 시스템 알람 및 소리 켜기
     </button>
-    <div id="alarmStatus" style="margin-top: 8px; font-size: 12px; color: #4ade80; text-align: center;"></div>
+    <div id="alarmStatus" style="margin-top: 6px; font-size: 11px; color: #4ade80; text-align: center;"></div>
 </div>
 
 <script>
@@ -65,7 +83,7 @@ function playAlarmSound() {
         gain.connect(audioCtx.destination);
         osc.type = "sine";
         osc.frequency.setValueAtTime(880, audioCtx.currentTime);
-        gain.gain.setValueAtTime(0.6, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
         osc.start();
         osc.stop(audioCtx.currentTime + 1.2);
     } catch(e) { console.log(e); }
@@ -83,7 +101,6 @@ function triggerSystemNotification() {
 
 function checkTimeForAlarm() {
     const now = new Date();
-    // 스마트폰 한국 시간 기준 오전 7시 00분 정각 알람
     if (now.getHours() === 7 && now.getMinutes() === 0 && now.getSeconds() === 0) {
         triggerSystemNotification();
     }
@@ -91,26 +108,25 @@ function checkTimeForAlarm() {
 
 function initAlarm() {
     if (!("Notification" in window)) {
-        alert("현재 브라우저에서 시스템 알림이 지원되지 않습니다.");
+        alert("브라우저에서 시스템 알림을 지원하지 않습니다.");
         return;
     }
-    
     Notification.requestPermission().then(permission => {
         if (permission === "granted") {
-            document.getElementById("alarmStatus").innerText = "✅ 매일 한국 시간 아침 7시 시스템 알람 활성화 완료!";
+            document.getElementById("alarmStatus").innerText = "✅ 매일 아침 7시 시스템 알람 활성화 완료!";
             document.getElementById("alarmBtn").style.backgroundColor = "#16a34a";
-            document.getElementById("alarmBtn").innerText = "🔔 알람 작동 중 (매일 오전 7:00)";
+            document.getElementById("alarmBtn").innerText = "🔔 알람 작동 중 (오전 7:00)";
             triggerSystemNotification();
             setInterval(checkTimeForAlarm, 1000);
         } else {
-            alert("알림 권한이 허용되지 않았습니다. 브라우저 설정에서 알림을 켜주세요.");
+            alert("알림 권한이 허용되지 않았습니다.");
         }
     });
 }
 </script>
 """
 
-# 4. 데이터 로딩 함수들
+# 4. 실시간 데이터 로딩 함수들
 @st.cache_data(ttl=60)
 def get_live_market_data(ticker_symbol):
     try:
@@ -149,19 +165,105 @@ def fetch_google_news(query, max_results=7):
     except Exception:
         return []
 
-# 헤더 영역 (한국 표준시 적용)
+# 5. 토스증권 계좌 잔고 및 보유 종목 호출 함수
+@st.cache_data(ttl=60)
+def fetch_toss_portfolio():
+    # Streamlit Secrets에 키가 등록되어 있는지 안전하게 확인
+    if "TOSS_API_KEY" in st.secrets and "TOSS_SECRET_KEY" in st.secrets and "TOSS_ACCOUNT_NO" in st.secrets:
+        try:
+            api_key = st.secrets["TOSS_API_KEY"]
+            secret_key = st.secrets["TOSS_SECRET_KEY"]
+            account_no = st.secrets["TOSS_ACCOUNT_NO"]
+
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "X-Tossinvest-Secret": secret_key,
+                "X-Tossinvest-Account": account_no,
+                "Content-Type": "application/json"
+            }
+            url = "https://openapi.tossinvest.com/v1/accounts/balance"
+            res = requests.get(url, headers=headers, timeout=5)
+            if res.status_code == 200:
+                return res.json(), "SUCCESS"
+            else:
+                return None, f"오류 ({res.status_code}): {res.text}"
+        except Exception as e:
+            return None, str(e)
+    return None, "NOT_CONFIGURED"
+
+
+# =============================================================
+# UI 메인 화면 렌더링
+# =============================================================
+
+# 헤더 영역
 st.title("📱 Daily Stock Assistant")
-st.caption(f"최근 조회 시각: {datetime.now(KST).strftime('%Y년 %m월 %d일 %H:%M:%S (한국 시간)')}")
+st.caption(f"최근 조회 시각: {datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S (한국 시간)')}")
 
 # 알람 설정 카드
 components.html(alarm_component, height=130)
 
-# 4개 탭 구성
-tab1, tab2, tab3, tab4 = st.tabs(["📊 실시간 시황", "📰 주요 뉴스", "🔍 종목 차트", "💡 AI 브리핑"])
+# 5개 탭 구성
+tab_portfolio, tab_market, tab_news, tab_chart, tab_briefing = st.tabs(
+    ["💼 내 포트폴리오", "📊 실시간 시황", "📰 주요 뉴스", "🔍 종목 차트", "💡 AI 브리핑"]
+)
 
-# TAB 1: 실시간 시황
-with tab1:
+# -------------------------------------------------------------
+# TAB 1: 토스증권 내 포트폴리오
+# -------------------------------------------------------------
+with tab_portfolio:
+    st.subheader("💼 토스증권 내 보유 종목")
+    
+    portfolio_data, status = fetch_toss_portfolio()
+    
+    if status == "SUCCESS" and portfolio_data:
+        # 실제 토스증권 데이터 렌더링
+        summary = portfolio_data.get("summary", {})
+        holdings = portfolio_data.get("holdings", [])
+        
+        total_eval = summary.get("totalEvaluationAmount", 0)
+        total_profit = summary.get("totalProfitAmount", 0)
+        total_profit_rate = summary.get("totalProfitRate", 0.0)
+        cash_avail = summary.get("orderableAmount", 0)
+        
+        c1, c2 = st.columns(2)
+        with c1:
+            st.metric("총 평가금액", f"{total_eval:,.0f}원", f"{total_profit_rate:+.2f}%")
+        with c2:
+            st.metric("주문 가능 예수금", f"{cash_avail:,.0f}원", f"평가손익: {total_profit:+,.0f}원")
+            
+        st.markdown("---")
+        st.write("📋 **보유 종목 상세 리스트**")
+        if holdings:
+            df_holdings = pd.DataFrame(holdings)
+            st.dataframe(df_holdings, use_container_width=True)
+        else:
+            st.info("현재 보유 중인 종목이 없습니다.")
+            
+    elif status == "NOT_CONFIGURED":
+        # API 키가 아직 설정되지 않았을 때 안내 화면
+        st.info("💡 **토스증권 Open API 키를 등록하면 실제 내 계좌의 보유 종목과 잔고가 여기에 자동으로 표시됩니다.**")
+        
+        with st.expander("🔑 토스증권 API 키 등록 방법 (1분 소요)", expanded=True):
+            st.markdown("""
+            1. [Streamlit Cloud 관리 페이지](https://share.streamlit.io/)에 접속합니다.
+            2. 내 앱 우측 메뉴(`⋮`) ➡️ **`Settings`** ➡️ **`Secrets`** 탭을 클릭합니다.
+            3. 아래 3줄을 복사해 본인의 키 정보를 입력하고 **`Save`**를 누릅니다:
+            ```toml
+            TOSS_API_KEY = "발급받은_API_KEY"
+            TOSS_SECRET_KEY = "발급받은_SECRET_KEY"
+            TOSS_ACCOUNT_NO = "본인_계좌번호"
+            ```
+            """)
+    else:
+        st.error(f"계좌 정보를 불러오는 중 오류가 발생했습니다: {status}")
+
+# -------------------------------------------------------------
+# TAB 2: 실시간 글로벌 & 국내 시황
+# -------------------------------------------------------------
+with tab_market:
     st.subheader("🌐 글로벌 & 국내 주요 지수 (실시간)")
+    
     kospi_p, kospi_d = get_live_market_data("^KS11")
     sp500_p, sp500_d = get_live_market_data("^GSPC")
     nasdaq_p, nasdaq_d = get_live_market_data("^IXIC")
@@ -177,6 +279,7 @@ with tab1:
 
     st.markdown("---")
     st.subheader("🏢 주요 대형주 시세 (실시간)")
+    
     samsung_p, samsung_d = get_live_market_data("005930.KS")
     hynix_p, hynix_d = get_live_market_data("000660.KS")
     hyundai_p, hyundai_d = get_live_market_data("005380.KS")
@@ -190,10 +293,16 @@ with tab1:
         st.metric("현대차", f"{hyundai_p:,.0f}원" if hyundai_p else "256,000원", f"{hyundai_d:+.2f}%" if hyundai_d else "+8.24%")
         st.metric("엔비디아 (NVDA)", f"${nvda_p:.2f}" if nvda_p else "$224.92", f"{nvda_d:+.2f}%" if nvda_d else "-0.18%")
 
-# TAB 2: 주요 뉴스
-with tab2:
+# -------------------------------------------------------------
+# TAB 3: 실시간 주요 뉴스
+# -------------------------------------------------------------
+with tab_news:
     st.subheader("📰 실시간 핵심 뉴스")
-    news_category = st.radio("카테고리", ["🇰🇷 국내 증시·경제", "🇺🇸 미국·글로벌 증시", "🤖 AI·반도체", "🔍 직접 검색"], horizontal=True)
+    news_category = st.radio(
+        "카테고리", 
+        ["🇰🇷 국내 증시·경제", "🇺🇸 미국·글로벌 증시", "🤖 AI·반도체", "🔍 직접 검색"], 
+        horizontal=True
+    )
     if news_category == "🇰🇷 국내 증시·경제":
         query = "코스피 OR 국내증시 OR 환율"
     elif news_category == "🇺🇸 미국·글로벌 증시":
@@ -214,8 +323,10 @@ with tab2:
                 </div>
                 """, unsafe_allow_html=True)
 
-# TAB 3: 종목 차트
-with tab3:
+# -------------------------------------------------------------
+# TAB 4: 종목 차트 & 검색
+# -------------------------------------------------------------
+with tab_chart:
     st.subheader("🔍 글로벌 종목 차트 분석")
     ticker_input = st.text_input("티커 입력 (예: AAPL, NVDA, TSLA, 005930.KS)", value="NVDA").upper()
     if st.button("차트 조회"):
@@ -227,16 +338,33 @@ with tab3:
                 prev_price = hist['Close'].iloc[-2]
                 change_pct = ((current_price - prev_price) / prev_price) * 100
                 currency = "원" if ".KS" in ticker_input or ".KQ" in ticker_input else "$"
-                st.metric(label=f"{ticker_input} 현재/최근가", value=f"{currency}{current_price:,.2f}" if currency == "$" else f"{current_price:,.0f}원", delta=f"{change_pct:+.2f}%")
+                st.metric(
+                    label=f"{ticker_input} 현재/최근가", 
+                    value=f"{currency}{current_price:,.2f}" if currency == "$" else f"{current_price:,.0f}원", 
+                    delta=f"{change_pct:+.2f}%"
+                )
                 fig = go.Figure()
-                fig.add_trace(go.Scatter(x=hist.index, y=hist['Close'], mode='lines+markers', name='Close', line=dict(color='#0066cc', width=2)))
-                fig.update_layout(title=f"{ticker_input} 최근 1개월 주가 추이", margin=dict(l=10, r=10, t=40, b=10), height=300, xaxis_rangeslider_visible=False)
+                fig.add_trace(go.Scatter(
+                    x=hist.index, 
+                    y=hist['Close'], 
+                    mode='lines+markers', 
+                    name='Close', 
+                    line=dict(color='#0066cc', width=2)
+                ))
+                fig.update_layout(
+                    title=f"{ticker_input} 최근 1개월 주가 추이", 
+                    margin=dict(l=10, r=10, t=40, b=10), 
+                    height=300, 
+                    xaxis_rangeslider_visible=False
+                )
                 st.plotly_chart(fig, use_container_width=True)
         except Exception as e:
             st.error(f"오류: {e}")
 
-# TAB 4: AI 브리핑
-with tab4:
+# -------------------------------------------------------------
+# TAB 5: AI 브리핑 & 일정
+# -------------------------------------------------------------
+with tab_briefing:
     st.subheader("📌 증시 핵심 체크포인트")
     st.info("📅 **주요 일정**\n• **8월 26일**: 엔비디아 2분기 실적 발표\n• **8월 28일**: 잭슨홀 심포지엄 (파월 연준의장 연설)")
     with st.expander("1. 미국 매크로: 인플레이션 안정 vs 소비 둔화", expanded=True):
@@ -245,29 +373,3 @@ with tab4:
         st.write("블랙웰 출하 일정 및 AI ROI 검증 국면 진입. 오픈AI 데이터센터 보증 축소 이슈 점검.")
     with st.expander("3. 국내 증시: 외국인 수급 지속성"):
         st.write("외국인 매수세의 코스닥 및 소부장 중소형주 확산 여부 관찰 필요.")
-
-
-        # 토스증권 실시간 보유 종목 불러오기 함수
-def get_toss_holdings():
-    try:
-        # Streamlit Secrets에서 안전하게 키 로드
-        api_key = st.secrets["TOSS_API_KEY"]
-        secret_key = st.secrets["TOSS_SECRET_KEY"]
-        account_no = st.secrets["TOSS_ACCOUNT_NO"]
-
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "X-Tossinvest-Secret": secret_key,
-            "X-Tossinvest-Account": account_no,
-            "Content-Type": "application/json"
-        }
-        url = "https://openapi.tossinvest.com/v1/accounts/balance"
-        res = requests.get(url, headers=headers, timeout=5)
-        
-        if res.status_code == 200:
-            return res.json()
-        else:
-            return None
-    except Exception:
-        return None
-
