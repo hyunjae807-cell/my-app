@@ -245,3 +245,29 @@ with tab4:
         st.write("블랙웰 출하 일정 및 AI ROI 검증 국면 진입. 오픈AI 데이터센터 보증 축소 이슈 점검.")
     with st.expander("3. 국내 증시: 외국인 수급 지속성"):
         st.write("외국인 매수세의 코스닥 및 소부장 중소형주 확산 여부 관찰 필요.")
+
+
+        # 토스증권 실시간 보유 종목 불러오기 함수
+def get_toss_holdings():
+    try:
+        # Streamlit Secrets에서 안전하게 키 로드
+        api_key = st.secrets["TOSS_API_KEY"]
+        secret_key = st.secrets["TOSS_SECRET_KEY"]
+        account_no = st.secrets["TOSS_ACCOUNT_NO"]
+
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "X-Tossinvest-Secret": secret_key,
+            "X-Tossinvest-Account": account_no,
+            "Content-Type": "application/json"
+        }
+        url = "https://openapi.tossinvest.com/v1/accounts/balance"
+        res = requests.get(url, headers=headers, timeout=5)
+        
+        if res.status_code == 200:
+            return res.json()
+        else:
+            return None
+    except Exception:
+        return None
+
