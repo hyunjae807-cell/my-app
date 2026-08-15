@@ -178,7 +178,7 @@ function initAlarm() {
 </script>
 """
 
-# 5. [신규] 실시간 날씨 데이터 조회 (용인시 기준 / Open-Meteo 무료 API)
+# 5. [수정 완료] 실시간 날씨 데이터 조회 (용인시 기준)
 @st.cache_data(ttl=1800)
 def get_yongin_weather():
     try:
@@ -190,10 +190,14 @@ def get_yongin_weather():
         code = current.get("weather_code", 0)
         
         weather_desc = "맑음 ☀️"
-        if code in: weather_desc = "구름 조금 ⛅"
-        elif code == 3: weather_desc = "흐림 ☁️"
-        elif code in [51, 53, 55, 61, 63, 65, 80, 81, 82]: weather_desc = "비 🌧️"
-        elif code in [71, 73, 75, 85, 86]: weather_desc = "눈 ❄️"
+        if code in:
+            weather_desc = "구름 조금 ⛅"
+        elif code == 3:
+            weather_desc = "흐림 ☁️"
+        elif code in [51, 53, 55, 61, 63, 65, 80, 81, 82]:
+            weather_desc = "비 🌧️"
+        elif code in [71, 73, 75, 85, 86]:
+            weather_desc = "눈 ❄️"
         
         return f"{temp:.1f}°C", weather_desc, f"{humidity}%"
     except Exception:
@@ -317,7 +321,7 @@ def generate_ai_briefing(news_headlines, portfolio_items, api_key):
         except Exception: pass
     return None, "브리핑 생성 실패"
 
-# 8. [신규] 1:1 대화형 AI 투자 챗봇 함수
+# 8. 1:1 대화형 AI 투자 챗봇 함수
 def ask_gemini_chat(chat_history, user_msg, portfolio_items, api_key):
     api_key = api_key.strip()
     headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
@@ -352,7 +356,7 @@ st.caption(f"기준 시각: {datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S (한�
 
 components.html(alarm_component, height=125)
 
-# 7개 풀스택 탭 구성
+# 7개 탭 구성
 tab_portfolio, tab_market, tab_news, tab_briefing, tab_chat, tab_sports, tab_daily = st.tabs(
     ["💼 포트폴리오", "📊 실시간 시황", "📰 주요 뉴스", "💡 AI 브리핑", "🤖 AI 챗봇", "⚽ 스포츠", "📋 데일리 & 날씨"]
 )
@@ -402,7 +406,7 @@ with tab_portfolio:
     st.write("📋 **보유 종목 실시간 현황표**")
     st.dataframe(pd.DataFrame(calculated_rows), use_container_width=True)
 
-    # 💰 [신규] 배당금 / 분배금 계산기
+    # 💰 배당금 / 분배금 계산기
     st.markdown("---")
     with st.expander("💰 내 배당금 / 커버드콜 월 분배금 계산기", expanded=False):
         st.write("보유 중인 `KODEX 200타겟위클리커버드콜` 등 고배당 ETF의 예상 배당 수익을 계산합니다.")
@@ -465,7 +469,7 @@ with tab_market:
         st.metric("삼성전자", f"{samsung_p:,.0f}원" if samsung_p else "84,500원", f"{samsung_d:+.2f}%" if samsung_d else "+2.43%")
         st.metric("SK하이닉스", f"{hynix_p:,.0f}원" if hynix_p else "193,000원", f"{hynix_d:+.2f}%" if hynix_d else "+3.30%")
     with cb:
-        st.metric("현대차", f"{hyundai_p:,.0f}원" if hyundai_p else "256,000원", f"{hyundai_d:+.2f}%" if hyundai_d else "+8.24%")
+        st.metric("현대차", f"{hyundai_p:,.0f}원" if hyundai_p else "256,000원", f"{hyundai_d:+.2f}%" if hynix_d else "+8.24%")
         st.metric("엔비디아 (NVDA)", f"${nvda_p:.2f}" if nvda_p else "$224.92", f"{nvda_d:+.2f}%" if nvda_d else "-0.18%")
 
 # -------------------------------------------------------------
@@ -507,7 +511,7 @@ with tab_news:
                 """, unsafe_allow_html=True)
 
 # -------------------------------------------------------------
-# TAB 4: 실시간 AI 브리핑 & [신규] 음성 읽어주기 (TTS)
+# TAB 4: 실시간 AI 브리핑 & 음성 읽어주기 (TTS)
 # -------------------------------------------------------------
 with tab_briefing:
     st.subheader("💡 실시간 맞춤형 AI 모닝 브리핑")
@@ -535,10 +539,9 @@ with tab_briefing:
 
     saved_briefing_text, saved_time = load_briefing()
 
-    # 🔊 [신규] 음성으로 읽어주기 (TTS) 버튼
     with c_btn2:
         if saved_briefing_text:
-            clean_speech = saved_briefing_text.replace("#", "").replace("*", "").replace("\n", " ")[:300]
+            clean_speech = saved_briefing_text.replace("#", "").replace("*", "").replace("\n", " ").replace('"', '')[:300]
             tts_html = f"""
             <button onclick="speakBriefing()" style="background-color: #8b5cf6; color: white; border: none; padding: 9px 15px; border-radius: 8px; font-weight: 600; cursor: pointer; width: 100%;">
                 🔊 음성으로 듣기 (TTS)
@@ -578,11 +581,11 @@ with tab_briefing:
     st.dataframe(pd.DataFrame(events), use_container_width=True)
 
 # -------------------------------------------------------------
-# TAB 5: [신규] 1:1 대화형 AI 투자 챗봇
+# TAB 5: 1:1 대화형 AI 투자 챗봇
 # -------------------------------------------------------------
 with tab_chat:
     st.subheader("🤖 1:1 AI 투자 비서 챗봇")
-    st.caption("내 포트폴리오를 기반으로 무엇이든 질문하세요! (예: '엔비디아 실적 관전 포인트는?', 'KODEX 커버드콜 배당 매력은?')")
+    st.caption("내 포트폴리오를 기반으로 무엇이든 질문하세요!")
     
     if "chat_messages" not in st.session_state:
         st.session_state.chat_messages = [
@@ -614,7 +617,7 @@ with tab_chat:
                     st.session_state.chat_messages.append({"role": "assistant", "content": bot_reply})
 
 # -------------------------------------------------------------
-# TAB 6: [신규] 스포츠 허브 (맨체스터 유나이티드 & 축구)
+# TAB 6: 스포츠 허브 (맨체스터 유나이티드 & 축구)
 # -------------------------------------------------------------
 with tab_sports:
     st.subheader("⚽ 스포츠 허브: 맨체스터 유나이티드")
@@ -640,12 +643,11 @@ with tab_sports:
             """, unsafe_allow_html=True)
 
 # -------------------------------------------------------------
-# TAB 7: [신규] 데일리 생산성 & 날씨 (용인시 기준)
+# TAB 7: 데일리 생산성 & 날씨 (용인시 기준)
 # -------------------------------------------------------------
 with tab_daily:
     st.subheader("📋 데일리 생산성 & 라이프")
     
-    # 용인시 실시간 날씨
     temp_val, weather_val, humid_val = get_yongin_weather()
     st.markdown(f"""
     <div class="weather-card">
@@ -660,7 +662,6 @@ with tab_daily:
     
     current_todos = load_todos()
     
-    # 투두 리스트 표시 및 체크 삭제
     to_delete = None
     for idx, todo_item in enumerate(current_todos):
         col_t1, col_t2 = st.columns([0.85, 0.15])
@@ -675,7 +676,6 @@ with tab_daily:
         save_todos(current_todos)
         st.rerun()
 
-    # 새 할 일 추가 폼
     with st.form("new_todo_form"):
         new_todo = st.text_input("새로운 할 일 입력")
         if st.form_submit_button("추가하기"):
