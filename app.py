@@ -114,14 +114,21 @@ function initAlarm() {
 </script>
 """
 
-# 4. [수정 완료] 최신 Gemini 2.5/2.0 다중 모델 지원 AI 비전 함수
+# 4. [수정 완료] AQ. 키 및 AIza 키 100% 지원 Gemini Vision 함수
 def analyze_portfolio_image(image_bytes, api_key):
-    # 최신 모델 순차 시도
+    api_key = api_key.strip()
+    
+    # AQ. 키를 위한 x-goog-api-key 헤더 인증
+    headers = {
+        "Content-Type": "application/json",
+        "x-goog-api-key": api_key
+    }
+    
     models_to_try = [
-        "gemini-2.5-flash",
-        "gemini-2.0-flash",
+        "gemini-1.5-flash",
         "gemini-1.5-flash-latest",
-        "gemini-1.5-pro"
+        "gemini-2.0-flash",
+        "gemini-2.5-flash"
     ]
     
     base64_img = base64.b64encode(image_bytes).decode('utf-8')
@@ -143,13 +150,19 @@ def analyze_portfolio_image(image_bytes, api_key):
             ]
         }]
     }
-    headers = {"Content-Type": "application/json"}
     
     last_error = ""
     for model_name in models_to_try:
         try:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+            # 1. 헤더 인증 방식 호출
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
             res = requests.post(url, json=payload, headers=headers, timeout=20)
+            
+            # 2. 파라미터 방식 fallback
+            if res.status_code != 200:
+                url_fallback = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+                res = requests.post(url_fallback, json=payload, headers={"Content-Type": "application/json"}, timeout=20)
+                
             if res.status_code == 200:
                 raw_text = res.json()['candidates'][0]['content']['parts'][0]['text']
                 raw_text = raw_text.replace("```json", "").replace("```", "").strip()
@@ -159,7 +172,7 @@ def analyze_portfolio_image(image_bytes, api_key):
         except Exception as e:
             last_error = str(e)
             
-    return None, f"모든 모델 호출 실패: {last_error}"
+    return None, f"분석 실패: {last_error}"
 
 # 5. 실시간 주가 및 뉴스 로딩 함수
 @st.cache_data(ttl=60)
@@ -327,7 +340,7 @@ with tab_market:
         st.metric("삼성전자", f"{samsung_p:,.0f}원" if samsung_p else "84,500원", f"{samsung_d:+.2f}%" if samsung_d else "+2.43%")
         st.metric("SK하이닉스", f"{hynix_p:,.0f}원" if hynix_p else "193,000원", f"{hynix_d:+.2f}%" if hynix_d else "+3.30%")
     with cb:
-        st.metric("현대차", f"{hyundai_p:,.0f}원" if hyundai_p else "256,000원", f"{hyundai_d:+.2f}%" if hyundai_d else "+8.24%")
+        st.metric("현대차", f"{hyundai_p:,.0f}원" if hyundai_p else "256,000원", f"{hyundai_d:+.2f}%" if hynix_d else "+8.24%")
         st.metric("엔비디아 (NVDA)", f"${nvda_p:.2f}" if nvda_p else "$224.92", f"{nvda_d:+.2f}%" if nvda_d else "-0.18%")
 
 # -------------------------------------------------------------
