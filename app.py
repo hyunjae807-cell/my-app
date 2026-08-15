@@ -186,7 +186,7 @@ function initAlarm() {
 </script>
 """
 
-# 5. 실시간 날씨 데이터 조회 (용인시 기준)
+# 5. [수정 완료] 실시간 날씨 데이터 조회 (용인시 기준)
 @st.cache_data(ttl=1800)
 def get_yongin_weather():
     try:
@@ -198,13 +198,13 @@ def get_yongin_weather():
         code = current.get("weather_code", 0)
         
         weather_desc = "맑음 ☀️"
-        if code in:
+        if code == 1 or code == 2:
             weather_desc = "구름 조금 ⛅"
         elif code == 3:
             weather_desc = "흐림 ☁️"
-        elif code in [51, 53, 55, 61, 63, 65, 80, 81, 82]:
+        elif code in (51, 53, 55, 61, 63, 65, 80, 81, 82):
             weather_desc = "비 🌧️"
-        elif code in [71, 73, 75, 85, 86]:
+        elif code in (71, 73, 75, 85, 86):
             weather_desc = "눈 ❄️"
         
         return f"{temp:.1f}°C", weather_desc, f"{humidity}%"
