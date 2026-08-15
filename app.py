@@ -3,6 +3,9 @@ import streamlit.components.v1 as components
 import yfinance as yf
 import pandas as pd
 import plotly.graph_objects as go
+import requests
+import json
+import base64
 from datetime import datetime, timezone, timedelta
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -111,7 +114,44 @@ function initAlarm() {
 </script>
 """
 
-# 4. 실시간 주가 및 뉴스 로딩 함수
+# 4. AI 비전 이미지 분석 함수 (Google Gemini Vision API 활용)
+def analyze_portfolio_image(image_bytes, api_key):
+    try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+        base64_img = base64.b64encode(image_bytes).decode('utf-8')
+        
+        prompt = """
+        이 이미지는 증권사 주식 잔고 화면입니다.
+        이미지에서 보유 중인 모든 주식의 종목명, 야후파이낸스 티커(국내 주식은 6자리.KS 또는 .KQ, 미국 주식은 AAPL, NVDA 등 알파벳 티커), 평균 매입단가(숫자), 보유 수량(정수)을 추출해주세요.
+        반드시 아래와 같은 순수 JSON 배열 형식으로만 응답해주세요 (코드블록 마크다운 없이 JSON 텍스트만 출력):
+        [
+            {"종목명": "삼성전자", "티커": "005930.KS", "매입단가": 80000.0, "보유수량": 50},
+            {"종목명": "엔비디아", "티커": "NVDA", "매입단가": 210.0, "보유수량": 15}
+        ]
+        """
+        
+        payload = {
+            "contents": [{
+                "parts": [
+                    {"text": prompt},
+                    {"inline_data": {"mime_type": "image/jpeg", "data": base64_img}}
+                ]
+            }]
+        }
+        
+        headers = {"Content-Type": "application/json"}
+        res = requests.post(url, json=payload, headers=headers, timeout=20)
+        
+        if res.status_code == 200:
+            raw_text = res.json()['candidates'][0]['content']['parts'][0]['text']
+            raw_text = raw_text.replace("```json", "").replace("```", "").strip()
+            return json.loads(raw_text), "SUCCESS"
+        else:
+            return None, f"AI 분석 실패 ({res.status_code}): {res.text}"
+    except Exception as e:
+        return None, str(e)
+
+# 5. 실시간 주가 및 뉴스 로딩 함수
 @st.cache_data(ttl=60)
 def get_live_market_data(ticker_symbol):
     try:
@@ -165,13 +205,12 @@ tab_portfolio, tab_market, tab_news, tab_chart, tab_briefing = st.tabs(
 )
 
 # -------------------------------------------------------------
-# TAB 1: 실시간 내 포트폴리오 관리 (100% 안정 연동)
+# TAB 1: 내 포트폴리오 (사진 분석 기능 포함)
 # -------------------------------------------------------------
 with tab_portfolio:
     st.subheader("💼 실시간 내 주식 포트폴리오")
-    st.caption("보유 종목을 등록해 두면 실시간 현재가와 총 수익률을 자동으로 추적합니다.")
     
-    # 기본 보유 종목 초기화
+    # 기본 포트폴리오 데이터 세션 저장
     if "user_portfolio" not in st.session_state:
         st.session_state.user_portfolio = [
             {"종목명": "삼성전자", "티커": "005930.KS", "매입단가": 80000.0, "보유수량": 50},
@@ -209,7 +248,7 @@ with tab_portfolio:
             "수익률": f"{profit_rate:+.2f}%"
         })
 
-    # 상단 총 요약 카드
+    # 상단 메트릭 요약
     total_profit_krw = total_eval_krw - total_buy_krw
     total_rate_krw = (total_profit_krw / total_buy_krw) * 100 if total_buy_krw > 0 else 0
 
@@ -223,24 +262,34 @@ with tab_portfolio:
     st.write("📋 **보유 종목 실시간 현황표**")
     st.dataframe(pd.DataFrame(calculated_rows), use_container_width=True)
 
-    # 종목 추가/수정 인터페이스
-    with st.expander("➕ 새 종목 추가 / 포트폴리오 관리"):
-        with st.form("add_stock_form"):
-            f_name = st.text_input("종목명 (예: 현대차, 애플)", value="현대차")
-            f_ticker = st.text_input("티커 (국내: 005380.KS / 미국: AAPL)", value="005380.KS")
-            f_price = st.number_input("매입단가 (원 또는 달러)", value=240000.0)
-            f_qty = st.number_input("보유 수량 (주)", value=10, min_value=1)
+    # 📸 사진으로 자동 분석 업데이트 영역
+    st.markdown("---")
+    st.subheader("📸 캡처 사진으로 포트폴리오 자동 업데이트")
+    
+    uploaded_file = st.file_uploader("증권사 잔고 캡처 사진을 올려주세요 (토스/키움 등)", type=["png", "jpg", "jpeg"])
+    
+    if uploaded_file is not None:
+        st.image(uploaded_file, caption="업로드된 잔고 이미지", use_container_width=True)
+        
+        # Gemini API Key 로드
+        api_key = st.secrets.get("GEMINI_API_KEY", None)
+        if not api_key:
+            api_key = st.text_input("Google AI Studio (Gemini) API Key 입력", type="password")
+            st.caption("※ [aistudio.google.com](https://aistudio.google.com)에서 무료 발급 가능 (Secrets에 GEMINI_API_KEY로 등록 시 생략)")
             
-            submitted = st.form_submit_button("포트폴리오에 추가하기")
-            if submitted:
-                st.session_state.user_portfolio.append({
-                    "종목명": f_name,
-                    "티커": f_ticker.upper(),
-                    "매입단가": f_price,
-                    "보유수량": int(f_qty)
-                })
-                st.success(f"'{f_name}' 종목이 추가되었습니다!")
-                st.rerun()
+        if st.button("✨ AI로 잔고 사진 분석 및 갱신"):
+            if not api_key:
+                st.warning("Gemini API Key를 입력해 주세요.")
+            else:
+                with st.spinner("AI가 잔고 사진을 정밀 분석 중입니다..."):
+                    parsed_stocks, status = analyze_portfolio_image(uploaded_file.getvalue(), api_key)
+                    
+                    if status == "SUCCESS" and parsed_stocks:
+                        st.session_state.user_portfolio = parsed_stocks
+                        st.success(f"🎉 성공! 총 {len(parsed_stocks)}개 종목이 인식되어 포트폴리오가 갱신되었습니다.")
+                        st.rerun()
+                    else:
+                        st.error(f"사진 분석 중 오류가 발생했습니다: {status}")
 
 # -------------------------------------------------------------
 # TAB 2: 실시간 시황
