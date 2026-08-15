@@ -56,7 +56,8 @@ st.markdown("""
         margin-bottom: 15px;
     }
     .sports-card {
-        background: linear-gradient(135deg, #b91c1c, #7f1d1d);
+        background: linear-gradient(135deg, #1e293b, #0f172a);
+        border: 1px solid #3b82f6;
         padding: 16px;
         border-radius: 12px;
         color: white;
@@ -69,10 +70,17 @@ st.markdown("""
 PORTFOLIO_FILE = "portfolio.json"
 BRIEFING_FILE = "briefing.json"
 TODOS_FILE = "todos.json"
+SPORTS_FILE = "sports_teams.json"
 
 DEFAULT_PORTFOLIO = [
     {"종목명": "KODEX AI반도체TOP2플러스", "티커": "395160.KS", "매입단가": 13234.0, "보유수량": 126},
     {"종목명": "KODEX 200타겟위클리커버드콜", "티커": "498400.KS", "매입단가": 13012.0, "보유수량": 863}
+]
+
+DEFAULT_SPORTS_TEAMS = [
+    {"종목": "⚽ 축구", "팀명": "맨체스터 유나이티드", "리그": "프리미어리그 (EPL)", "키워드": "맨체스터 유나이티드 OR 맨유"},
+    {"종목": "⚾ 야구", "팀명": "KIA 타이거즈", "리그": "KBO 리그", "키워드": "KIA 타이거즈"},
+    {"종목": "⚾ 야구", "팀명": "LA 다저스", "리그": "메이저리그 (MLB)", "키워드": "LA 다저스 OR 오타니"}
 ]
 
 def load_portfolio():
@@ -119,7 +127,7 @@ def load_todos():
                     return data
         except Exception:
             pass
-    return ["주요 증시 캘린더 확인하기", "맨유 경기 일정 체크하기"]
+    return ["주요 증시 캘린더 확인하기", "내 응원팀 경기 일정 체크하기"]
 
 def save_todos(todos):
     try:
@@ -128,17 +136,42 @@ def save_todos(todos):
     except Exception as e:
         st.error(f"저장 오류: {e}")
 
+def load_sports_teams():
+    if os.path.exists(SPORTS_FILE):
+        try:
+            with open(SPORTS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if data:
+                    return data
+        except Exception:
+            pass
+    return DEFAULT_SPORTS_TEAMS
+
+def save_sports_teams(teams):
+    try:
+        with open(SPORTS_FILE, "w", encoding="utf-8") as f:
+            json.dump(teams, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        st.error(f"스포츠 설정 저장 오류: {e}")
+
 # 4. 아침 7시 시스템 알람 컴포넌트
 alarm_component = """
-<div style="background: linear-gradient(135deg, #1e293b, #0f172a); padding: 14px; border-radius: 12px; color: white; margin-bottom: 12px;">
+<div id="alarmCard" style="background: linear-gradient(135deg, #1e293b, #0f172a); padding: 14px; border-radius: 12px; color: white; margin-bottom: 12px; transition: all 0.3s ease;">
     <div style="font-weight: 700; font-size: 14px; margin-bottom: 4px;">⏰ 매일 한국 시간 아침 7시 시스템 알람</div>
-    <button id="alarmBtn" onclick="initAlarm()" style="background-color: #3b82f6; color: white; border: none; padding: 7px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; width: 100%;">
-        🔔 시스템 알람 및 소리 켜기
+    <div style="font-size: 11px; color: #94a3b8; margin-bottom: 10px;">버튼을 누르면 테스트 알람이 울린 후 이 설정창은 자동으로 사라집니다.</div>
+    <button id="alarmBtn" onclick="initAlarm()" style="background-color: #3b82f6; color: white; border: none; padding: 8px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; width: 100%;">
+        🔔 시스템 알람 켜기 & 테스트 알람
     </button>
-    <div id="alarmStatus" style="margin-top: 5px; font-size: 11px; color: #4ade80; text-align: center;"></div>
 </div>
 
 <script>
+function hideCard() {
+    const card = document.getElementById("alarmCard");
+    if (card) {
+        card.style.display = "none";
+    }
+}
+
 function playAlarmSound() {
     try {
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -172,16 +205,25 @@ function checkTimeForAlarm() {
 }
 
 function initAlarm() {
-    if (!("Notification" in window)) return alert("알림을 지원하지 않는 브라우저입니다.");
+    if (!("Notification" in window)) {
+        alert("알림을 지원하지 않는 브라우저입니다.");
+        return;
+    }
     Notification.requestPermission().then(permission => {
         if (permission === "granted") {
-            document.getElementById("alarmStatus").innerText = "✅ 매일 아침 7시 알람 작동 중!";
-            document.getElementById("alarmBtn").style.backgroundColor = "#16a34a";
-            document.getElementById("alarmBtn").innerText = "🔔 알람 활성화 완료 (오전 7:00)";
+            localStorage.setItem("alarm_enabled", "true");
             triggerSystemNotification();
             setInterval(checkTimeForAlarm, 1000);
+            setTimeout(hideCard, 500);
+        } else {
+            alert("알림 권한이 허용되지 않았습니다.");
         }
     });
+}
+
+if (Notification.permission === "granted" || localStorage.getItem("alarm_enabled") === "true") {
+    hideCard();
+    setInterval(checkTimeForAlarm, 1000);
 }
 </script>
 """
@@ -337,7 +379,7 @@ def generate_ai_briefing(news_headlines, portfolio_items, api_key):
             pass
     return None, "브리핑 생성 실패"
 
-# 8. [완전 개선] 1:1 대화형 AI 투자 챗봇 함수 (role 순서 오류 완벽 해결)
+# 8. 1:1 대화형 AI 투자 챗봇 함수
 def ask_gemini_chat(chat_history, user_msg, portfolio_items, api_key):
     api_key = api_key.strip()
     headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
@@ -345,7 +387,6 @@ def ask_gemini_chat(chat_history, user_msg, portfolio_items, api_key):
     
     system_inst = f"당신은 투자자의 1:1 개인 금융/주식 비서 AI입니다. 투자자가 보유한 종목은 [{stock_list_str}] 입니다. 친절하고 명확하며 통찰력 있는 분석을 한국어로 답변하세요."
     
-    # 구글 API는 첫 메시지가 반드시 'user'여야 합니다 (환영 메시지 제외)
     contents = []
     for msg in chat_history:
         if not contents and msg["role"] != "user":
@@ -384,7 +425,8 @@ def ask_gemini_chat(chat_history, user_msg, portfolio_items, api_key):
 st.title("🦁 My Personal Assistant")
 st.caption(f"기준 시각: {datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S (한국 시간)')}")
 
-components.html(alarm_component, height=125)
+# 알람 컴포넌트 삽입 (설정 완료 시 스스로 사라짐)
+components.html(alarm_component, height=95)
 
 # API 키 공유 관리
 if "saved_gemini_key" not in st.session_state:
@@ -392,7 +434,7 @@ if "saved_gemini_key" not in st.session_state:
 
 # 7개 탭 구성
 tab_portfolio, tab_market, tab_news, tab_briefing, tab_chat, tab_sports, tab_daily = st.tabs(
-    ["💼 포트폴리오", "📊 실시간 시황", "📰 주요 뉴스", "💡 AI 브리핑", "🤖 AI 챗봇", "⚽ 스포츠", "📋 데일리 & 날씨"]
+    ["💼 포트폴리오", "📊 실시간 시황", "📰 주요 뉴스", "💡 AI 브리핑", "🤖 AI 챗봇", "⚽ 스포츠 허브", "📋 데일리 & 날씨"]
 )
 
 # -------------------------------------------------------------
@@ -669,30 +711,73 @@ with tab_chat:
                     st.session_state.chat_messages.append({"role": "assistant", "content": bot_reply})
 
 # -------------------------------------------------------------
-# TAB 6: 스포츠 허브 (맨체스터 유나이티드 & 축구)
+# TAB 6: [맞춤형 검색 & 다종목 지원] 스포츠 허브
 # -------------------------------------------------------------
 with tab_sports:
-    st.subheader("⚽ 스포츠 허브: 맨체스터 유나이티드")
+    st.subheader("🏆 내 응원팀 스포츠 허브")
     
-    st.markdown("""
+    # 영구 저장된 내 응원팀 목록 로드
+    my_teams = load_sports_teams()
+    
+    # 팀 선택 셀렉트박스
+    team_names = [f"{t['종목']} {t['팀명']} ({t['리그']})" for t in my_teams]
+    selected_team_idx = st.selectbox("응원하는 팀 선택", range(len(team_names)), format_func=lambda x: team_names[x])
+    
+    current_team = my_teams[selected_team_idx]
+    
+    # 선택된 팀 안내 카드
+    st.markdown(f"""
     <div class="sports-card">
-        <div style="font-size: 18px; font-weight: 700;">🔴 Manchester United 다음 경기 안내</div>
-        <div style="font-size: 14px; margin-top: 8px;">🏆 2026/27 프리미어리그 (EPL) 1라운드 개막전</div>
-        <div style="font-size: 13px; color: #fecaca; margin-top: 4px;">📍 올드 트래포드 (Old Trafford) 홈 경기</div>
+        <div style="font-size: 18px; font-weight: 800;">{current_team['종목']} {current_team['팀명']}</div>
+        <div style="font-size: 14px; margin-top: 6px; color: #93c5fd;">🏆 {current_team['리그']}</div>
+        <div style="font-size: 12px; color: #cbd5e1; margin-top: 6px;">실시간 최신 경기 결과 및 구단 뉴스 브리핑</div>
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown("---")
-    st.write("📰 **맨체스터 유나이티드 & 해외 축구 최신 뉴스**")
-    mufc_news = fetch_google_news("맨체스터 유나이티드 OR 맨유 OR 프리미어리그", max_results=6)
-    if mufc_news:
-        for n in mufc_news:
+    # 해당 팀 실시간 뉴스 피드
+    st.write(f"📰 **{current_team['팀명']} 실시간 뉴스**")
+    team_news = fetch_google_news(current_team["키워드"], max_results=6)
+    if team_news:
+        for n in team_news:
             st.markdown(f"""
             <div class="news-card">
-                <a class="news-title" href="{n['link']}" target="_blank">⚽ {n['title']}</a>
+                <a class="news-title" href="{n['link']}" target="_blank">📣 {n['title']}</a>
                 <div class="news-meta">📰 {n['source']} &nbsp;|&nbsp; 🕒 {n['date']}</div>
             </div>
             """, unsafe_allow_html=True)
+    else:
+        st.info("최신 뉴스를 가져오는 중입니다...")
+
+    # ➕ 새로운 응원팀 추가 / 관리
+    st.markdown("---")
+    with st.expander("➕ 새 응원팀 직접 검색 및 추가하기 (축구, 야구, 농구, e스포츠 등)"):
+        with st.form("add_team_form"):
+            sports_type = st.selectbox("종목 선택", ["⚽ 축구", "⚾ 야구", "🏀 농구", "🏐 배구", "🎮 e스포츠", "🏎️ 모터스포츠/기타"])
+            new_team_name = st.text_input("팀명 입력 (예: 토트넘, 한화 이글스, T1, 골든스테이트)", value="토트넘")
+            new_league = st.text_input("리그명 (예: EPL, KBO, LCK, NBA)", value="EPL")
+            new_keyword = st.text_input("뉴스 검색 키워드 (예: 토트넘 OR 손흥민)", value="토트넘")
+            
+            if st.form_submit_button("내 응원팀에 추가하기"):
+                if new_team_name.strip():
+                    my_teams.append({
+                        "종목": sports_type,
+                        "팀명": new_team_name.strip(),
+                        "리그": new_league.strip(),
+                        "키워드": new_keyword.strip() if new_keyword.strip() else new_team_name.strip()
+                    })
+                    save_sports_teams(my_teams)
+                    st.success(f"'{new_team_name}' 팀이 성공적으로 추가되었습니다!")
+                    st.rerun()
+
+        # 팀 삭제 옵션
+        if len(my_teams) > 1:
+            st.write("🗑️ **등록된 팀 삭제**")
+            del_idx = st.selectbox("삭제할 팀 선택", range(len(my_teams)), format_func=lambda x: f"{my_teams[x]['종목']} {my_teams[x]['팀명']}", key="del_team_sel")
+            if st.button("선택한 팀 삭제", key="btn_del_team"):
+                removed = my_teams.pop(del_idx)
+                save_sports_teams(my_teams)
+                st.success(f"'{removed['팀명']}' 팀이 삭제되었습니다.")
+                st.rerun()
 
 # -------------------------------------------------------------
 # TAB 7: 데일리 생산성 & 날씨 (용인시 기준)
