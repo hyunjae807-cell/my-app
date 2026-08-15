@@ -126,7 +126,7 @@ function initAlarm() {
 </script>
 """
 
-# 4. 실시간 데이터 로딩 함수들
+# 4. 실시간 주가 및 뉴스 로딩 함수
 @st.cache_data(ttl=60)
 def get_live_market_data(ticker_symbol):
     try:
@@ -165,90 +165,82 @@ def fetch_google_news(query, max_results=7):
     except Exception:
         return []
 
-# 5. 토스증권 계좌 잔고 및 보유 종목 호출 함수
+# 5. [수정] 토스증권 공식 OAuth2 토큰 발급 및 보유 종목 조회 함수
 @st.cache_data(ttl=60)
 def fetch_toss_portfolio():
-    # Streamlit Secrets에 키가 등록되어 있는지 안전하게 확인
     if "TOSS_API_KEY" in st.secrets and "TOSS_SECRET_KEY" in st.secrets and "TOSS_ACCOUNT_NO" in st.secrets:
         try:
             api_key = st.secrets["TOSS_API_KEY"]
             secret_key = st.secrets["TOSS_SECRET_KEY"]
             account_no = st.secrets["TOSS_ACCOUNT_NO"]
 
+            # 1단계: OAuth2 토큰 발급 (공식 규격)
+            token_url = "https://openapi.tossinvest.com/oauth2/token"
+            token_payload = {
+                "grant_type": "client_credentials",
+                "client_id": api_key,
+                "client_secret": secret_key
+            }
+            token_headers = {"Content-Type": "application/x-www-form-urlencoded"}
+            token_res = requests.post(token_url, data=token_payload, headers=token_headers, timeout=5)
+            
+            if token_res.status_code != 200:
+                return None, f"토큰 발급 실패 ({token_res.status_code}): {token_res.text}"
+            
+            access_token = token_res.json().get("access_token")
+
+            # 2단계: 공식 보유 주식 엔드포인트 호출 (/api/v1/holdings)
+            holdings_url = "https://openapi.tossinvest.com/api/v1/holdings"
             headers = {
-                "Authorization": f"Bearer {api_key}",
-                "X-Tossinvest-Secret": secret_key,
-                "X-Tossinvest-Account": account_no,
+                "Authorization": f"Bearer {access_token}",
+                "X-Tossinvest-Account": str(account_no),
                 "Content-Type": "application/json"
             }
-            url = "https://openapi.tossinvest.com/v1/accounts/balance"
-            res = requests.get(url, headers=headers, timeout=5)
-            if res.status_code == 200:
-                return res.json(), "SUCCESS"
+            holdings_res = requests.get(holdings_url, headers=headers, timeout=5)
+            
+            if holdings_res.status_code == 200:
+                return holdings_res.json(), "SUCCESS"
             else:
-                return None, f"오류 ({res.status_code}): {res.text}"
+                return None, f"보유 종목 조회 실패 ({holdings_res.status_code}): {holdings_res.text}"
         except Exception as e:
             return None, str(e)
     return None, "NOT_CONFIGURED"
 
 
 # =============================================================
-# UI 메인 화면 렌더링
+# UI 렌더링
 # =============================================================
 
-# 헤더 영역
 st.title("📱 Daily Stock Assistant")
 st.caption(f"최근 조회 시각: {datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S (한국 시간)')}")
 
-# 알람 설정 카드
 components.html(alarm_component, height=130)
 
-# 5개 탭 구성
 tab_portfolio, tab_market, tab_news, tab_chart, tab_briefing = st.tabs(
     ["💼 내 포트폴리오", "📊 실시간 시황", "📰 주요 뉴스", "🔍 종목 차트", "💡 AI 브리핑"]
 )
 
-# -------------------------------------------------------------
 # TAB 1: 토스증권 내 포트폴리오
-# -------------------------------------------------------------
 with tab_portfolio:
     st.subheader("💼 토스증권 내 보유 종목")
     
     portfolio_data, status = fetch_toss_portfolio()
     
     if status == "SUCCESS" and portfolio_data:
-        # 실제 토스증권 데이터 렌더링
-        summary = portfolio_data.get("summary", {})
-        holdings = portfolio_data.get("holdings", [])
+        holdings = portfolio_data if isinstance(portfolio_data, list) else portfolio_data.get("holdings", portfolio_data.get("items", []))
         
-        total_eval = summary.get("totalEvaluationAmount", 0)
-        total_profit = summary.get("totalProfitAmount", 0)
-        total_profit_rate = summary.get("totalProfitRate", 0.0)
-        cash_avail = summary.get("orderableAmount", 0)
-        
-        c1, c2 = st.columns(2)
-        with c1:
-            st.metric("총 평가금액", f"{total_eval:,.0f}원", f"{total_profit_rate:+.2f}%")
-        with c2:
-            st.metric("주문 가능 예수금", f"{cash_avail:,.0f}원", f"평가손익: {total_profit:+,.0f}원")
-            
-        st.markdown("---")
-        st.write("📋 **보유 종목 상세 리스트**")
         if holdings:
             df_holdings = pd.DataFrame(holdings)
+            st.success("✅ 토스증권 계좌 연동 성공!")
             st.dataframe(df_holdings, use_container_width=True)
         else:
             st.info("현재 보유 중인 종목이 없습니다.")
             
     elif status == "NOT_CONFIGURED":
-        # API 키가 아직 설정되지 않았을 때 안내 화면
-        st.info("💡 **토스증권 Open API 키를 등록하면 실제 내 계좌의 보유 종목과 잔고가 여기에 자동으로 표시됩니다.**")
-        
-        with st.expander("🔑 토스증권 API 키 등록 방법 (1분 소요)", expanded=True):
+        st.info("💡 **토스증권 Open API 키를 등록하면 실제 보유 종목이 여기에 자동으로 표시됩니다.**")
+        with st.expander("🔑 키 등록 안내", expanded=True):
             st.markdown("""
-            1. [Streamlit Cloud 관리 페이지](https://share.streamlit.io/)에 접속합니다.
-            2. 내 앱 우측 메뉴(`⋮`) ➡️ **`Settings`** ➡️ **`Secrets`** 탭을 클릭합니다.
-            3. 아래 3줄을 복사해 본인의 키 정보를 입력하고 **`Save`**를 누릅니다:
+            Streamlit Cloud ➡️ **`Settings`** ➡️ **`Secrets`**에 등록:
             ```toml
             TOSS_API_KEY = "발급받은_API_KEY"
             TOSS_SECRET_KEY = "발급받은_SECRET_KEY"
@@ -256,14 +248,11 @@ with tab_portfolio:
             ```
             """)
     else:
-        st.error(f"계좌 정보를 불러오는 중 오류가 발생했습니다: {status}")
+        st.error(f"계좌 조회 안내: {status}")
 
-# -------------------------------------------------------------
-# TAB 2: 실시간 글로벌 & 국내 시황
-# -------------------------------------------------------------
+# TAB 2: 실시간 시황
 with tab_market:
-    st.subheader("🌐 글로벌 & 국내 주요 지수 (실시간)")
-    
+    st.subheader("🌐 글로벌 & 국내 주요 지수")
     kospi_p, kospi_d = get_live_market_data("^KS11")
     sp500_p, sp500_d = get_live_market_data("^GSPC")
     nasdaq_p, nasdaq_d = get_live_market_data("^IXIC")
@@ -275,11 +264,10 @@ with tab_market:
         st.metric("S&P 500", f"{sp500_p:,.2f}" if sp500_p else "5,554.20", f"{sp500_d:+.2f}%" if sp500_d else "-0.20%")
     with c2:
         st.metric("나스닥 (NASDAQ)", f"{nasdaq_p:,.2f}" if nasdaq_p else "17,594.50", f"{nasdaq_d:+.2f}%" if nasdaq_d else "+0.12%")
-        st.metric("브렌트유 (Brent Oil)", f"${oil_p:.2f}" if oil_p else "$88.59", f"{oil_d:+.2f}%" if oil_d else "+1.75%")
+        st.metric("브렌트유 (Oil)", f"${oil_p:.2f}" if oil_p else "$88.59", f"{oil_d:+.2f}%" if oil_d else "+1.75%")
 
     st.markdown("---")
-    st.subheader("🏢 주요 대형주 시세 (실시간)")
-    
+    st.subheader("🏢 주요 대형주 시세")
     samsung_p, samsung_d = get_live_market_data("005930.KS")
     hynix_p, hynix_d = get_live_market_data("000660.KS")
     hyundai_p, hyundai_d = get_live_market_data("005380.KS")
@@ -293,16 +281,10 @@ with tab_market:
         st.metric("현대차", f"{hyundai_p:,.0f}원" if hyundai_p else "256,000원", f"{hyundai_d:+.2f}%" if hyundai_d else "+8.24%")
         st.metric("엔비디아 (NVDA)", f"${nvda_p:.2f}" if nvda_p else "$224.92", f"{nvda_d:+.2f}%" if nvda_d else "-0.18%")
 
-# -------------------------------------------------------------
-# TAB 3: 실시간 주요 뉴스
-# -------------------------------------------------------------
+# TAB 3: 주요 뉴스
 with tab_news:
     st.subheader("📰 실시간 핵심 뉴스")
-    news_category = st.radio(
-        "카테고리", 
-        ["🇰🇷 국내 증시·경제", "🇺🇸 미국·글로벌 증시", "🤖 AI·반도체", "🔍 직접 검색"], 
-        horizontal=True
-    )
+    news_category = st.radio("카테고리", ["🇰🇷 국내 증시·경제", "🇺🇸 미국·글로벌 증시", "🤖 AI·반도체", "🔍 직접 검색"], horizontal=True)
     if news_category == "🇰🇷 국내 증시·경제":
         query = "코스피 OR 국내증시 OR 환율"
     elif news_category == "🇺🇸 미국·글로벌 증시":
@@ -323,9 +305,7 @@ with tab_news:
                 </div>
                 """, unsafe_allow_html=True)
 
-# -------------------------------------------------------------
-# TAB 4: 종목 차트 & 검색
-# -------------------------------------------------------------
+# TAB 4: 종목 차트
 with tab_chart:
     st.subheader("🔍 글로벌 종목 차트 분석")
     ticker_input = st.text_input("티커 입력 (예: AAPL, NVDA, TSLA, 005930.KS)", value="NVDA").upper()
@@ -338,32 +318,15 @@ with tab_chart:
                 prev_price = hist['Close'].iloc[-2]
                 change_pct = ((current_price - prev_price) / prev_price) * 100
                 currency = "원" if ".KS" in ticker_input or ".KQ" in ticker_input else "$"
-                st.metric(
-                    label=f"{ticker_input} 현재/최근가", 
-                    value=f"{currency}{current_price:,.2f}" if currency == "$" else f"{current_price:,.0f}원", 
-                    delta=f"{change_pct:+.2f}%"
-                )
+                st.metric(label=f"{ticker_input} 현재/최근가", value=f"{currency}{current_price:,.2f}" if currency == "$" else f"{current_price:,.0f}원", delta=f"{change_pct:+.2f}%")
                 fig = go.Figure()
-                fig.add_trace(go.Scatter(
-                    x=hist.index, 
-                    y=hist['Close'], 
-                    mode='lines+markers', 
-                    name='Close', 
-                    line=dict(color='#0066cc', width=2)
-                ))
-                fig.update_layout(
-                    title=f"{ticker_input} 최근 1개월 주가 추이", 
-                    margin=dict(l=10, r=10, t=40, b=10), 
-                    height=300, 
-                    xaxis_rangeslider_visible=False
-                )
+                fig.add_trace(go.Scatter(x=hist.index, y=hist['Close'], mode='lines+markers', name='Close', line=dict(color='#0066cc', width=2)))
+                fig.update_layout(title=f"{ticker_input} 최근 1개월 주가 추이", margin=dict(l=10, r=10, t=40, b=10), height=300, xaxis_rangeslider_visible=False)
                 st.plotly_chart(fig, use_container_width=True)
         except Exception as e:
             st.error(f"오류: {e}")
 
-# -------------------------------------------------------------
-# TAB 5: AI 브리핑 & 일정
-# -------------------------------------------------------------
+# TAB 5: AI 브리핑
 with tab_briefing:
     st.subheader("📌 증시 핵심 체크포인트")
     st.info("📅 **주요 일정**\n• **8월 26일**: 엔비디아 2분기 실적 발표\n• **8월 28일**: 잭슨홀 심포지엄 (파월 연준의장 연설)")
