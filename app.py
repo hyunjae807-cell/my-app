@@ -26,6 +26,14 @@ st.set_page_config(
 # 모바일 친화적 CSS
 st.markdown("""
     <style>
+    .summary-card {
+        background-color: #1e293b;
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 12px;
+        border: 1px solid #334155;
+        color: #f8fafc;
+    }
     .news-card {
         background-color: #1e293b;
         color: #f8fafc;
@@ -396,7 +404,7 @@ def generate_ai_briefing(news_headlines, portfolio_items, api_key):
             pass
     return None, "브리핑 생성 실패"
 
-# 8. [신규] 실시간 구단 경기 일정 및 AI 브리핑 생성 함수
+# 8. [한국 시간 KST 기준 통일] 실시간 구단 경기 일정 및 AI 브리핑 함수
 def generate_team_briefing(team_name, sports_type, league, team_news, api_key):
     api_key = api_key.strip()
     headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
@@ -406,11 +414,14 @@ def generate_team_briefing(team_name, sports_type, league, team_news, api_key):
     당신은 스포츠 전문 기자이자 분석가 AI입니다.
     현재 시점(2026년 8월)을 기준으로 [{sports_type} - {team_name} ({league})] 구단의 최신 경기 일정, 최근 경기 결과, 구단 핵심 이슈를 브리핑해주세요.
 
+    [중요 규칙]
+    - 경기 일정에 표기되는 모든 날짜와 킥오프/시작 시간은 반드시 **대한민국 표준시 (한국 시간, KST)** 기준으로 표기해주세요 (예: '8월 16일(일) 밤 10:30 (한국 시간)', '새벽 04:00 (한국 시간)').
+
     [최신 관련 뉴스 데이터]
     {news_text}
 
     [작성 가이드라인]
-    1. 📅 **다가오는 다음 경기 일정**: (상대팀, 경기 날짜/시간, 홈/원정)
+    1. 📅 **다가오는 다음 경기 일정**: (대진 상대, 경기 날짜/한국 시간 KST, 홈/원정)
     2. 🏆 **최근 경기 결과 & 스코어**: (최근 경기 승패, 스코어, 주요 활약 선수)
     3. 📰 **구단 핵심 뉴스 & 라인업 이슈**: (부상자, 주요 선수 폼, 최근 팀 분위기 3줄 요약)
 
@@ -490,10 +501,80 @@ components.html(alarm_component, height=95)
 if "saved_gemini_key" not in st.session_state:
     st.session_state.saved_gemini_key = st.secrets.get("GEMINI_API_KEY", "")
 
-# 7개 탭 구성
-tab_portfolio, tab_market, tab_news, tab_briefing, tab_chat, tab_sports, tab_daily = st.tabs(
-    ["💼 포트폴리오", "📊 실시간 시황", "📰 주요 뉴스", "💡 AI 브리핑", "🤖 AI 챗봇", "⚽ 스포츠 허브", "📋 데일리 & 날씨"]
+# 8개 탭 구성 (맨 앞에 [🏠 데일리 요약] 대시보드 추가)
+tab_home, tab_portfolio, tab_market, tab_news, tab_briefing, tab_chat, tab_sports, tab_daily = st.tabs(
+    ["🏠 데일리 요약", "💼 포트폴리오", "📊 실시간 시황", "📰 주요 뉴스", "💡 AI 브리핑", "🤖 AI 챗봇", "⚽ 스포츠 허브", "📋 데일리 & 날씨"]
 )
+
+# -------------------------------------------------------------
+# TAB 0: [신규 맨 앞] 🏠 데일리 요약
+# -------------------------------------------------------------
+with tab_home:
+    st.subheader("🌅 오늘의 핵심 데일리 요약")
+    
+    # 1) 날씨 요약 카드
+    temp_val, weather_val, humid_val = get_yongin_weather()
+    st.markdown(f"""
+    <div class="summary-card" style="background: linear-gradient(135deg, #0369a1, #0f172a); border-color: #38bdf8;">
+        <div style="font-size: 13px; color: #bae6fd; font-weight: 600;">📍 경기도 용인시 오늘 날씨</div>
+        <div style="font-size: 24px; font-weight: 800; margin-top: 4px;">{weather_val} {temp_val}</div>
+        <div style="font-size: 12px; color: #e0f2fe; margin-top: 2px;">습도: {humid_val} | 외출 및 출퇴근 추천 날씨</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # 2) 오늘의 To-Do 요약 카드
+    home_todos = load_todos()
+    with st.container(border=True):
+        st.markdown("**✅ 오늘의 할 일 (To-Do)**")
+        if home_todos:
+            for t in home_todos[:3]:
+                st.markdown(f"• {t}")
+            if len(home_todos) > 3:
+                st.caption(f"외 {len(home_todos)-3}개의 할 일이 더 있습니다. (📋 데일리 탭에서 관리)")
+        else:
+            st.info("등록된 할 일이 없습니다.")
+
+    # 3) 내 자산 한 줄 요약
+    home_portfolio = load_portfolio()
+    total_eval_h = 0
+    total_buy_h = 0
+    for it in home_portfolio:
+        cp, _ = get_live_market_data(it["티커"])
+        if cp is None:
+            cp = it["매입단가"]
+        total_eval_h += cp * it["보유수량"]
+        total_buy_h += it["매입단가"] * it["보유수량"]
+    diff_h = total_eval_h - total_buy_h
+    rate_h = (diff_h / total_buy_h) * 100 if total_buy_h > 0 else 0
+
+    with st.container(border=True):
+        st.markdown("**💼 내 포트폴리오 요약**")
+        ch1, ch2 = st.columns(2)
+        with ch1:
+            st.metric("총 평가금액", f"{total_eval_h:,.0f}원", f"{rate_h:+.2f}%")
+        with ch2:
+            st.metric("총 평가손익", f"{diff_h:+,.0f}원")
+
+    # 4) 스포츠 응원팀 다음 경기 일정 요약 (한국 시간 기준)
+    home_teams = load_sports_teams()
+    home_sb = load_sports_briefings()
+    first_team = home_teams[0] if home_teams else None
+    
+    if first_team:
+        with st.container(border=True):
+            st.markdown(f"**{first_team['종목']} {first_team['팀명']} ({first_team['리그']}) 일정 요약**")
+            if first_team["팀명"] in home_sb:
+                briefing_preview = home_sb[first_team["팀명"]].get("text", "")
+                st.markdown(briefing_preview[:280] + ("..." if len(briefing_preview) > 280 else ""))
+            else:
+                st.caption("🏆 2026/27 시즌 주요 경기 진행 중 (⚽ 스포츠 허브 탭에서 실시간 업데이트 확인)")
+
+    # 5) 실시간 간단 뉴스 헤드라인 (3줄 요약)
+    quick_news = fetch_google_news("코스피 OR 반도체 OR 연준 금리", max_results=3)
+    with st.container(border=True):
+        st.markdown("**📰 오늘의 핵심 3줄 뉴스**")
+        for qn in quick_news:
+            st.markdown(f"• [{qn['title']}]({qn['link']}) <span style='font-size:11px;color:#94a3b8;'>({qn['source']})</span>", unsafe_allow_html=True)
 
 # -------------------------------------------------------------
 # TAB 1: 내 실제 포트폴리오 & 배당금 계산기
@@ -769,7 +850,7 @@ with tab_chat:
                     st.session_state.chat_messages.append({"role": "assistant", "content": bot_reply})
 
 # -------------------------------------------------------------
-# TAB 6: [실시간 경기 일정 & AI 브리핑 탑재] 스포츠 허브
+# TAB 6: [한국 시간 KST 기준] 스포츠 허브
 # -------------------------------------------------------------
 with tab_sports:
     st.subheader("🏆 내 응원팀 스포츠 허브")
@@ -783,11 +864,9 @@ with tab_sports:
     current_team = my_teams[selected_team_idx]
     team_key = current_team["팀명"]
 
-    # 실시간 구단 뉴스 수집 (경기 일정/결과 집중 검색)
     search_query = f'"{current_team["팀명"]}" AND (경기 OR 일정 OR 결과 OR 승리 OR 패배 OR 하이라이트)'
     team_news = fetch_google_news(search_query, max_results=8)
 
-    # ⚡ [실시간 AI 구단 브리핑 생성 버튼]
     c_s1, c_s2 = st.columns([0.65, 0.35])
     with c_s1:
         st.write(f"### {current_team['종목']} {current_team['팀명']} ({current_team['리그']})")
@@ -796,7 +875,7 @@ with tab_sports:
             if not st.session_state.saved_gemini_key:
                 st.warning("API Key가 필요합니다.")
             else:
-                with st.spinner(f"{team_key}의 최신 경기 일정과 결과를 AI가 분석 중입니다..."):
+                with st.spinner(f"{team_key}의 최신 경기 일정과 결과를 AI가 분석 중입니다 (한국시간 기준)..."):
                     briefing_text = generate_team_briefing(
                         current_team['팀명'], current_team['종목'], current_team['리그'], team_news, st.session_state.saved_gemini_key
                     )
@@ -807,14 +886,13 @@ with tab_sports:
                         st.success("구단 브리핑이 성공적으로 업데이트되었습니다!")
                         st.rerun()
 
-    # 구단 브리핑 출력
     if team_key in sports_briefings:
         b_data = sports_briefings[team_key]
-        st.caption(f"🕒 **마지막 업데이트 시각**: {b_data.get('updated_at', '')}")
+        st.caption(f"🕒 **마지막 업데이트 시각**: {b_data.get('updated_at', '')} (모든 경기 시간은 한국시간 KST 기준)")
         with st.container(border=True):
             st.markdown(b_data.get("text", ""))
     else:
-        st.info(f"💡 우측 상단의 **[⚡ 실시간 경기 & 구단 브리핑 생성]** 버튼을 누르면 AI가 {team_key}의 **다음 경기 일정, 최근 스코어, 구단 이슈**를 실시간으로 분석해 드립니다.")
+        st.info(f"💡 우측 상단의 **[⚡ 실시간 경기 & 구단 브리핑 생성]** 버튼을 누르면 AI가 {team_key}의 **다음 경기 일정(한국시간), 최근 스코어, 구단 이슈**를 실시간으로 분석해 드립니다.")
 
     st.markdown("---")
     st.write(f"📰 **{current_team['팀명']} 실시간 경기 뉴스**")
@@ -826,15 +904,12 @@ with tab_sports:
                 <div class="news-meta">📰 {n['source']} &nbsp;|&nbsp; 🕒 {n['date']}</div>
             </div>
             """, unsafe_allow_html=True)
-    else:
-        st.info("최신 뉴스를 가져오는 중입니다...")
 
-    # ➕ 새로운 응원팀 추가 / 관리
     st.markdown("---")
-    with st.expander("➕ 새 응원팀 직접 검색 및 추가하기 (축구, 야구, 농구, e스포츠 등)"):
+    with st.expander("➕ 새 응원팀 직접 검색 및 추가하기"):
         with st.form("add_team_form"):
             sports_type = st.selectbox("종목 선택", ["⚽ 축구", "⚾ 야구", "🏀 농구", "🏐 배구", "🎮 e스포츠", "🏎️ 모터스포츠/기타"])
-            new_team_name = st.text_input("팀명 입력 (예: 토트넘, 한화 이글스, T1, 골든스테이트)", value="한화 이글스")
+            new_team_name = st.text_input("팀명 입력 (예: 토트넘, 한화 이글스, T1)", value="한화 이글스")
             new_league = st.text_input("리그명 (예: KBO, EPL, LCK, NBA)", value="KBO")
             new_keyword = st.text_input("뉴스 검색 키워드", value="한화 이글스")
             
@@ -851,7 +926,6 @@ with tab_sports:
                     st.rerun()
 
         if len(my_teams) > 1:
-            st.write("🗑️ **등록된 팀 삭제**")
             del_idx = st.selectbox("삭제할 팀 선택", range(len(my_teams)), format_func=lambda x: f"{my_teams[x]['종목']} {my_teams[x]['팀명']}", key="del_team_sel")
             if st.button("선택한 팀 삭제", key="btn_del_team"):
                 removed = my_teams.pop(del_idx)
