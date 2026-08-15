@@ -319,4 +319,20 @@ with tab_chart:
                 st.metric(label=f"{ticker_input} 현재/최근가", value=f"{currency}{current_price:,.2f}" if currency == "$" else f"{current_price:,.0f}원", delta=f"{change_pct:+.2f}%")
                 fig = go.Figure()
                 fig.add_trace(go.Scatter(x=hist.index, y=hist['Close'], mode='lines+markers', name='Close', line=dict(color='#0066cc', width=2)))
-                fig.update_layout(title=f"{ticker_input} 최근 1개월 주가 추이", margin=dict(l
+                fig.update_layout(title=f"{ticker_input} 최근 1개월 주가 추이", margin=dict(l=10, r=10, t=40, b=10), height=300, xaxis_rangeslider_visible=False)
+                st.plotly_chart(fig, use_container_width=True)
+        except Exception as e:
+            st.error(f"오류: {e}")
+
+# -------------------------------------------------------------
+# TAB 5: AI 브리핑
+# -------------------------------------------------------------
+with tab_briefing:
+    st.subheader("📌 증시 핵심 체크포인트")
+    st.info("📅 **주요 일정**\n• **8월 26일**: 엔비디아 2분기 실적 발표\n• **8월 28일**: 잭슨홀 심포지엄 (파월 연준의장 연설)")
+    with st.expander("1. 미국 매크로: 인플레이션 안정 vs 소비 둔화", expanded=True):
+        st.write("7월 소매판매(-0.6%) 및 소비자심리지수 하락으로 경기 둔화 우려 대두. 8월 28일 잭슨홀 미팅 주목.")
+    with st.expander("2. AI 반도체: 엔비디아 실적(8/26) & 데이터센터"):
+        st.write("블랙웰 출하 일정 및 AI ROI 검증 국면 진입. 오픈AI 데이터센터 보증 축소 이슈 점검.")
+    with st.expander("3. 국내 증시: 외국인 수급 지속성"):
+        st.write("외국인 매수세의 코스닥 및 소부장 중소형주 확산 여부 관찰 필요.")
