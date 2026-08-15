@@ -17,8 +17,8 @@ KST = timezone(timedelta(hours=9))
 
 # 2. 모바일 최적화 페이지 설정
 st.set_page_config(
-    page_title="나만의 증시 비서",
-    page_icon="📈",
+    page_title="나만의 올인원 비서",
+    page_icon="🦁",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
@@ -48,12 +48,27 @@ st.markdown("""
         color: #94a3b8;
         margin-top: 6px;
     }
+    .weather-card {
+        background: linear-gradient(135deg, #0284c7, #0369a1);
+        padding: 16px;
+        border-radius: 12px;
+        color: white;
+        margin-bottom: 15px;
+    }
+    .sports-card {
+        background: linear-gradient(135deg, #b91c1c, #7f1d1d);
+        padding: 16px;
+        border-radius: 12px;
+        color: white;
+        margin-bottom: 15px;
+    }
     </style>
 """, unsafe_allow_html=True)
 
-# 3. [영구 저장소] 포트폴리오 및 AI 브리핑 파일 관리
+# 3. [영구 저장소 파일 관리]
 PORTFOLIO_FILE = "portfolio.json"
 BRIEFING_FILE = "briefing.json"
+TODOS_FILE = "todos.json"
 
 DEFAULT_PORTFOLIO = [
     {"종목명": "KODEX AI반도체TOP2플러스", "티커": "395160.KS", "매입단가": 13234.0, "보유수량": 126},
@@ -65,18 +80,15 @@ def load_portfolio():
         try:
             with open(PORTFOLIO_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                if data:
-                    return data
-        except Exception:
-            return DEFAULT_PORTFOLIO
+                if data: return data
+        except Exception: pass
     return DEFAULT_PORTFOLIO
 
 def save_portfolio(data):
     try:
         with open(PORTFOLIO_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        st.error(f"포트폴리오 저장 오류: {e}")
+    except Exception as e: st.error(f"저장 오류: {e}")
 
 def load_briefing():
     if os.path.exists(BRIEFING_FILE):
@@ -84,26 +96,38 @@ def load_briefing():
             with open(BRIEFING_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 return data.get("text"), data.get("generated_at")
-        except Exception:
-            return None, None
+        except Exception: pass
     return None, None
 
 def save_briefing(text, generated_at_str):
     try:
         with open(BRIEFING_FILE, "w", encoding="utf-8") as f:
             json.dump({"text": text, "generated_at": generated_at_str}, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        st.error(f"브리핑 저장 오류: {e}")
+    except Exception as e: st.error(f"저장 오류: {e}")
+
+def load_todos():
+    if os.path.exists(TODOS_FILE):
+        try:
+            with open(TODOS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if data: return data
+        except Exception: pass
+    return ["주요 증시 캘린더 확인하기", "맨유 경기 일정 체크하기"]
+
+def save_todos(todos):
+    try:
+        with open(TODOS_FILE, "w", encoding="utf-8") as f:
+            json.dump(todos, f, ensure_ascii=False, indent=2)
+    except Exception as e: st.error(f"저장 오류: {e}")
 
 # 4. 아침 7시 시스템 알람 컴포넌트
 alarm_component = """
-<div style="background: linear-gradient(135deg, #1e293b, #0f172a); padding: 15px; border-radius: 12px; color: white; margin-bottom: 15px;">
+<div style="background: linear-gradient(135deg, #1e293b, #0f172a); padding: 14px; border-radius: 12px; color: white; margin-bottom: 12px;">
     <div style="font-weight: 700; font-size: 14px; margin-bottom: 4px;">⏰ 매일 한국 시간 아침 7시 시스템 알람</div>
-    <div style="font-size: 11px; color: #94a3b8; margin-bottom: 10px;">스마트폰 상단바 알림과 소리 알람을 활성화합니다.</div>
-    <button id="alarmBtn" onclick="initAlarm()" style="background-color: #3b82f6; color: white; border: none; padding: 8px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; width: 100%;">
+    <button id="alarmBtn" onclick="initAlarm()" style="background-color: #3b82f6; color: white; border: none; padding: 7px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; width: 100%;">
         🔔 시스템 알람 및 소리 켜기
     </button>
-    <div id="alarmStatus" style="margin-top: 6px; font-size: 11px; color: #4ade80; text-align: center;"></div>
+    <div id="alarmStatus" style="margin-top: 5px; font-size: 11px; color: #4ade80; text-align: center;"></div>
 </div>
 
 <script>
@@ -119,7 +143,7 @@ function playAlarmSound() {
         gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
         osc.start();
         osc.stop(audioCtx.currentTime + 1.2);
-    } catch(e) { console.log(e); }
+    } catch(e) {}
 }
 
 function triggerSystemNotification() {
@@ -140,129 +164,42 @@ function checkTimeForAlarm() {
 }
 
 function initAlarm() {
-    if (!("Notification" in window)) {
-        alert("브라우저에서 시스템 알림을 지원하지 않습니다.");
-        return;
-    }
+    if (!("Notification" in window)) return alert("알림을 지원하지 않는 브라우저입니다.");
     Notification.requestPermission().then(permission => {
         if (permission === "granted") {
-            document.getElementById("alarmStatus").innerText = "✅ 매일 아침 7시 시스템 알람 활성화 완료!";
+            document.getElementById("alarmStatus").innerText = "✅ 매일 아침 7시 알람 작동 중!";
             document.getElementById("alarmBtn").style.backgroundColor = "#16a34a";
-            document.getElementById("alarmBtn").innerText = "🔔 알람 작동 중 (오전 7:00)";
+            document.getElementById("alarmBtn").innerText = "🔔 알람 활성화 완료 (오전 7:00)";
             triggerSystemNotification();
             setInterval(checkTimeForAlarm, 1000);
-        } else {
-            alert("알림 권한이 허용되지 않았습니다.");
         }
     });
 }
 </script>
 """
 
-# 5. 종목별 맞춤 캘린더 일정 함수
-def get_stock_calendar_events(portfolio_items):
-    events = [
-        {"날짜": "2026-08-28", "구분": "🌐 거시경제", "이벤트": "미국 잭슨홀 심포지엄 (파월 연준의장 기조연설)", "중요도": "🔴 높음"},
-        {"날짜": "2026-09-16", "구분": "🌐 거시경제", "이벤트": "미국 9월 FOMC 기준금리 결정 회의", "중요도": "🔴 높음"}
-    ]
-    for item in portfolio_items:
-        name = item["종목명"]
-        ticker = item["티커"]
-        if "AI반도체" in name or "395160" in ticker or "NVDA" in ticker or "삼성전자" in name or "하이닉스" in name:
-            events.append({"날짜": "2026-08-26", "구분": f"🎯 {name}", "이벤트": "엔비디아(NVDA) 2분기 실적 발표 (미국 현지시간)", "중요도": "🔴 핵심"})
-            events.append({"날짜": "2026-09-04", "구분": f"🎯 {name}", "이벤트": "글로벌 세미콘 반도체 컨퍼런스 & HBM 서밋", "중요도": "🟡 보통"})
-            events.append({"날짜": "2026-10-08", "구분": f"🎯 {name}", "이벤트": "삼성전자 3분기 잠정 실적 발표", "중요도": "🔴 높음"})
-        if "커버드콜" in name or "498400" in ticker or "200" in name:
-            events.append({"날짜": "2026-08-19", "구분": f"🎯 {name}", "이벤트": "8월 월분배금(배당금) 계좌 지급일", "중요도": "🟢 배당"})
-            events.append({"날짜": "2026-09-10", "구분": f"🎯 {name}", "이벤트": "국내 선물·옵션 동시 만기일 (네 마녀의 날)", "중요도": "🔴 변동성"})
-            events.append({"날짜": "매주 목요일", "구분": f"🎯 {name}", "이벤트": "위클리 옵션 만기 및 프리미엄 정산", "중요도": "🟡 정기"})
-    return pd.DataFrame(events).drop_duplicates(subset=["날짜", "이벤트"])
-
-# 6. AI 비전 이미지 분석 함수
-def analyze_portfolio_image(image_bytes, api_key):
-    api_key = api_key.strip()
-    headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
-    candidate_models = ["models/gemini-3.5-flash", "models/gemini-2.0-flash", "models/gemini-1.5-flash-latest"]
+# 5. [신규] 실시간 날씨 데이터 조회 (용인시 기준 / Open-Meteo 무료 API)
+@st.cache_data(ttl=1800)
+def get_yongin_weather():
     try:
-        m_res = requests.get("https://generativelanguage.googleapis.com/v1beta/models", headers=headers, timeout=5)
-        if m_res.status_code == 200:
-            active_models = [m['name'] for m in m_res.json().get('models', []) if 'generateContent' in m.get('supportedGenerationMethods', [])]
-            if active_models: candidate_models = active_models
-    except Exception: pass
+        url = "https://api.open-meteo.com/v1/forecast?latitude=37.2410&longitude=127.1775&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=Asia%2FTokyo"
+        res = requests.get(url, timeout=4).json()
+        current = res.get("current", {})
+        temp = current.get("temperature_2m", 28.0)
+        humidity = current.get("relative_humidity_2m", 65)
+        code = current.get("weather_code", 0)
+        
+        weather_desc = "맑음 ☀️"
+        if code in: weather_desc = "구름 조금 ⛅"
+        elif code == 3: weather_desc = "흐림 ☁️"
+        elif code in [51, 53, 55, 61, 63, 65, 80, 81, 82]: weather_desc = "비 🌧️"
+        elif code in [71, 73, 75, 85, 86]: weather_desc = "눈 ❄️"
+        
+        return f"{temp:.1f}°C", weather_desc, f"{humidity}%"
+    except Exception:
+        return "28.0°C", "맑음 ☀️", "60%"
 
-    base64_img = base64.b64encode(image_bytes).decode('utf-8')
-    prompt = """
-    이 이미지는 증권사 주식/ETF 잔고 화면입니다.
-    보유 중인 종목명, 야후파이낸스 티커(국내 종목/ETF는 6자리코드.KS 또는 .KQ, 미국 주식은 알파벳), 평균 매입단가(숫자), 보유 수량(정수)을 추출해주세요.
-    반드시 순수 JSON 배열 형식으로만 응답해주세요:
-    [
-        {"종목명": "KODEX AI반도체TOP2플러스", "티커": "395160.KS", "매입단가": 13234.0, "보유수량": 126},
-        {"종목명": "KODEX 200타겟위클리커버드콜", "티커": "498400.KS", "매입단가": 13012.0, "보유수량": 863}
-    ]
-    """
-    payload = {"contents": [{"parts": [{"text": prompt}, {"inline_data": {"mime_type": "image/jpeg", "data": base64_img}}]}]}
-    
-    last_err = ""
-    for model_path in candidate_models:
-        clean_model = model_path if model_path.startswith("models/") else f"models/{model_path}"
-        url = f"https://generativelanguage.googleapis.com/v1beta/{clean_model}:generateContent"
-        try:
-            res = requests.post(url, json=payload, headers=headers, timeout=20)
-            if res.status_code == 200:
-                raw = res.json()['candidates'][0]['content']['parts'][0]['text']
-                raw = raw.replace("```json", "").replace("```", "").strip()
-                return json.loads(raw), "SUCCESS"
-            else:
-                last_err = f"{clean_model}: {res.text}"
-        except Exception as e:
-            last_err = str(e)
-    return None, f"분석 오류: {last_err}"
-
-# 7. 실시간 맞춤형 AI 브리핑 생성 함수
-def generate_ai_briefing(news_headlines, portfolio_items, api_key):
-    api_key = api_key.strip()
-    headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
-    candidate_models = ["models/gemini-3.5-flash", "models/gemini-2.0-flash", "models/gemini-1.5-flash-latest"]
-    try:
-        m_res = requests.get("https://generativelanguage.googleapis.com/v1beta/models", headers=headers, timeout=5)
-        if m_res.status_code == 200:
-            active_models = [m['name'] for m in m_res.json().get('models', []) if 'generateContent' in m.get('supportedGenerationMethods', [])]
-            if active_models: candidate_models = active_models
-    except Exception: pass
-
-    stock_list_str = ", ".join([f"{item['종목명']} ({item['티커']})" for item in portfolio_items])
-    news_text = "\n".join([f"- {h['title']} ({h.get('source', '')})" for h in news_headlines[:15]])
-    
-    prompt = f"""
-    당신은 수석 증시 애널리스트 AI 어시스턴트입니다.
-    오늘자 실시간 주요 금융/경제 뉴스 헤드라인과 투자자의 보유 포트폴리오를 바탕으로, 모바일에서 읽기 편한 [오늘자 맞춤형 모닝 증시 브리핑]을 작성해주세요.
-
-    [투자자 보유 종목]
-    {stock_list_str}
-
-    [오늘의 실시간 주요 뉴스 헤드라인]
-    {news_text}
-
-    [작성 가이드라인]
-    1. 🌐 오늘의 글로벌 & 국내 증시 핵심 요약 (핵심 3줄)
-    2. 🎯 내 보유 종목에 미치는 영향 및 시사점 (KODEX AI반도체 및 커버드콜 등 보유 종목별 맞춤 분석)
-    3. 💡 오늘 장 시작 전 투자 전략 및 관전 포인트 (간결하고 실용적인 가이드)
-    
-    이모지와 함께 모바일 화면에서 한눈에 들어오도록 명확하고 간결하게 마크다운으로 작성해주세요.
-    """
-    payload = {"contents": [{"parts": [{"text": prompt}]}]}
-    
-    for model_path in candidate_models:
-        clean_model = model_path if model_path.startswith("models/") else f"models/{model_path}"
-        url = f"https://generativelanguage.googleapis.com/v1beta/{clean_model}:generateContent"
-        try:
-            res = requests.post(url, json=payload, headers=headers, timeout=25)
-            if res.status_code == 200:
-                return res.json()['candidates'][0]['content']['parts'][0]['text'], "SUCCESS"
-        except Exception: pass
-    return None, "브리핑 생성에 실패했습니다."
-
-# 8. 실시간 주가 및 뉴스 로딩 함수
+# 6. 실시간 주가 및 뉴스 로딩 함수
 @st.cache_data(ttl=60)
 def get_live_market_data(ticker_symbol):
     try:
@@ -300,26 +237,131 @@ def fetch_google_news(query, max_results=8):
     except Exception:
         return []
 
+# 7. AI 비전 이미지 분석 및 브리핑 함수
+def analyze_portfolio_image(image_bytes, api_key):
+    api_key = api_key.strip()
+    headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
+    candidate_models = ["models/gemini-3.5-flash", "models/gemini-2.0-flash", "models/gemini-1.5-flash-latest"]
+    try:
+        m_res = requests.get("https://generativelanguage.googleapis.com/v1beta/models", headers=headers, timeout=5)
+        if m_res.status_code == 200:
+            active = [m['name'] for m in m_res.json().get('models', []) if 'generateContent' in m.get('supportedGenerationMethods', [])]
+            if active: candidate_models = active
+    except Exception: pass
+
+    base64_img = base64.b64encode(image_bytes).decode('utf-8')
+    prompt = """
+    이 이미지는 증권사 주식/ETF 잔고 화면입니다.
+    보유 중인 종목명, 야후파이낸스 티커(국내 종목/ETF는 6자리코드.KS 또는 .KQ, 미국 주식은 알파벳), 평균 매입단가(숫자), 보유 수량(정수)을 추출해주세요.
+    반드시 순수 JSON 배열 형식으로만 응답해주세요:
+    [
+        {"종목명": "KODEX AI반도체TOP2플러스", "티커": "395160.KS", "매입단가": 13234.0, "보유수량": 126},
+        {"종목명": "KODEX 200타겟위클리커버드콜", "티커": "498400.KS", "매입단가": 13012.0, "보유수량": 863}
+    ]
+    """
+    payload = {"contents": [{"parts": [{"text": prompt}, {"inline_data": {"mime_type": "image/jpeg", "data": base64_img}}]}]}
+    
+    last_err = ""
+    for model_path in candidate_models:
+        clean_model = model_path if model_path.startswith("models/") else f"models/{model_path}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/{clean_model}:generateContent"
+        try:
+            res = requests.post(url, json=payload, headers=headers, timeout=20)
+            if res.status_code == 200:
+                raw = res.json()['candidates'][0]['content']['parts'][0]['text']
+                raw = raw.replace("```json", "").replace("```", "").strip()
+                return json.loads(raw), "SUCCESS"
+            else: last_err = f"{clean_model}: {res.text}"
+        except Exception as e: last_err = str(e)
+    return None, f"분석 오류: {last_err}"
+
+def generate_ai_briefing(news_headlines, portfolio_items, api_key):
+    api_key = api_key.strip()
+    headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
+    candidate_models = ["models/gemini-3.5-flash", "models/gemini-2.0-flash", "models/gemini-1.5-flash-latest"]
+    try:
+        m_res = requests.get("https://generativelanguage.googleapis.com/v1beta/models", headers=headers, timeout=5)
+        if m_res.status_code == 200:
+            active = [m['name'] for m in m_res.json().get('models', []) if 'generateContent' in m.get('supportedGenerationMethods', [])]
+            if active: candidate_models = active
+    except Exception: pass
+
+    stock_list_str = ", ".join([f"{item['종목명']} ({item['티커']})" for item in portfolio_items])
+    news_text = "\n".join([f"- {h['title']} ({h.get('source', '')})" for h in news_headlines[:15]])
+    
+    prompt = f"""
+    당신은 수석 증시 애널리스트 AI 어시스턴트입니다.
+    오늘자 실시간 주요 금융/경제 뉴스 헤드라인과 투자자의 보유 포트폴리오를 바탕으로, 모바일에서 읽기 편한 [오늘자 맞춤형 모닝 증시 브리핑]을 작성해주세요.
+
+    [투자자 보유 종목]
+    {stock_list_str}
+
+    [오늘의 실시간 주요 뉴스 헤드라인]
+    {news_text}
+
+    [작성 가이드라인]
+    1. 🌐 오늘의 글로벌 & 국내 증시 핵심 요약 (핵심 3줄)
+    2. 🎯 내 보유 종목에 미치는 영향 및 시사점 (KODEX AI반도체 및 커버드콜 등 보유 종목별 맞춤 분석)
+    3. 💡 오늘 장 시작 전 투자 전략 및 관전 포인트 (간결하고 실용적인 가이드)
+    
+    이모지와 함께 모바일 화면에서 한눈에 들어오도록 명확하고 간결하게 마크다운으로 작성해주세요.
+    """
+    payload = {"contents": [{"parts": [{"text": prompt}]}]}
+    for model_path in candidate_models:
+        clean_model = model_path if model_path.startswith("models/") else f"models/{model_path}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/{clean_model}:generateContent"
+        try:
+            res = requests.post(url, json=payload, headers=headers, timeout=25)
+            if res.status_code == 200:
+                return res.json()['candidates'][0]['content']['parts'][0]['text'], "SUCCESS"
+        except Exception: pass
+    return None, "브리핑 생성 실패"
+
+# 8. [신규] 1:1 대화형 AI 투자 챗봇 함수
+def ask_gemini_chat(chat_history, user_msg, portfolio_items, api_key):
+    api_key = api_key.strip()
+    headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
+    stock_list_str = ", ".join([f"{item['종목명']} ({item['티커']})" for item in portfolio_items])
+    
+    system_inst = f"당신은 투자자의 1:1 개인 금융/주식 비서 AI입니다. 투자자가 보유한 종목은 [{stock_list_str}] 입니다. 친절하고 명확하며 통찰력 있는 분석을 한국어로 답변하세요."
+    
+    contents = []
+    for msg in chat_history:
+        role = "user" if msg["role"] == "user" else "model"
+        contents.append({"role": role, "parts": [{"text": msg["content"]}]})
+    contents.append({"role": "user", "parts": [{"text": f"{system_inst}\n\n질문: {user_msg}"}]})
+
+    candidate_models = ["models/gemini-3.5-flash", "models/gemini-2.0-flash", "models/gemini-1.5-flash-latest"]
+    for model_path in candidate_models:
+        clean_model = model_path if model_path.startswith("models/") else f"models/{model_path}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/{clean_model}:generateContent"
+        try:
+            res = requests.post(url, json={"contents": contents}, headers=headers, timeout=20)
+            if res.status_code == 200:
+                return res.json()['candidates'][0]['content']['parts'][0]['text']
+        except Exception: pass
+    return "답변을 불러오는 중 오류가 발생했습니다."
+
 
 # =============================================================
-# 메인 UI 화면
+# 메인 UI 렌더링
 # =============================================================
 
-st.title("📱 Daily Stock Assistant")
-st.caption(f"최근 조회 시각: {datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S (한국 시간)')}")
+st.title("🦁 My Personal Assistant")
+st.caption(f"기준 시각: {datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S (한국 시간)')}")
 
-components.html(alarm_component, height=130)
+components.html(alarm_component, height=125)
 
-tab_portfolio, tab_market, tab_news, tab_chart, tab_briefing = st.tabs(
-    ["💼 내 포트폴리오", "📊 실시간 시황", "📰 주요 뉴스", "🔍 종목 차트", "💡 AI 브리핑"]
+# 7개 풀스택 탭 구성
+tab_portfolio, tab_market, tab_news, tab_briefing, tab_chat, tab_sports, tab_daily = st.tabs(
+    ["💼 포트폴리오", "📊 실시간 시황", "📰 주요 뉴스", "💡 AI 브리핑", "🤖 AI 챗봇", "⚽ 스포츠", "📋 데일리 & 날씨"]
 )
 
 # -------------------------------------------------------------
-# TAB 1: 내 실제 포트폴리오
+# TAB 1: 내 실제 포트폴리오 & 배당금 계산기
 # -------------------------------------------------------------
 with tab_portfolio:
-    st.subheader("💼 내 주식·ETF 포트폴리오 (실시간 연동 & 영구 저장)")
-    
+    st.subheader("💼 내 주식·ETF 포트폴리오")
     user_portfolio = load_portfolio()
     total_eval_krw = 0
     total_buy_krw = 0
@@ -341,7 +383,6 @@ with tab_portfolio:
 
         calculated_rows.append({
             "종목명": item["종목명"],
-            "티커": item["티커"],
             "보유수량": f"{item['보유수량']:,}주",
             "매입단가": f"{item['매입단가']:,.0f}원" if is_krw else f"${item['매입단가']:.2f}",
             "현재가 (실시간)": f"{cur_p:,.0f}원" if is_krw else f"${cur_p:.2f}",
@@ -354,38 +395,45 @@ with tab_portfolio:
     total_rate_krw = (total_profit_krw / total_buy_krw) * 100 if total_buy_krw > 0 else 0
 
     c1, c2 = st.columns(2)
-    with c1:
-        st.metric("총 평가금액", f"{total_eval_krw:,.0f}원", f"{total_rate_krw:+.2f}%")
-    with c2:
-        st.metric("총 평가손익", f"{total_profit_krw:+,.0f}원", f"매입총액: {total_buy_krw:,.0f}원")
+    with c1: st.metric("총 평가금액", f"{total_eval_krw:,.0f}원", f"{total_rate_krw:+.2f}%")
+    with c2: st.metric("총 평가손익", f"{total_profit_krw:+,.0f}원", f"매입총액: {total_buy_krw:,.0f}원")
 
     st.markdown("---")
     st.write("📋 **보유 종목 실시간 현황표**")
     st.dataframe(pd.DataFrame(calculated_rows), use_container_width=True)
 
+    # 💰 [신규] 배당금 / 분배금 계산기
+    st.markdown("---")
+    with st.expander("💰 내 배당금 / 커버드콜 월 분배금 계산기", expanded=False):
+        st.write("보유 중인 `KODEX 200타겟위클리커버드콜` 등 고배당 ETF의 예상 배당 수익을 계산합니다.")
+        div_shares = st.number_input("커버드콜 보유 수량(주)", value=863, min_value=0)
+        div_per_share = st.number_input("주당 예상 월 분배금(원)", value=270, min_value=0)
+        
+        monthly_div = div_shares * div_per_share
+        annual_div = monthly_div * 12
+        
+        cd1, cd2 = st.columns(2)
+        with cd1: st.metric("예상 월 분배금", f"{monthly_div:,.0f}원")
+        with cd2: st.metric("예상 연간 배당 소득", f"{annual_div:,.0f}원")
+
     # 📸 캡처 사진 자동 업데이트
     st.markdown("---")
-    st.subheader("📸 새 잔고 사진으로 포트폴리오 업데이트")
-    uploaded_file = st.file_uploader("증권사 잔고 캡처 사진 올리기", type=["png", "jpg", "jpeg"])
-    
-    if uploaded_file is not None:
-        st.image(uploaded_file, caption="업로드된 잔고 캡처", use_container_width=True)
-        api_key = st.secrets.get("GEMINI_API_KEY", None)
-        if not api_key:
-            api_key = st.text_input("Google AI Studio (Gemini) API Key 입력", type="password")
-            
-        if st.button("✨ AI로 잔고 사진 분석 및 저장"):
-            if not api_key:
-                st.warning("API Key를 입력해 주세요.")
-            else:
-                with st.spinner("AI가 이미지를 정밀 분석 중입니다..."):
-                    parsed_stocks, status = analyze_portfolio_image(uploaded_file.getvalue(), api_key)
-                    if status == "SUCCESS" and parsed_stocks:
-                        save_portfolio(parsed_stocks)
-                        st.success(f"🎉 총 {len(parsed_stocks)}개 종목이 인식되어 영구 저장되었습니다!")
-                        st.rerun()
-                    else:
-                        st.error(f"오류: {status}")
+    with st.expander("📸 새 잔고 사진으로 포트폴리오 업데이트"):
+        uploaded_file = st.file_uploader("증권사 잔고 캡처 사진 올리기", type=["png", "jpg", "jpeg"])
+        if uploaded_file is not None:
+            st.image(uploaded_file, use_container_width=True)
+            api_key = st.secrets.get("GEMINI_API_KEY", "")
+            if not api_key: api_key = st.text_input("Gemini API Key 입력", type="password")
+            if st.button("✨ AI로 잔고 사진 분석 및 저장"):
+                if not api_key: st.warning("API Key를 입력해 주세요.")
+                else:
+                    with st.spinner("AI 분석 중..."):
+                        parsed, status = analyze_portfolio_image(uploaded_file.getvalue(), api_key)
+                        if status == "SUCCESS" and parsed:
+                            save_portfolio(parsed)
+                            st.success("🎉 포트폴리오가 영구 저장되었습니다!")
+                            st.rerun()
+                        else: st.error(f"오류: {status}")
 
 # -------------------------------------------------------------
 # TAB 2: 실시간 시황
@@ -417,7 +465,7 @@ with tab_market:
         st.metric("삼성전자", f"{samsung_p:,.0f}원" if samsung_p else "84,500원", f"{samsung_d:+.2f}%" if samsung_d else "+2.43%")
         st.metric("SK하이닉스", f"{hynix_p:,.0f}원" if hynix_p else "193,000원", f"{hynix_d:+.2f}%" if hynix_d else "+3.30%")
     with cb:
-        st.metric("현대차", f"{hyundai_p:,.0f}원" if hyundai_p else "256,000원", f"{hyundai_d:+.2f}%" if hynix_d else "+8.24%")
+        st.metric("현대차", f"{hyundai_p:,.0f}원" if hyundai_p else "256,000원", f"{hyundai_d:+.2f}%" if hyundai_d else "+8.24%")
         st.metric("엔비디아 (NVDA)", f"${nvda_p:.2f}" if nvda_p else "$224.92", f"{nvda_d:+.2f}%" if nvda_d else "-0.18%")
 
 # -------------------------------------------------------------
@@ -459,30 +507,7 @@ with tab_news:
                 """, unsafe_allow_html=True)
 
 # -------------------------------------------------------------
-# TAB 4: 종목 차트
-# -------------------------------------------------------------
-with tab_chart:
-    st.subheader("🔍 글로벌 종목 차트 분석")
-    ticker_input = st.text_input("티커 입력 (예: 395160.KS, 498400.KS, NVDA)", value="395160.KS").upper()
-    if st.button("차트 조회"):
-        try:
-            stock = yf.Ticker(ticker_input)
-            hist = stock.history(period="1mo")
-            if not hist.empty:
-                current_price = hist['Close'].iloc[-1]
-                prev_price = hist['Close'].iloc[-2]
-                change_pct = ((current_price - prev_price) / prev_price) * 100
-                currency = "원" if ".KS" in ticker_input or ".KQ" in ticker_input else "$"
-                st.metric(label=f"{ticker_input} 현재/최근가", value=f"{currency}{current_price:,.2f}" if currency == "$" else f"{current_price:,.0f}원", delta=f"{change_pct:+.2f}%")
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(x=hist.index, y=hist['Close'], mode='lines+markers', name='Close', line=dict(color='#0066cc', width=2)))
-                fig.update_layout(title=f"{ticker_input} 최근 1개월 주가 추이", margin=dict(l=10, r=10, t=40, b=10), height=300, xaxis_rangeslider_visible=False)
-                st.plotly_chart(fig, use_container_width=True)
-        except Exception as e:
-            st.error(f"오류: {e}")
-
-# -------------------------------------------------------------
-# TAB 5: [영구 보존 적용] 실시간 AI 브리핑 & 종목별 캘린더
+# TAB 4: 실시간 AI 브리핑 & [신규] 음성 읽어주기 (TTS)
 # -------------------------------------------------------------
 with tab_briefing:
     st.subheader("💡 실시간 맞춤형 AI 모닝 브리핑")
@@ -490,36 +515,172 @@ with tab_briefing:
     user_portfolio = load_portfolio()
     recent_news = fetch_google_news("코스피 OR 반도체 OR 연준 금리 OR 엔비디아", max_results=12)
     
-    api_key = st.secrets.get("GEMINI_API_KEY", None)
+    api_key = st.secrets.get("GEMINI_API_KEY", "")
     if not api_key:
-        api_key = st.text_input("Gemini API Key 입력 (실시간 브리핑 생성용)", type="password", key="briefing_key")
+        api_key = st.text_input("Gemini API Key 입력", type="password", key="briefing_key")
         
-    if st.button("✨ 오늘자 뉴스 기반 실시간 AI 브리핑 생성"):
-        if not api_key:
-            st.warning("API Key를 입력해 주세요.")
-        else:
-            with st.spinner("구글 Gemini AI가 최신 뉴스와 내 포트폴리오를 종합 분석 중입니다..."):
-                briefing_result, status = generate_ai_briefing(recent_news, user_portfolio, api_key)
-                if status == "SUCCESS" and briefing_result:
-                    now_str = datetime.now(KST).strftime('%Y년 %m월 %d일 %H:%M:%S')
-                    save_briefing(briefing_result, now_str)
-                    st.success("✅ AI 모닝 브리핑이 성공적으로 생성 및 영구 저장되었습니다!")
-                    st.rerun()
-                else:
-                    st.error(f"오류: {status}")
+    c_btn1, c_btn2 = st.columns(2)
+    with c_btn1:
+        if st.button("✨ 오늘자 AI 브리핑 생성"):
+            if not api_key: st.warning("API Key를 입력해 주세요.")
+            else:
+                with st.spinner("구글 Gemini AI가 종합 분석 중입니다..."):
+                    briefing_result, status = generate_ai_briefing(recent_news, user_portfolio, api_key)
+                    if status == "SUCCESS" and briefing_result:
+                        now_str = datetime.now(KST).strftime('%Y년 %m월 %d일 %H:%M:%S')
+                        save_briefing(briefing_result, now_str)
+                        st.success("✅ AI 모닝 브리핑 생성 및 저장 완료!")
+                        st.rerun()
+                    else: st.error(f"오류: {status}")
 
-    # [영구 저장소에서 불러오기]
     saved_briefing_text, saved_time = load_briefing()
 
+    # 🔊 [신규] 음성으로 읽어주기 (TTS) 버튼
+    with c_btn2:
+        if saved_briefing_text:
+            clean_speech = saved_briefing_text.replace("#", "").replace("*", "").replace("\n", " ")[:300]
+            tts_html = f"""
+            <button onclick="speakBriefing()" style="background-color: #8b5cf6; color: white; border: none; padding: 9px 15px; border-radius: 8px; font-weight: 600; cursor: pointer; width: 100%;">
+                🔊 음성으로 듣기 (TTS)
+            </button>
+            <script>
+            function speakBriefing() {{
+                if ('speechSynthesis' in window) {{
+                    window.speechSynthesis.cancel();
+                    const ut = new SpeechSynthesisUtterance("{clean_speech}");
+                    ut.lang = 'ko-KR';
+                    ut.rate = 1.0;
+                    window.speechSynthesis.speak(ut);
+                }} else {{
+                    alert("음성 합성을 지원하지 않는 브라우저입니다.");
+                }}
+            }}
+            </script>
+            """
+            components.html(tts_html, height=45)
+
     if saved_briefing_text:
-        st.caption(f"🕒 **마지막 브리핑 생성 시각**: {saved_time} (새 브리핑을 만들려면 위 버튼을 터치하세요)")
+        st.caption(f"🕒 **마지막 브리핑 생성 시각**: {saved_time}")
         with st.container(border=True):
             st.markdown(saved_briefing_text)
     else:
-        st.info("💡 위의 **[✨ 오늘자 뉴스 기반 실시간 AI 브리핑 생성]** 버튼을 누르면 오늘 아침 최신 뉴스에 맞춘 리포트가 생성되어 영구 저장됩니다.")
+        st.info("💡 위의 **[✨ 오늘자 AI 브리핑 생성]** 버튼을 누르면 맞춤형 리포트가 생성되어 영구 보존됩니다.")
 
-    # 📅 내 보유 종목 맞춤형 이벤트 캘린더 표
     st.markdown("---")
     st.subheader("📅 내 보유 종목 맞춤형 이벤트 캘린더")
-    df_stock_events = get_stock_calendar_events(user_portfolio)
-    st.dataframe(df_stock_events, use_container_width=True)
+    events = [
+        {"날짜": "2026-08-26", "구분": "🎯 AI반도체", "이벤트": "엔비디아(NVDA) 2분기 실적 발표 (미국 현지시간)", "중요도": "🔴 핵심"},
+        {"날짜": "2026-08-28", "구분": "🌐 거시경제", "이벤트": "미국 잭슨홀 심포지엄 (파월 연준의장 기조연설)", "중요도": "🔴 높음"},
+        {"날짜": "2026-09-10", "구분": "🎯 커버드콜", "이벤트": "국내 선물·옵션 동시 만기일 (네 마녀의 날)", "중요도": "🔴 변동성"},
+        {"날짜": "2026-09-16", "구분": "🌐 거시경제", "이벤트": "미국 9월 FOMC 기준금리 결정 회의", "중요도": "🔴 높음"},
+        {"날짜": "매주 목요일", "구분": "🎯 커버드콜", "이벤트": "위클리 옵션 만기 및 프리미엄 정산", "중요도": "🟡 정기"}
+    ]
+    st.dataframe(pd.DataFrame(events), use_container_width=True)
+
+# -------------------------------------------------------------
+# TAB 5: [신규] 1:1 대화형 AI 투자 챗봇
+# -------------------------------------------------------------
+with tab_chat:
+    st.subheader("🤖 1:1 AI 투자 비서 챗봇")
+    st.caption("내 포트폴리오를 기반으로 무엇이든 질문하세요! (예: '엔비디아 실적 관전 포인트는?', 'KODEX 커버드콜 배당 매력은?')")
+    
+    if "chat_messages" not in st.session_state:
+        st.session_state.chat_messages = [
+            {"role": "assistant", "content": "안녕하세요! 고객님의 포트폴리오(KODEX AI반도체, KODEX 200커버드콜)를 기반으로 맞춤 투자 분석을 도와드립니다. 무엇이든 물어보세요!"}
+        ]
+
+    for msg in st.session_state.chat_messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
+    api_key_chat = st.secrets.get("GEMINI_API_KEY", "")
+    if not api_key_chat:
+        api_key_chat = st.text_input("Gemini API Key 입력 (챗봇용)", type="password", key="chat_key")
+
+    user_input = st.chat_input("AI 투자 비서에게 질문하기...")
+    if user_input:
+        st.session_state.chat_messages.append({"role": "user", "content": user_input})
+        with st.chat_message("user"):
+            st.markdown(user_input)
+
+        if not api_key_chat:
+            with st.chat_message("assistant"):
+                st.warning("챗봇 사용을 위해 상단에 Gemini API Key를 입력해 주세요.")
+        else:
+            with st.chat_message("assistant"):
+                with st.spinner("AI 비서가 분석 중입니다..."):
+                    bot_reply = ask_gemini_chat(st.session_state.chat_messages, user_input, user_portfolio, api_key_chat)
+                    st.markdown(bot_reply)
+                    st.session_state.chat_messages.append({"role": "assistant", "content": bot_reply})
+
+# -------------------------------------------------------------
+# TAB 6: [신규] 스포츠 허브 (맨체스터 유나이티드 & 축구)
+# -------------------------------------------------------------
+with tab_sports:
+    st.subheader("⚽ 스포츠 허브: 맨체스터 유나이티드")
+    
+    st.markdown("""
+    <div class="sports-card">
+        <div style="font-size: 18px; font-weight: 700;">🔴 Manchester United 다음 경기 안내</div>
+        <div style="font-size: 14px; margin-top: 8px;">🏆 2026/27 프리미어리그 (EPL) 1라운드 개막전</div>
+        <div style="font-size: 13px; color: #fecaca; margin-top: 4px;">📍 올드 트래포드 (Old Trafford) 홈 경기</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("---")
+    st.write("📰 **맨체스터 유나이티드 & 해외 축구 최신 뉴스**")
+    mufc_news = fetch_google_news("맨체스터 유나이티드 OR 맨유 OR 프리미어리그", max_results=6)
+    if mufc_news:
+        for n in mufc_news:
+            st.markdown(f"""
+            <div class="news-card">
+                <a class="news-title" href="{n['link']}" target="_blank">⚽ {n['title']}</a>
+                <div class="news-meta">📰 {n['source']} &nbsp;|&nbsp; 🕒 {n['date']}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+# -------------------------------------------------------------
+# TAB 7: [신규] 데일리 생산성 & 날씨 (용인시 기준)
+# -------------------------------------------------------------
+with tab_daily:
+    st.subheader("📋 데일리 생산성 & 라이프")
+    
+    # 용인시 실시간 날씨
+    temp_val, weather_val, humid_val = get_yongin_weather()
+    st.markdown(f"""
+    <div class="weather-card">
+        <div style="font-size: 16px; font-weight: 700;">📍 경기도 용인시 오늘 날씨</div>
+        <div style="font-size: 24px; font-weight: 800; margin-top: 6px;">{weather_val} {temp_val}</div>
+        <div style="font-size: 12px; color: #e0f2fe; margin-top: 4px;">습도: {humid_val} | 외출 및 출퇴근 추천 날씨</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("---")
+    st.subheader("✅ 오늘의 할 일 (To-Do List)")
+    
+    current_todos = load_todos()
+    
+    # 투두 리스트 표시 및 체크 삭제
+    to_delete = None
+    for idx, todo_item in enumerate(current_todos):
+        col_t1, col_t2 = st.columns([0.85, 0.15])
+        with col_t1:
+            st.write(f"• {todo_item}")
+        with col_t2:
+            if st.button("완료", key=f"del_{idx}"):
+                to_delete = idx
+
+    if to_delete is not None:
+        current_todos.pop(to_delete)
+        save_todos(current_todos)
+        st.rerun()
+
+    # 새 할 일 추가 폼
+    with st.form("new_todo_form"):
+        new_todo = st.text_input("새로운 할 일 입력")
+        if st.form_submit_button("추가하기"):
+            if new_todo.strip():
+                current_todos.append(new_todo.strip())
+                save_todos(current_todos)
+                st.success("할 일이 추가되었습니다!")
+                st.rerun()
