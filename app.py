@@ -114,42 +114,52 @@ function initAlarm() {
 </script>
 """
 
-# 4. AI 비전 이미지 분석 함수 (Google Gemini Vision API 활용)
+# 4. [수정 완료] 최신 Gemini 2.5/2.0 다중 모델 지원 AI 비전 함수
 def analyze_portfolio_image(image_bytes, api_key):
-    try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
-        base64_img = base64.b64encode(image_bytes).decode('utf-8')
-        
-        prompt = """
-        이 이미지는 증권사 주식 잔고 화면입니다.
-        이미지에서 보유 중인 모든 주식의 종목명, 야후파이낸스 티커(국내 주식은 6자리.KS 또는 .KQ, 미국 주식은 AAPL, NVDA 등 알파벳 티커), 평균 매입단가(숫자), 보유 수량(정수)을 추출해주세요.
-        반드시 아래와 같은 순수 JSON 배열 형식으로만 응답해주세요 (코드블록 마크다운 없이 JSON 텍스트만 출력):
-        [
-            {"종목명": "삼성전자", "티커": "005930.KS", "매입단가": 80000.0, "보유수량": 50},
-            {"종목명": "엔비디아", "티커": "NVDA", "매입단가": 210.0, "보유수량": 15}
-        ]
-        """
-        
-        payload = {
-            "contents": [{
-                "parts": [
-                    {"text": prompt},
-                    {"inline_data": {"mime_type": "image/jpeg", "data": base64_img}}
-                ]
-            }]
-        }
-        
-        headers = {"Content-Type": "application/json"}
-        res = requests.post(url, json=payload, headers=headers, timeout=20)
-        
-        if res.status_code == 200:
-            raw_text = res.json()['candidates'][0]['content']['parts'][0]['text']
-            raw_text = raw_text.replace("```json", "").replace("```", "").strip()
-            return json.loads(raw_text), "SUCCESS"
-        else:
-            return None, f"AI 분석 실패 ({res.status_code}): {res.text}"
-    except Exception as e:
-        return None, str(e)
+    # 최신 모델 순차 시도
+    models_to_try = [
+        "gemini-2.5-flash",
+        "gemini-2.0-flash",
+        "gemini-1.5-flash-latest",
+        "gemini-1.5-pro"
+    ]
+    
+    base64_img = base64.b64encode(image_bytes).decode('utf-8')
+    prompt = """
+    이 이미지는 증권사 주식/ETF 잔고 화면입니다.
+    이미지에서 보유 중인 모든 종목명, 야후파이낸스 티커(국내 종목/ETF는 6자리코드.KS 또는 .KQ, 미국 주식은 알파벳 티커), 평균 매입단가(숫자), 보유 수량(정수)을 추출해주세요.
+    반드시 아래와 같은 순수 JSON 배열 형식으로만 응답해주세요 (코드블록 마크다운 없이 JSON 텍스트만 출력):
+    [
+        {"종목명": "KODEX AI반도체TOP2플러스", "티커": "466920.KS", "매입단가": 13234.0, "보유수량": 126},
+        {"종목명": "KODEX 200타겟위클리커버드콜", "티커": "476800.KS", "매입단가": 13012.0, "보유수량": 863}
+    ]
+    """
+    
+    payload = {
+        "contents": [{
+            "parts": [
+                {"text": prompt},
+                {"inline_data": {"mime_type": "image/jpeg", "data": base64_img}}
+            ]
+        }]
+    }
+    headers = {"Content-Type": "application/json"}
+    
+    last_error = ""
+    for model_name in models_to_try:
+        try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+            res = requests.post(url, json=payload, headers=headers, timeout=20)
+            if res.status_code == 200:
+                raw_text = res.json()['candidates'][0]['content']['parts'][0]['text']
+                raw_text = raw_text.replace("```json", "").replace("```", "").strip()
+                return json.loads(raw_text), "SUCCESS"
+            else:
+                last_error = f"{model_name} ({res.status_code}): {res.text}"
+        except Exception as e:
+            last_error = str(e)
+            
+    return None, f"모든 모델 호출 실패: {last_error}"
 
 # 5. 실시간 주가 및 뉴스 로딩 함수
 @st.cache_data(ttl=60)
@@ -205,20 +215,19 @@ tab_portfolio, tab_market, tab_news, tab_chart, tab_briefing = st.tabs(
 )
 
 # -------------------------------------------------------------
-# TAB 1: 내 포트폴리오 (사진 분석 기능 포함)
+# TAB 1: 내 실제 포트폴리오
 # -------------------------------------------------------------
 with tab_portfolio:
-    st.subheader("💼 실시간 내 주식 포트폴리오")
+    st.subheader("💼 내 주식·ETF 포트폴리오 (실시간 연동)")
     
-    # 기본 포트폴리오 데이터 세션 저장
+    # 캡처 사진의 실제 보유 종목 기본 적용
     if "user_portfolio" not in st.session_state:
         st.session_state.user_portfolio = [
-            {"종목명": "삼성전자", "티커": "005930.KS", "매입단가": 80000.0, "보유수량": 50},
-            {"종목명": "SK하이닉스", "티커": "000660.KS", "매입단가": 185000.0, "보유수량": 20},
-            {"종목명": "엔비디아", "티커": "NVDA", "매입단가": 210.0, "보유수량": 15},
+            {"종목명": "KODEX AI반도체TOP2플러스", "티커": "466920.KS", "매입단가": 13234.0, "보유수량": 126},
+            {"종목명": "KODEX 200타겟위클리커버드콜", "티커": "476800.KS", "매입단가": 13012.0, "보유수량": 863}
         ]
 
-    # 실시간 시세 매칭 및 손익 계산
+    # 실시간 손익 계산
     total_eval_krw = 0
     total_buy_krw = 0
     calculated_rows = []
@@ -248,48 +257,45 @@ with tab_portfolio:
             "수익률": f"{profit_rate:+.2f}%"
         })
 
-    # 상단 메트릭 요약
+    # 상단 요약 메트릭
     total_profit_krw = total_eval_krw - total_buy_krw
     total_rate_krw = (total_profit_krw / total_buy_krw) * 100 if total_buy_krw > 0 else 0
 
     c1, c2 = st.columns(2)
     with c1:
-        st.metric("국내 보유 총 평가금액", f"{total_eval_krw:,.0f}원", f"{total_rate_krw:+.2f}%")
+        st.metric("총 평가금액", f"{total_eval_krw:,.0f}원", f"{total_rate_krw:+.2f}%")
     with c2:
-        st.metric("국내 총 평가손익", f"{total_profit_krw:+,.0f}원")
+        st.metric("총 평가손익", f"{total_profit_krw:+,.0f}원")
 
     st.markdown("---")
     st.write("📋 **보유 종목 실시간 현황표**")
     st.dataframe(pd.DataFrame(calculated_rows), use_container_width=True)
 
-    # 📸 사진으로 자동 분석 업데이트 영역
+    # 📸 캡처 사진 자동 업데이트
     st.markdown("---")
     st.subheader("📸 캡처 사진으로 포트폴리오 자동 업데이트")
     
-    uploaded_file = st.file_uploader("증권사 잔고 캡처 사진을 올려주세요 (토스/키움 등)", type=["png", "jpg", "jpeg"])
+    uploaded_file = st.file_uploader("새로운 잔고 캡처 사진 올리기", type=["png", "jpg", "jpeg"])
     
     if uploaded_file is not None:
-        st.image(uploaded_file, caption="업로드된 잔고 이미지", use_container_width=True)
+        st.image(uploaded_file, caption="업로드된 잔고 캡처", use_container_width=True)
         
-        # Gemini API Key 로드
         api_key = st.secrets.get("GEMINI_API_KEY", None)
         if not api_key:
             api_key = st.text_input("Google AI Studio (Gemini) API Key 입력", type="password")
-            st.caption("※ [aistudio.google.com](https://aistudio.google.com)에서 무료 발급 가능 (Secrets에 GEMINI_API_KEY로 등록 시 생략)")
             
         if st.button("✨ AI로 잔고 사진 분석 및 갱신"):
             if not api_key:
-                st.warning("Gemini API Key를 입력해 주세요.")
+                st.warning("API Key를 입력해 주세요.")
             else:
-                with st.spinner("AI가 잔고 사진을 정밀 분석 중입니다..."):
+                with st.spinner("AI가 잔고 이미지를 정밀 분석 중입니다..."):
                     parsed_stocks, status = analyze_portfolio_image(uploaded_file.getvalue(), api_key)
-                    
                     if status == "SUCCESS" and parsed_stocks:
                         st.session_state.user_portfolio = parsed_stocks
-                        st.success(f"🎉 성공! 총 {len(parsed_stocks)}개 종목이 인식되어 포트폴리오가 갱신되었습니다.")
+                        st.success(f"🎉 총 {len(parsed_stocks)}개 종목이 성공적으로 인식되어 포트폴리오가 갱신되었습니다!")
                         st.rerun()
                     else:
-                        st.error(f"사진 분석 중 오류가 발생했습니다: {status}")
+                        st.error(f"오류: {status}")
 
 # -------------------------------------------------------------
 # TAB 2: 실시간 시황
@@ -310,7 +316,7 @@ with tab_market:
         st.metric("브렌트유 (Oil)", f"${oil_p:.2f}" if oil_p else "$88.59", f"{oil_d:+.2f}%" if oil_d else "+1.75%")
 
     st.markdown("---")
-    st.subheader("🏢 주요 대형주 시세 (실시간)")
+    st.subheader("🏢 주요 대형주 시세")
     samsung_p, samsung_d = get_live_market_data("005930.KS")
     hynix_p, hynix_d = get_live_market_data("000660.KS")
     hyundai_p, hyundai_d = get_live_market_data("005380.KS")
@@ -337,7 +343,7 @@ with tab_news:
     elif news_category == "🤖 AI·반도체":
         query = "엔비디아 OR 반도체 HBM OR 인공지능"
     else:
-        query = st.text_input("검색 키워드", value="삼성전자")
+        query = st.text_input("검색 키워드", value="KODEX")
     
     if query:
         news_list = fetch_google_news(query, max_results=7)
@@ -355,7 +361,7 @@ with tab_news:
 # -------------------------------------------------------------
 with tab_chart:
     st.subheader("🔍 글로벌 종목 차트 분석")
-    ticker_input = st.text_input("티커 입력 (예: AAPL, NVDA, TSLA, 005930.KS)", value="NVDA").upper()
+    ticker_input = st.text_input("티커 입력 (예: 466920.KS, 476800.KS, NVDA)", value="466920.KS").upper()
     if st.button("차트 조회"):
         try:
             stock = yf.Ticker(ticker_input)
