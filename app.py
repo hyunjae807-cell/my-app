@@ -7,6 +7,8 @@ import requests
 import json
 import os
 import base64
+import io
+from PIL import Image, ImageDraw
 from datetime import datetime, timezone, timedelta
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -15,30 +17,83 @@ import urllib.parse
 # 1. 한국 표준시(KST) 정의
 KST = timezone(timedelta(hours=9))
 
-# 2. 모바일 최적화 페이지 설정
+# 2. 배경화면(따뜻한 거실, 식물, 고양이)과 어울리는 프리미엄 MORI 앱 아이콘 생성
+def get_mori_app_icon():
+    size = 256
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+
+    # 딥 세이지/포레스트 그린 그라데이션 배경
+    for y in range(size):
+        r = int(30 + (y / size) * 20)
+        g = int(60 + (y / size) * 25)
+        b = int(50 + (y / size) * 20)
+        draw.line([(0, y), (size, y)], fill=(r, g, b, 255))
+
+    mask = Image.new("L", (size, size), 0)
+    mask_draw = ImageDraw.Draw(mask)
+    mask_draw.rounded_rectangle([(0, 0), (size, size)], radius=55, fill=255)
+
+    icon_img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    icon_img.paste(img, (0, 0), mask=mask)
+    d = ImageDraw.Draw(icon_img)
+
+    # 은은한 골드 링 테두리
+    d.ellipse([(35, 35), (size-35, size-35)], outline=(245, 235, 220, 45), width=2)
+
+    # 미니멀 크림화이트 M 심볼
+    points = [(70, 180), (70, 90), (128, 145), (186, 90), (186, 180)]
+    for i in range(len(points)-1):
+        d.line([points[i], points[i+1]], fill=(255, 250, 240, 245), width=12)
+
+    # 골드 스타 스파클 포인트
+    cx, cy = 195, 70
+    sc = (245, 210, 130, 255)
+    d.line([(cx-11, cy), (cx+11, cy)], fill=sc, width=3)
+    d.line([(cx, cy-11), (cx, cy+11)], fill=sc, width=3)
+    d.line([(cx-6, cy-6), (cx+6, cy+6)], fill=sc, width=2)
+    d.line([(cx-6, cy+6), (cx+6, cy-6)], fill=sc, width=2)
+
+    return icon_img
+
+mori_icon_image = get_mori_app_icon()
+
+buf = io.BytesIO()
+mori_icon_image.save(buf, format="PNG")
+icon_b64_str = base64.b64encode(buf.getvalue()).decode("utf-8")
+
+# 3. 모바일 최적화 페이지 설정 (이름: MORI, 아이콘: 커스텀 MORI 심볼)
 st.set_page_config(
     page_title="MORI",
-    page_icon="✨",
+    page_icon=mori_icon_image,
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# 3. 프리미엄 다크 테마 커스텀 CSS (Glassmorphism & Neon Gradient Accent)
-st.markdown("""
+# 4. PWA 홈화면 메타태그 및 다크 테마 커스텀 CSS
+st.markdown(f"""
+    <head>
+        <link rel="apple-touch-icon" href="data:image/png;base64,{icon_b64_str}">
+        <link rel="icon" type="image/png" href="data:image/png;base64,{icon_b64_str}">
+        <meta name="apple-mobile-web-app-title" content="MORI">
+        <meta name="application-name" content="MORI">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    </head>
     <style>
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
-    * {
+    * {{
         font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
-    }
+    }}
     
     /* MORI 메인 헤더 */
-    .mori-header {
+    .mori-header {{
         margin-top: -10px;
-        margin-bottom: 20px;
+        margin-bottom: 18px;
         padding-bottom: 14px;
         border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    }
-    .mori-title {
+    }}
+    .mori-title {{
         font-size: 34px;
         font-weight: 900;
         letter-spacing: -0.03em;
@@ -47,22 +102,22 @@ st.markdown("""
         -webkit-text-fill-color: transparent;
         margin: 0;
         line-height: 1.2;
-    }
-    .mori-subtitle {
+    }}
+    .mori-subtitle {{
         font-size: 14px;
         font-weight: 400;
         color: #94a3b8;
         margin-top: 5px;
         letter-spacing: -0.01em;
-    }
-    .mori-time {
+    }}
+    .mori-time {{
         font-size: 11px;
         color: #64748b;
         margin-top: 6px;
-    }
+    }}
 
     /* 다크 글래스 카드 */
-    .summary-card {
+    .summary-card {{
         background: rgba(30, 41, 59, 0.7);
         backdrop-filter: blur(16px);
         -webkit-backdrop-filter: blur(16px);
@@ -72,37 +127,37 @@ st.markdown("""
         margin-bottom: 14px;
         color: #f8fafc;
         box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
-    }
+    }}
     
-    .news-card {
+    .news-card {{
         background: rgba(30, 41, 59, 0.6);
         border: 1px solid rgba(255, 255, 255, 0.06);
         border-radius: 12px;
         padding: 14px;
         margin-bottom: 10px;
         transition: transform 0.2s ease, border-color 0.2s ease;
-    }
-    .news-card:hover {
+    }}
+    .news-card:hover {{
         transform: translateY(-2px);
         border-color: rgba(96, 165, 250, 0.4);
-    }
-    .news-title {
+    }}
+    .news-title {{
         font-size: 15px;
         font-weight: 600;
         color: #f1f5f9;
         text-decoration: none;
         line-height: 1.4;
-    }
-    .news-title:hover {
+    }}
+    .news-title:hover {{
         color: #60a5fa;
-    }
-    .news-meta {
+    }}
+    .news-meta {{
         font-size: 11px;
         color: #94a3b8;
         margin-top: 6px;
-    }
+    }}
     
-    .weather-gradient {
+    .weather-gradient {{
         background: linear-gradient(135deg, #0f766e 0%, #0369a1 50%, #1e1b4b 100%);
         border: 1px solid rgba(56, 189, 248, 0.3);
         border-radius: 14px;
@@ -110,22 +165,22 @@ st.markdown("""
         color: white;
         margin-bottom: 14px;
         box-shadow: 0 4px 20px rgba(3, 105, 161, 0.2);
-    }
+    }}
 
-    .sports-card {
+    .sports-card {{
         background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
         border: 1px solid rgba(147, 51, 234, 0.3);
         border-radius: 14px;
         padding: 16px;
         color: white;
         margin-bottom: 14px;
-    }
+    }}
 
     /* 탭 스타일 고급화 */
-    .stTabs [data-baseweb="tab-list"] {
+    .stTabs [data-baseweb="tab-list"] {{
         gap: 6px;
-    }
-    .stTabs [data-baseweb="tab"] {
+    }}
+    .stTabs [data-baseweb="tab"] {{
         height: 42px;
         border-radius: 8px;
         padding: 6px 14px;
@@ -134,16 +189,16 @@ st.markdown("""
         color: #94a3b8;
         background-color: transparent;
         border: none;
-    }
-    .stTabs [aria-selected="true"] {
+    }}
+    .stTabs [aria-selected="true"] {{
         background-color: rgba(59, 130, 246, 0.15) !important;
         color: #60a5fa !important;
         border-bottom: 2px solid #3b82f6 !important;
-    }
+    }}
     </style>
 """, unsafe_allow_html=True)
 
-# 4. [영구 저장소 파일 관리]
+# 5. [영구 저장소 파일 관리]
 PORTFOLIO_FILE = "portfolio.json"
 BRIEFING_FILE = "briefing.json"
 TODOS_FILE = "todos.json"
@@ -166,18 +221,15 @@ def load_portfolio():
         try:
             with open(PORTFOLIO_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                if data:
-                    return data
-        except Exception:
-            pass
+                if data: return data
+        except Exception: pass
     return DEFAULT_PORTFOLIO
 
 def save_portfolio(data):
     try:
         with open(PORTFOLIO_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        st.error(f"저장 오류: {e}")
+    except Exception as e: st.error(f"저장 오류: {e}")
 
 def load_briefing():
     if os.path.exists(BRIEFING_FILE):
@@ -185,70 +237,60 @@ def load_briefing():
             with open(BRIEFING_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 return data.get("text"), data.get("generated_at")
-        except Exception:
-            pass
+        except Exception: pass
     return None, None
 
 def save_briefing(text, generated_at_str):
     try:
         with open(BRIEFING_FILE, "w", encoding="utf-8") as f:
             json.dump({"text": text, "generated_at": generated_at_str}, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        st.error(f"저장 오류: {e}")
+    except Exception as e: st.error(f"저장 오류: {e}")
 
 def load_todos():
     if os.path.exists(TODOS_FILE):
         try:
             with open(TODOS_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                if data:
-                    return data
-        except Exception:
-            pass
+                if data: return data
+        except Exception: pass
     return ["주요 증시 캘린더 확인하기", "내 응원팀 경기 일정 체크하기"]
 
 def save_todos(todos):
     try:
         with open(TODOS_FILE, "w", encoding="utf-8") as f:
             json.dump(todos, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        st.error(f"저장 오류: {e}")
+    except Exception as e: st.error(f"저장 오류: {e}")
 
 def load_sports_teams():
     if os.path.exists(SPORTS_FILE):
         try:
             with open(SPORTS_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                if data:
-                    return data
-        except Exception:
-            pass
+                if data: return data
+        except Exception: pass
     return DEFAULT_SPORTS_TEAMS
 
 def save_sports_teams(teams):
     try:
         with open(SPORTS_FILE, "w", encoding="utf-8") as f:
             json.dump(teams, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        st.error(f"스포츠 설정 저장 오류: {e}")
+    except Exception as e: st.error(f"스포츠 설정 저장 오류: {e}")
 
 def load_sports_briefings():
     if os.path.exists(SPORTS_BRIEFINGS_FILE):
         try:
             with open(SPORTS_BRIEFINGS_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except Exception:
-            pass
+        except Exception: pass
     return {}
 
 def save_sports_briefings(briefings):
     try:
         with open(SPORTS_BRIEFINGS_FILE, "w", encoding="utf-8") as f:
             json.dump(briefings, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        pass
+    except Exception as e: pass
 
-# 5. 아침 7시 시스템 알람 컴포넌트
+# 6. 아침 7시 시스템 알람 컴포넌트
 alarm_component = """
 <div id="alarmCard" style="background: rgba(30, 41, 59, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(59, 130, 246, 0.3); padding: 14px; border-radius: 12px; color: white; margin-bottom: 12px; transition: all 0.3s ease;">
     <div style="font-weight: 700; font-size: 13px; color: #60a5fa; margin-bottom: 2px;">시스템 알람 설정 (오전 7:00 KST)</div>
@@ -315,7 +357,7 @@ if (Notification.permission === "granted" || localStorage.getItem("alarm_enabled
 </script>
 """
 
-# 6. 실시간 날씨 데이터 조회 (용인시 기준)
+# 7. 실시간 날씨 데이터 조회 (용인시 기준)
 @st.cache_data(ttl=1800)
 def get_yongin_weather():
     try:
@@ -327,20 +369,16 @@ def get_yongin_weather():
         code = current.get("weather_code", 0)
         
         weather_desc = "맑음 ☀️"
-        if code == 1 or code == 2:
-            weather_desc = "구름 조금 ⛅"
-        elif code == 3:
-            weather_desc = "흐림 ☁️"
-        elif code in (51, 53, 55, 61, 63, 65, 80, 81, 82):
-            weather_desc = "비 🌧️"
-        elif code in (71, 73, 75, 85, 86):
-            weather_desc = "눈 ❄️"
+        if code == 1 or code == 2: weather_desc = "구름 조금 ⛅"
+        elif code == 3: weather_desc = "흐림 ☁️"
+        elif code in (51, 53, 55, 61, 63, 65, 80, 81, 82): weather_desc = "비 🌧️"
+        elif code in (71, 73, 75, 85, 86): weather_desc = "눈 ❄️"
         
         return f"{temp:.1f}°C", weather_desc, f"{humidity}%"
     except Exception:
         return "28.0°C", "맑음 ☀️", "60%"
 
-# 7. 실시간 주가 및 뉴스 로딩 함수
+# 8. 실시간 주가 및 뉴스 로딩 함수
 @st.cache_data(ttl=60)
 def get_live_market_data(ticker_symbol):
     try:
@@ -372,14 +410,13 @@ def fetch_google_news(query, max_results=8):
                 link = item.find('link').text if item.find('link') is not None else "#"
                 pub_date = item.find('pubDate').text if item.find('pubDate') is not None else ""
                 source = item.find('source').text if item.find('source') is not None else "언론사"
-                if pub_date:
-                    pub_date = pub_date[:16]
+                if pub_date: pub_date = pub_date[:16]
                 news_items.append({"title": title, "link": link, "source": source, "date": pub_date})
             return news_items
     except Exception:
         return []
 
-# 8. AI 비전 이미지 분석 및 브리핑 함수
+# 9. AI 비전 이미지 분석 및 브리핑 함수
 def analyze_portfolio_image(image_bytes, api_key):
     api_key = api_key.strip()
     headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
@@ -388,10 +425,8 @@ def analyze_portfolio_image(image_bytes, api_key):
         m_res = requests.get("https://generativelanguage.googleapis.com/v1beta/models", headers=headers, timeout=5)
         if m_res.status_code == 200:
             active = [m['name'] for m in m_res.json().get('models', []) if 'generateContent' in m.get('supportedGenerationMethods', [])]
-            if active:
-                candidate_models = active
-    except Exception:
-        pass
+            if active: candidate_models = active
+    except Exception: pass
 
     base64_img = base64.b64encode(image_bytes).decode('utf-8')
     prompt = """
@@ -415,10 +450,8 @@ def analyze_portfolio_image(image_bytes, api_key):
                 raw = res.json()['candidates'][0]['content']['parts'][0]['text']
                 raw = raw.replace("```json", "").replace("```", "").strip()
                 return json.loads(raw), "SUCCESS"
-            else:
-                last_err = f"{clean_model}: {res.text}"
-        except Exception as e:
-            last_err = str(e)
+            else: last_err = f"{clean_model}: {res.text}"
+        except Exception as e: last_err = str(e)
     return None, f"분석 오류: {last_err}"
 
 def generate_ai_briefing(news_headlines, portfolio_items, api_key):
@@ -429,10 +462,8 @@ def generate_ai_briefing(news_headlines, portfolio_items, api_key):
         m_res = requests.get("https://generativelanguage.googleapis.com/v1beta/models", headers=headers, timeout=5)
         if m_res.status_code == 200:
             active = [m['name'] for m in m_res.json().get('models', []) if 'generateContent' in m.get('supportedGenerationMethods', [])]
-            if active:
-                candidate_models = active
-    except Exception:
-        pass
+            if active: candidate_models = active
+    except Exception: pass
 
     stock_list_str = ", ".join([f"{item['종목명']} ({item['티커']})" for item in portfolio_items])
     news_text = "\n".join([f"- {h['title']} ({h.get('source', '')})" for h in news_headlines[:15]])
@@ -462,11 +493,10 @@ def generate_ai_briefing(news_headlines, portfolio_items, api_key):
             res = requests.post(url, json=payload, headers=headers, timeout=25)
             if res.status_code == 200:
                 return res.json()['candidates'][0]['content']['parts'][0]['text'], "SUCCESS"
-        except Exception:
-            pass
+        except Exception: pass
     return None, "브리핑 생성 실패"
 
-# 9. 실시간 구단 경기 일정 및 AI 브리핑 함수 (한국 시간 KST 기준)
+# 10. 실시간 구단 경기 일정 및 AI 브리핑 함수 (한국 시간 KST 기준)
 def generate_team_briefing(team_name, sports_type, league, team_news, api_key):
     api_key = api_key.strip()
     headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
@@ -496,10 +526,8 @@ def generate_team_briefing(team_name, sports_type, league, team_news, api_key):
         m_res = requests.get("https://generativelanguage.googleapis.com/v1beta/models", headers=headers, timeout=5)
         if m_res.status_code == 200:
             active = [m['name'] for m in m_res.json().get('models', []) if 'generateContent' in m.get('supportedGenerationMethods', [])]
-            if active:
-                candidate_models = active
-    except Exception:
-        pass
+            if active: candidate_models = active
+    except Exception: pass
 
     for model_path in candidate_models:
         clean_model = model_path if model_path.startswith("models/") else f"models/{model_path}"
@@ -508,11 +536,10 @@ def generate_team_briefing(team_name, sports_type, league, team_news, api_key):
             res = requests.post(url, json=payload, headers=headers, timeout=20)
             if res.status_code == 200:
                 return res.json()['candidates'][0]['content']['parts'][0]['text']
-        except Exception:
-            pass
+        except Exception: pass
     return None
 
-# 10. 1:1 대화형 AI 투자 챗봇 함수
+# 11. 1:1 대화형 AI 투자 챗봇 함수
 def ask_gemini_chat(chat_history, user_msg, portfolio_items, api_key):
     api_key = api_key.strip()
     headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
@@ -534,10 +561,8 @@ def ask_gemini_chat(chat_history, user_msg, portfolio_items, api_key):
         m_res = requests.get("https://generativelanguage.googleapis.com/v1beta/models", headers=headers, timeout=5)
         if m_res.status_code == 200:
             active = [m['name'] for m in m_res.json().get('models', []) if 'generateContent' in m.get('supportedGenerationMethods', [])]
-            if active:
-                candidate_models = active
-    except Exception:
-        pass
+            if active: candidate_models = active
+    except Exception: pass
 
     for model_path in candidate_models:
         clean_model = model_path if model_path.startswith("models/") else f"models/{model_path}"
@@ -546,8 +571,7 @@ def ask_gemini_chat(chat_history, user_msg, portfolio_items, api_key):
             res = requests.post(url, json={"contents": contents}, headers=headers, timeout=20)
             if res.status_code == 200:
                 return res.json()['candidates'][0]['content']['parts'][0]['text']
-        except Exception:
-            pass
+        except Exception: pass
     return "답변을 불러오는 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
 
 
