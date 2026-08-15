@@ -7,7 +7,6 @@ import requests
 import json
 import os
 import base64
-import io
 from PIL import Image, ImageDraw
 from datetime import datetime, timezone, timedelta
 import urllib.request
@@ -17,13 +16,12 @@ import urllib.parse
 # 1. 한국 표준시(KST) 정의
 KST = timezone(timedelta(hours=9))
 
-# 2. 배경화면(따뜻한 거실, 식물, 고양이)과 어울리는 프리미엄 MORI 앱 아이콘 생성
+# 2. 배경화면과 어울리는 프리미엄 MORI 앱 아이콘 생성
 def get_mori_app_icon():
     size = 256
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
-    # 딥 세이지/포레스트 그린 그라데이션 배경
     for y in range(size):
         r = int(30 + (y / size) * 20)
         g = int(60 + (y / size) * 25)
@@ -38,15 +36,12 @@ def get_mori_app_icon():
     icon_img.paste(img, (0, 0), mask=mask)
     d = ImageDraw.Draw(icon_img)
 
-    # 은은한 골드 링 테두리
     d.ellipse([(35, 35), (size-35, size-35)], outline=(245, 235, 220, 45), width=2)
 
-    # 미니멀 크림화이트 M 심볼
     points = [(70, 180), (70, 90), (128, 145), (186, 90), (186, 180)]
     for i in range(len(points)-1):
         d.line([points[i], points[i+1]], fill=(255, 250, 240, 245), width=12)
 
-    # 골드 스타 스파클 포인트
     cx, cy = 195, 70
     sc = (245, 210, 130, 255)
     d.line([(cx-11, cy), (cx+11, cy)], fill=sc, width=3)
@@ -58,10 +53,6 @@ def get_mori_app_icon():
 
 mori_icon_image = get_mori_app_icon()
 
-buf = io.BytesIO()
-mori_icon_image.save(buf, format="PNG")
-icon_b64_str = base64.b64encode(buf.getvalue()).decode("utf-8")
-
 # 3. 모바일 최적화 페이지 설정 (이름: MORI, 아이콘: 커스텀 MORI 심볼)
 st.set_page_config(
     page_title="MORI",
@@ -70,132 +61,121 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 4. PWA 홈화면 메타태그 및 다크 테마 커스텀 CSS
-st.markdown(f"""
-    <head>
-        <link rel="apple-touch-icon" href="data:image/png;base64,{icon_b64_str}">
-        <link rel="icon" type="image/png" href="data:image/png;base64,{icon_b64_str}">
-        <meta name="apple-mobile-web-app-title" content="MORI">
-        <meta name="application-name" content="MORI">
-        <meta name="apple-mobile-web-app-capable" content="yes">
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    </head>
-    <style>
-    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
-    * {{
-        font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
-    }}
-    
-    /* MORI 메인 헤더 */
-    .mori-header {{
-        margin-top: -10px;
-        margin-bottom: 18px;
-        padding-bottom: 14px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    }}
-    .mori-title {{
-        font-size: 34px;
-        font-weight: 900;
-        letter-spacing: -0.03em;
-        background: linear-gradient(135deg, #60a5fa 0%, #a855f7 50%, #38bdf8 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        margin: 0;
-        line-height: 1.2;
-    }}
-    .mori-subtitle {{
-        font-size: 14px;
-        font-weight: 400;
-        color: #94a3b8;
-        margin-top: 5px;
-        letter-spacing: -0.01em;
-    }}
-    .mori-time {{
-        font-size: 11px;
-        color: #64748b;
-        margin-top: 6px;
-    }}
+# 4. 다크 테마 커스텀 CSS (순수 CSS 선언으로 상단 텍스트 노출 원천 차단)
+st.markdown("""
+<style>
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+* {
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+}
 
-    /* 다크 글래스 카드 */
-    .summary-card {{
-        background: rgba(30, 41, 59, 0.7);
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 14px;
-        padding: 16px;
-        margin-bottom: 14px;
-        color: #f8fafc;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
-    }}
-    
-    .news-card {{
-        background: rgba(30, 41, 59, 0.6);
-        border: 1px solid rgba(255, 255, 255, 0.06);
-        border-radius: 12px;
-        padding: 14px;
-        margin-bottom: 10px;
-        transition: transform 0.2s ease, border-color 0.2s ease;
-    }}
-    .news-card:hover {{
-        transform: translateY(-2px);
-        border-color: rgba(96, 165, 250, 0.4);
-    }}
-    .news-title {{
-        font-size: 15px;
-        font-weight: 600;
-        color: #f1f5f9;
-        text-decoration: none;
-        line-height: 1.4;
-    }}
-    .news-title:hover {{
-        color: #60a5fa;
-    }}
-    .news-meta {{
-        font-size: 11px;
-        color: #94a3b8;
-        margin-top: 6px;
-    }}
-    
-    .weather-gradient {{
-        background: linear-gradient(135deg, #0f766e 0%, #0369a1 50%, #1e1b4b 100%);
-        border: 1px solid rgba(56, 189, 248, 0.3);
-        border-radius: 14px;
-        padding: 16px;
-        color: white;
-        margin-bottom: 14px;
-        box-shadow: 0 4px 20px rgba(3, 105, 161, 0.2);
-    }}
+.mori-header {
+    margin-top: -10px;
+    margin-bottom: 18px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.mori-title {
+    font-size: 34px;
+    font-weight: 900;
+    letter-spacing: -0.03em;
+    background: linear-gradient(135deg, #60a5fa 0%, #a855f7 50%, #38bdf8 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin: 0;
+    line-height: 1.2;
+}
+.mori-subtitle {
+    font-size: 14px;
+    font-weight: 400;
+    color: #94a3b8;
+    margin-top: 5px;
+    letter-spacing: -0.01em;
+}
+.mori-time {
+    font-size: 11px;
+    color: #64748b;
+    margin-top: 6px;
+}
 
-    .sports-card {{
-        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-        border: 1px solid rgba(147, 51, 234, 0.3);
-        border-radius: 14px;
-        padding: 16px;
-        color: white;
-        margin-bottom: 14px;
-    }}
+.summary-card {
+    background: rgba(30, 41, 59, 0.7);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 14px;
+    color: #f8fafc;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
 
-    /* 탭 스타일 고급화 */
-    .stTabs [data-baseweb="tab-list"] {{
-        gap: 6px;
-    }}
-    .stTabs [data-baseweb="tab"] {{
-        height: 42px;
-        border-radius: 8px;
-        padding: 6px 14px;
-        font-size: 13px;
-        font-weight: 600;
-        color: #94a3b8;
-        background-color: transparent;
-        border: none;
-    }}
-    .stTabs [aria-selected="true"] {{
-        background-color: rgba(59, 130, 246, 0.15) !important;
-        color: #60a5fa !important;
-        border-bottom: 2px solid #3b82f6 !important;
-    }}
-    </style>
+.news-card {
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 10px;
+    transition: transform 0.2s ease, border-color 0.2s ease;
+}
+.news-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(96, 165, 250, 0.4);
+}
+.news-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #f1f5f9;
+    text-decoration: none;
+    line-height: 1.4;
+}
+.news-title:hover {
+    color: #60a5fa;
+}
+.news-meta {
+    font-size: 11px;
+    color: #94a3b8;
+    margin-top: 6px;
+}
+
+.weather-gradient {
+    background: linear-gradient(135deg, #0f766e 0%, #0369a1 50%, #1e1b4b 100%);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    border-radius: 14px;
+    padding: 16px;
+    color: white;
+    margin-bottom: 14px;
+    box-shadow: 0 4px 20px rgba(3, 105, 161, 0.2);
+}
+
+.sports-card {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    border: 1px solid rgba(147, 51, 234, 0.3);
+    border-radius: 14px;
+    padding: 16px;
+    color: white;
+    margin-bottom: 14px;
+}
+
+.stTabs [data-baseweb="tab-list"] {
+    gap: 6px;
+}
+.stTabs [data-baseweb="tab"] {
+    height: 42px;
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #94a3b8;
+    background-color: transparent;
+    border: none;
+}
+.stTabs [aria-selected="true"] {
+    background-color: rgba(59, 130, 246, 0.15) !important;
+    color: #60a5fa !important;
+    border-bottom: 2px solid #3b82f6 !important;
+}
+</style>
 """, unsafe_allow_html=True)
 
 # 5. [영구 저장소 파일 관리]
@@ -784,7 +764,7 @@ with tab_market:
         st.metric("삼성전자", f"{samsung_p:,.0f}원" if samsung_p else "84,500원", f"{samsung_d:+.2f}%" if samsung_d else "+2.43%")
         st.metric("SK하이닉스", f"{hynix_p:,.0f}원" if hynix_p else "193,000원", f"{hynix_d:+.2f}%" if hynix_d else "+3.30%")
     with cb:
-        st.metric("현대차", f"{hyundai_p:,.0f}원" if hyundai_p else "256,000원", f"{hyundai_d:+.2f}%" if hynix_d else "+8.24%")
+        st.metric("현대차", f"{hyundai_p:,.0f}원" if hynix_p else "256,000원", f"{hyundai_d:+.2f}%" if hynix_d else "+8.24%")
         st.metric("엔비디아 (NVDA)", f"${nvda_p:.2f}" if nvda_p else "$224.92", f"{nvda_d:+.2f}%" if nvda_d else "-0.18%")
 
 # -------------------------------------------------------------
