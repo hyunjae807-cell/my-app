@@ -70,7 +70,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 5. 폴드 커버화면 및 다크 테마 커스텀 CSS
+# 5. 폴드 커버화면 및 다크 테마 커스텀 CSS (상단 잘림 완벽 방지)
 st.markdown("""
 <style>
 @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
@@ -78,8 +78,9 @@ st.markdown("""
     font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
 }
 
+/* 1. 상단 잘림 방지를 위해 padding-top을 2.2rem으로 여유 있게 설정 */
 .block-container {
-    padding-top: 1rem !important;
+    padding-top: 2.2rem !important;
     padding-bottom: 2.5rem !important;
     padding-left: 0.6rem !important;
     padding-right: 0.6rem !important;
@@ -91,10 +92,11 @@ html, body, p, span, div, label, li {
     line-height: 1.65 !important;
 }
 
+/* 2. 상단 마진 음수 제거 */
 .mori-header {
-    margin-top: -10px;
-    margin-bottom: 18px;
-    padding-bottom: 14px;
+    margin-top: 0px !important;
+    margin-bottom: 16px !important;
+    padding-bottom: 12px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 .mori-title {
@@ -111,13 +113,13 @@ html, body, p, span, div, label, li {
     font-size: 16px !important;
     font-weight: 500 !important;
     color: #94a3b8;
-    margin-top: 5px;
+    margin-top: 4px;
     letter-spacing: -0.01em;
 }
 .mori-time {
     font-size: 13px !important;
     color: #64748b;
-    margin-top: 6px;
+    margin-top: 4px;
 }
 
 .summary-card {
@@ -896,7 +898,8 @@ if "dual_view_mode" not in st.session_state:
 # [화면 렌더링 분기: 듀얼뷰 vs 탭 네비게이션]
 # =============================================================
 
-col_h1, col_h2 = st.columns([0.7, 0.3])
+# 헤더 여유 있게 배치 (잘림 방지)
+col_h1, col_h2 = st.columns([0.6, 0.4])
 with col_h1:
     st.markdown("""
     <div class="mori-header">
@@ -907,7 +910,7 @@ with col_h1:
     """, unsafe_allow_html=True)
 with col_h2:
     st.write("")
-    is_dual = st.toggle("📖 듀얼뷰 (폴드 펼침 모드)", value=st.session_state.get("dual_view_mode", False))
+    is_dual = st.toggle("📖 듀얼뷰 모드", value=st.session_state.get("dual_view_mode", False))
     st.session_state["dual_view_mode"] = is_dual
 
 
@@ -956,7 +959,7 @@ if st.session_state.get("dual_view_mode", False):
 
 else:
     # ---------------------------------------------------------
-    # 📱 커버 화면 최적화 탭 네비게이션 모드
+    # 📱 커버 화면 최적화 탭 네비게이션 모드 (10개 탭 정상 인덱스)
     # ---------------------------------------------------------
     tabs = st.tabs([
         "🏠 데일리 요약", "💼 포트폴리오", "📅 캘린더", "💳 구독료 관리",
@@ -973,7 +976,7 @@ else:
         st.markdown(f"""
         <div class="weather-gradient">
             <div style="font-size: 15px; color: #bae6fd; font-weight: 700;">{loc_tag} 실시간 날씨</div>
-            <div style="font-size: 30px; font-weight: 900; margin-top: 6px; letter-spacing: -0.02em;">{weather_val} {temp_val}</div>
+            <div style="font-size: 30px; font-weight: 900; margin-top: 6px;">{weather_val} {temp_val}</div>
             <div style="font-size: 14px; color: #e0f2fe; margin-top: 4px;">습도 {humid_val} | 외출 및 출퇴근 추천 날씨</div>
         </div>
         """, unsafe_allow_html=True)
@@ -1018,7 +1021,7 @@ else:
     with tabs:
         render_calendar_section()
 
-    with tabs[3]:
+    with tabs:
         render_subscriptions_section()
 
     with tabs[4]:
