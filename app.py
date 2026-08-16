@@ -78,9 +78,9 @@ st.markdown("""
     font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
 }
 
-/* 1. 상단 잘림 방지를 위해 padding-top을 2.2rem으로 여유 있게 설정 */
+/* 상단 잘림 방지 (padding-top 2.5rem) */
 .block-container {
-    padding-top: 2.2rem !important;
+    padding-top: 2.5rem !important;
     padding-bottom: 2.5rem !important;
     padding-left: 0.6rem !important;
     padding-right: 0.6rem !important;
@@ -92,7 +92,6 @@ html, body, p, span, div, label, li {
     line-height: 1.65 !important;
 }
 
-/* 2. 상단 마진 음수 제거 */
 .mori-header {
     margin-top: 0px !important;
     margin-bottom: 16px !important;
@@ -895,10 +894,9 @@ if "dual_view_mode" not in st.session_state:
 
 
 # =============================================================
-# [화면 렌더링 분기: 듀얼뷰 vs 탭 네비게이션]
+# [메인 헤더 & 듀얼 뷰 토글]
 # =============================================================
 
-# 헤더 여유 있게 배치 (잘림 방지)
 col_h1, col_h2 = st.columns([0.6, 0.4])
 with col_h1:
     st.markdown("""
@@ -913,6 +911,10 @@ with col_h2:
     is_dual = st.toggle("📖 듀얼뷰 모드", value=st.session_state.get("dual_view_mode", False))
     st.session_state["dual_view_mode"] = is_dual
 
+
+# =============================================================
+# [화면 렌더링 분기: 듀얼뷰 vs 탭 네비게이션]
+# =============================================================
 
 if st.session_state.get("dual_view_mode", False):
     # ---------------------------------------------------------
@@ -976,7 +978,7 @@ else:
         st.markdown(f"""
         <div class="weather-gradient">
             <div style="font-size: 15px; color: #bae6fd; font-weight: 700;">{loc_tag} 실시간 날씨</div>
-            <div style="font-size: 30px; font-weight: 900; margin-top: 6px;">{weather_val} {temp_val}</div>
+            <div style="font-size: 30px; font-weight: 900; margin-top: 6px; letter-spacing: -0.02em;">{weather_val} {temp_val}</div>
             <div style="font-size: 14px; color: #e0f2fe; margin-top: 4px;">습도 {humid_val} | 외출 및 출퇴근 추천 날씨</div>
         </div>
         """, unsafe_allow_html=True)
