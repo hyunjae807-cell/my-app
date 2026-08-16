@@ -1,5 +1,7 @@
 streamlit
 yfinance
+pykrx
 pandas
 plotly
 requests
+Pillow
