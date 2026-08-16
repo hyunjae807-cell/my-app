@@ -442,15 +442,60 @@ def fetch_google_news(query, max_results=8):
     except Exception:
         return []
 
-# 9. [안정성 극대화 AI 함수군]
-def analyze_portfolio_image(image_bytes, api_key):
+# 9. [통합 제미나이 AI 호출 엔진 - 404 모델 에러 100% 방지]
+def call_gemini_api(prompt_text, api_key, system_instruction=None, image_bytes=None, chat_contents=None):
     if not api_key or not api_key.strip():
-        return None, "API Key가 입력되지 않았습니다."
-    clean_key = api_key.strip()
-    headers = {"Content-Type": "application/json", "x-goog-api-key": clean_key}
-    candidate_models = ["models/gemini-2.0-flash", "models/gemini-1.5-flash", "models/gemini-1.5-flash-latest", "models/gemini-1.5-pro"]
+        return None, "Gemini API Key를 입력해 주세요."
     
-    base64_img = base64.b64encode(image_bytes).decode('utf-8')
+    clean_key = api_key.strip()
+    headers = {"Content-Type": "application/json"}
+    
+    # 1) 실시간 지원 모델 목록 자동 조회
+    candidate_models = []
+    try:
+        m_res = requests.get(f"https://generativelanguage.googleapis.com/v1beta/models?key={clean_key}", timeout=5)
+        if m_res.status_code == 200:
+            active = [m['name'].replace("models/", "") for m in m_res.json().get('models', []) if 'generateContent' in m.get('supportedGenerationMethods', [])]
+            flash_models = [m for m in active if 'flash' in m.lower()]
+            other_models = [m for m in active if 'flash' not in m.lower()]
+            candidate_models = flash_models + other_models
+    except Exception:
+        pass
+        
+    if not candidate_models:
+        candidate_models = ["gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-2.0-flash", "gemini-2.5-flash", "gemini-pro"]
+
+    # 2) 페이로드 구성
+    if chat_contents:
+        contents = chat_contents
+    elif image_bytes:
+        base64_img = base64.b64encode(image_bytes).decode('utf-8')
+        contents = [{"parts": [{"text": prompt_text}, {"inline_data": {"mime_type": "image/jpeg", "data": base64_img}}]}]
+    else:
+        contents = [{"parts": [{"text": prompt_text}]}]
+
+    payload = {"contents": contents}
+    if system_instruction:
+        payload["systemInstruction"] = {"parts": [{"text": system_instruction}]}
+
+    last_err = ""
+    for model_name in candidate_models:
+        clean_name = model_name.replace("models/", "").strip()
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{clean_name}:generateContent?key={clean_key}"
+        try:
+            res = requests.post(url, json=payload, headers=headers, timeout=25)
+            if res.status_code == 200:
+                resp_json = res.json()
+                text = resp_json['candidates'][0]['content']['parts'][0]['text']
+                return text, "SUCCESS"
+            else:
+                last_err = f"[{res.status_code}] {res.text[:120]}"
+        except Exception as e:
+            last_err = str(e)
+            
+    return None, f"AI 생성 오류: {last_err}"
+
+def analyze_portfolio_image(image_bytes, api_key):
     prompt = """
     이 이미지는 증권사 주식/ETF 잔고 화면입니다.
     보유 중인 종목명, 야후파이낸스 또는 한국거래소 티커(국내 종목/ETF는 6자리코드, 미국 주식은 알파벳), 평균 매입단가(숫자), 보유 수량(정수)을 추출해주세요.
@@ -460,29 +505,16 @@ def analyze_portfolio_image(image_bytes, api_key):
         {"종목명": "KODEX 200타겟위클리커버드콜", "티커": "498400", "매입단가": 13012.0, "보유수량": 863}
     ]
     """
-    payload = {"contents": [{"parts": [{"text": prompt}, {"inline_data": {"mime_type": "image/jpeg", "data": base64_img}}]}]}
-    
-    last_err = ""
-    for model_path in candidate_models:
-        clean_model = model_path if model_path.startswith("models/") else f"models/{model_path}"
-        url = f"https://generativelanguage.googleapis.com/v1beta/{clean_model}:generateContent?key={clean_key}"
+    raw_text, status = call_gemini_api(prompt, api_key, image_bytes=image_bytes)
+    if status == "SUCCESS" and raw_text:
         try:
-            res = requests.post(url, json=payload, headers=headers, timeout=20)
-            if res.status_code == 200:
-                raw = res.json()['candidates'][0]['content']['parts'][0]['text']
-                raw = raw.replace("```json", "").replace("```", "").strip()
-                return json.loads(raw), "SUCCESS"
-            else: last_err = f"[{res.status_code}] {res.text[:120]}"
-        except Exception as e: last_err = str(e)
-    return None, f"분석 오류: {last_err}"
+            clean_json = raw_text.replace("```json", "").replace("```", "").strip()
+            return json.loads(clean_json), "SUCCESS"
+        except Exception as e:
+            return None, f"JSON 파싱 실패: {e}"
+    return None, raw_text if raw_text else status
 
 def generate_ai_briefing(news_headlines, portfolio_items, api_key):
-    if not api_key or not api_key.strip():
-        return None, "Gemini API Key가 필요합니다. 상단에 Key를 입력해 주세요."
-    clean_key = api_key.strip()
-    headers = {"Content-Type": "application/json", "x-goog-api-key": clean_key}
-    candidate_models = ["models/gemini-2.0-flash", "models/gemini-1.5-flash", "models/gemini-1.5-flash-latest", "models/gemini-1.5-pro"]
-
     stock_list_str = ", ".join([f"{item['종목명']} ({item['티커']})" for item in portfolio_items]) if portfolio_items else "KODEX AI반도체TOP2플러스, KODEX 200타겟위클리커버드콜"
     news_text = "\n".join([f"- {h['title']} ({h.get('source', '')})" for h in news_headlines[:15]]) if news_headlines else "국내외 주요 증시 시황 및 반도체 뉴스"
     
@@ -503,28 +535,9 @@ def generate_ai_briefing(news_headlines, portfolio_items, api_key):
     
     이모지와 함께 모바일 화면에서 한눈에 들어오도록 명확하고 간결하게 마크다운으로 작성해주세요.
     """
-    payload = {"contents": [{"parts": [{"text": prompt}]}]}
-    
-    last_err = ""
-    for model_path in candidate_models:
-        clean_model = model_path if model_path.startswith("models/") else f"models/{model_path}"
-        url = f"https://generativelanguage.googleapis.com/v1beta/{clean_model}:generateContent?key={clean_key}"
-        try:
-            res = requests.post(url, json=payload, headers=headers, timeout=25)
-            if res.status_code == 200:
-                return res.json()['candidates'][0]['content']['parts'][0]['text'], "SUCCESS"
-            else: last_err = f"[{res.status_code}] {res.text[:120]}"
-        except Exception as e: last_err = str(e)
-            
-    return None, f"AI 생성 오류: {last_err}"
+    return call_gemini_api(prompt, api_key)
 
 def generate_team_briefing(team_name, sports_type, league, team_news, api_key):
-    if not api_key or not api_key.strip():
-        return None
-    clean_key = api_key.strip()
-    headers = {"Content-Type": "application/json", "x-goog-api-key": clean_key}
-    candidate_models = ["models/gemini-2.0-flash", "models/gemini-1.5-flash", "models/gemini-1.5-flash-latest", "models/gemini-1.5-pro"]
-
     news_text = "\n".join([f"- {h['title']} ({h.get('source', '')})" for h in team_news[:10]]) if team_news else f"{team_name} 최신 경기 일정"
     
     prompt = f"""
@@ -544,29 +557,14 @@ def generate_team_briefing(team_name, sports_type, league, team_news, api_key):
 
     이모지와 함께 모바일 화면에서 한눈에 보기 좋게 마크다운으로 명확하고 간결하게 작성해주세요.
     """
-    payload = {"contents": [{"parts": [{"text": prompt}]}]}
+    text, status = call_gemini_api(prompt, api_key)
+    return text if status == "SUCCESS" else None
 
-    for model_path in candidate_models:
-        clean_model = model_path if model_path.startswith("models/") else f"models/{model_path}"
-        url = f"https://generativelanguage.googleapis.com/v1beta/{clean_model}:generateContent?key={clean_key}"
-        try:
-            res = requests.post(url, json=payload, headers=headers, timeout=20)
-            if res.status_code == 200:
-                return res.json()['candidates'][0]['content']['parts'][0]['text']
-        except Exception: pass
-    return None
-
-# 10. [멀티턴 & 단일턴 듀얼 폴백 1:1 AI 챗봇 엔진]
 def ask_gemini_chat(chat_history, user_msg, portfolio_items, api_key):
-    if not api_key or not api_key.strip():
-        return "⚠️ 상단에 Gemini API Key를 입력해 주세요."
-    clean_key = api_key.strip()
-    headers = {"Content-Type": "application/json", "x-goog-api-key": clean_key}
-    
     stock_list_str = ", ".join([f"{item['종목명']} ({item['티커']})" for item in portfolio_items]) if portfolio_items else "KODEX AI반도체TOP2플러스, KODEX 200타겟위클리커버드콜"
     system_inst = f"당신은 투자자의 1:1 개인 금융/주식 비서 AI 'MORI'입니다. 투자자가 보유한 포트폴리오는 [{stock_list_str}] 입니다. 친절하고 명확하며 실용적인 분석을 한국어로 답변하세요."
 
-    # 역할(user/model)이 겹치지 않도록 깔끔하게 정돈된 멀티턴 구성
+    # 역할 교차 검증 (Gemini 멀티턴 400 방지)
     contents = []
     last_role = None
     for msg in chat_history:
@@ -581,44 +579,16 @@ def ask_gemini_chat(chat_history, user_msg, portfolio_items, api_key):
     if not contents:
         contents = [{"role": "user", "parts": [{"text": user_msg}]}]
 
-    payload_with_sys = {
-        "contents": contents,
-        "systemInstruction": {"parts": [{"text": system_inst}]}
-    }
+    text, status = call_gemini_api("", api_key, system_instruction=system_inst, chat_contents=contents)
+    if status == "SUCCESS" and text:
+        return text
     
-    fallback_payload = {
-        "contents": [{
-            "role": "user",
-            "parts": [{"text": f"[{system_inst}]\n\n질문: {user_msg}"}]
-        }]
-    }
-
-    candidate_models = ["models/gemini-2.0-flash", "models/gemini-1.5-flash", "models/gemini-1.5-flash-latest", "models/gemini-1.5-pro"]
-    
-    last_err = ""
-    for model_path in candidate_models:
-        clean_model = model_path if model_path.startswith("models/") else f"models/{model_path}"
-        url = f"https://generativelanguage.googleapis.com/v1beta/{clean_model}:generateContent?key={clean_key}"
-        
-        # 1차 시도: 대화형 멀티턴 요청
-        try:
-            res = requests.post(url, json=payload_with_sys, headers=headers, timeout=20)
-            if res.status_code == 200:
-                return res.json()['candidates'][0]['content']['parts'][0]['text']
-            else:
-                last_err = f"[{res.status_code}] {res.text[:120]}"
-        except Exception as e:
-            last_err = str(e)
-            
-        # 2차 시도: 단일턴 안전 폴백 요청
-        try:
-            res = requests.post(url, json=fallback_payload, headers=headers, timeout=20)
-            if res.status_code == 200:
-                return res.json()['candidates'][0]['content']['parts'][0]['text']
-        except Exception:
-            pass
-
-    return f"⚠️ AI 비서 응답 중 오류가 발생했습니다: {last_err}"
+    # 단일턴 폴백 재시도
+    fallback_prompt = f"[{system_inst}]\n\n질문: {user_msg}"
+    fb_text, fb_status = call_gemini_api(fallback_prompt, api_key)
+    if fb_status == "SUCCESS" and fb_text:
+        return fb_text
+    return f"⚠️ AI 비서 응답 중 오류가 발생했습니다: {text if text else status}"
 
 
 # =============================================================
@@ -982,7 +952,7 @@ with tab_briefing:
     st.dataframe(pd.DataFrame(events), use_container_width=True)
 
 # -------------------------------------------------------------
-# TAB 5: 1:1 대화형 AI 투자 챗봇 (오류 완벽 해결)
+# TAB 5: 1:1 대화형 AI 투자 챗봇 (404 오류 완벽 해결)
 # -------------------------------------------------------------
 with tab_chat:
     st.subheader("🤖 1:1 AI 투자 비서 챗봇")
