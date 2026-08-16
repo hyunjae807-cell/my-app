@@ -56,7 +56,7 @@ def get_mori_app_icon():
     d.line([(cx-11, cy), (cx+11, cy)], fill=sc, width=3)
     d.line([(cx, cy-11), (cx, cy+11)], fill=sc, width=3)
     d.line([(cx-6, cy-6), (cx+6, cy+6)], fill=sc, width=2)
-    d.line([(cx-6, cy+6), (cx+6, cy-6)], fill=sc, width=2)
+    d.line([(cx-6, cy-6), (cx+6, cy+6)], fill=sc, width=2)
 
     return icon_img
 
@@ -178,6 +178,15 @@ html, body, p, span, div, label, li {
     margin-bottom: 14px;
 }
 
+.subs-card {
+    background: linear-gradient(135deg, #1e1b4b 0%, #31104b 100%);
+    border: 1px solid rgba(168, 85, 247, 0.4);
+    border-radius: 16px;
+    padding: 18px;
+    color: white;
+    margin-bottom: 14px;
+}
+
 [data-testid="stMetricValue"] {
     font-size: 28px !important;
     font-weight: 900 !important;
@@ -227,6 +236,7 @@ TODOS_FILE = "todos.json"
 SPORTS_FILE = "sports_teams.json"
 SPORTS_BRIEFINGS_FILE = "sports_briefings.json"
 LOCATION_FILE = "location.json"
+SUBS_FILE = "subscriptions.json"
 
 DEFAULT_PORTFOLIO = [
     {"종목명": "KODEX AI반도체TOP2플러스", "티커": "395160", "매입단가": 13234.0, "보유수량": 126},
@@ -237,6 +247,13 @@ DEFAULT_SPORTS_TEAMS = [
     {"종목": "⚽ 축구", "팀명": "맨체스터 유나이티드", "리그": "프리미어리그 (EPL)", "키워드": "맨체스터 유나이티드 OR 맨유"},
     {"종목": "⚾ 야구", "팀명": "KIA 타이거즈", "리그": "KBO 리그", "키워드": "KIA 타이거즈"},
     {"종목": "⚾ 야구", "팀명": "LA 다저스", "리그": "메이저리그 (MLB)", "키워드": "LA 다저스 OR 오타니"}
+]
+
+DEFAULT_SUBSCRIPTIONS = [
+    {"서비스": "SPOTV NOW", "월요금": 19900, "결제일": 15, "카테고리": "⚽ 스포츠 중계"},
+    {"서비스": "넷플릭스 (Netflix)", "월요금": 17000, "결제일": 22, "카테고리": "🎬 OTT/영화"},
+    {"서비스": "쿠팡플레이 (와우멤버십)", "월요금": 7890, "결제일": 8, "카테고리": "🛍️ OTT/쇼핑"},
+    {"서비스": "Spotify (스포티파이)", "월요금": 11990, "결제일": 1, "카테고리": "🎵 음악 스트리밍"}
 ]
 
 DEFAULT_LOCATION = {
@@ -346,6 +363,21 @@ def save_sports_briefings(briefings):
             json.dump(briefings, f, ensure_ascii=False, indent=2)
     except Exception as e: pass
 
+def load_subscriptions():
+    if os.path.exists(SUBS_FILE):
+        try:
+            with open(SUBS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if data: return data
+        except Exception: pass
+    return DEFAULT_SUBSCRIPTIONS
+
+def save_subscriptions(subs):
+    try:
+        with open(SUBS_FILE, "w", encoding="utf-8") as f:
+            json.dump(subs, f, ensure_ascii=False, indent=2)
+    except Exception as e: st.error(f"구독 정보 저장 오류: {e}")
+
 # 7. 실시간 위치 기반 날씨 데이터 조회 (GPS 및 용인/성남 연동)
 @st.cache_data(ttl=1800)
 def get_current_weather(lat=37.2410, lon=127.1775, default_name="경기도 용인시"):
@@ -450,7 +482,6 @@ def call_gemini_api(prompt_text, api_key, system_instruction=None, image_bytes=N
     clean_key = api_key.strip()
     headers = {"Content-Type": "application/json"}
     
-    # 1) 실시간 지원 모델 목록 자동 조회
     candidate_models = []
     try:
         m_res = requests.get(f"https://generativelanguage.googleapis.com/v1beta/models?key={clean_key}", timeout=5)
@@ -465,7 +496,6 @@ def call_gemini_api(prompt_text, api_key, system_instruction=None, image_bytes=N
     if not candidate_models:
         candidate_models = ["gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-2.0-flash", "gemini-2.5-flash", "gemini-pro"]
 
-    # 2) 페이로드 구성
     if chat_contents:
         contents = chat_contents
     elif image_bytes:
@@ -564,7 +594,6 @@ def ask_gemini_chat(chat_history, user_msg, portfolio_items, api_key):
     stock_list_str = ", ".join([f"{item['종목명']} ({item['티커']})" for item in portfolio_items]) if portfolio_items else "KODEX AI반도체TOP2플러스, KODEX 200타겟위클리커버드콜"
     system_inst = f"당신은 투자자의 1:1 개인 금융/주식 비서 AI 'MORI'입니다. 투자자가 보유한 포트폴리오는 [{stock_list_str}] 입니다. 친절하고 명확하며 실용적인 분석을 한국어로 답변하세요."
 
-    # 역할 교차 검증 (Gemini 멀티턴 400 방지)
     contents = []
     last_role = None
     for msg in chat_history:
@@ -583,7 +612,6 @@ def ask_gemini_chat(chat_history, user_msg, portfolio_items, api_key):
     if status == "SUCCESS" and text:
         return text
     
-    # 단일턴 폴백 재시도
     fallback_prompt = f"[{system_inst}]\n\n질문: {user_msg}"
     fb_text, fb_status = call_gemini_api(fallback_prompt, api_key)
     if fb_status == "SUCCESS" and fb_text:
@@ -592,123 +620,10 @@ def ask_gemini_chat(chat_history, user_msg, portfolio_items, api_key):
 
 
 # =============================================================
-# 위치 정보 관리 및 파싱
+# [공통 모듈 렌더링 함수들]
 # =============================================================
 
-# 저장된 사용자 위치 불러오기 (기본: 경기도 용인시)
-current_loc_data = load_location()
-
-# URL 쿼리 파라미터에 GPS 좌표가 있으면 우선 적용
-if "lat" in st.query_params and "lon" in st.query_params:
-    try:
-        gps_lat = float(st.query_params["lat"])
-        gps_lon = float(st.query_params["lon"])
-        current_loc_data = {"name": "현재 GPS 위치", "lat": gps_lat, "lon": gps_lon}
-        save_location(current_loc_data)
-    except Exception: pass
-
-if "saved_gemini_key" not in st.session_state:
-    st.session_state.saved_gemini_key = st.secrets.get("GEMINI_API_KEY", "")
-
-
-# =============================================================
-# 메인 UI 렌더링 (초고속 즉시 로딩)
-# =============================================================
-
-st.markdown("""
-<div class="mori-header">
-    <div class="mori-title">MORI</div>
-    <div class="mori-subtitle">Everything about you, in one place.</div>
-    <div class="mori-time">대한민국 표준시(KST) : """ + datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S') + """</div>
-</div>
-""", unsafe_allow_html=True)
-
-# 8개 탭 구성
-tab_home, tab_portfolio, tab_market, tab_news, tab_briefing, tab_chat, tab_sports, tab_daily = st.tabs(
-    ["🏠 데일리 요약", "💼 포트폴리오", "📊 실시간 시황", "📰 주요 뉴스", "💡 AI 브리핑", "🤖 AI 챗봇", "⚽ 스포츠 허브", "📋 데일리 & 날씨"]
-)
-
-# -------------------------------------------------------------
-# TAB 0: 🏠 데일리 요약 (Home Dashboard - 0.3초 로딩)
-# -------------------------------------------------------------
-with tab_home:
-    st.subheader("오늘의 핵심 데일리 요약")
-    
-    # 1) 실시간 위치 날씨 카드
-    temp_val, weather_val, humid_val, loc_tag = get_current_weather(
-        current_loc_data.get("lat", 37.2410),
-        current_loc_data.get("lon", 127.1775),
-        current_loc_data.get("name", "경기도 용인시")
-    )
-    st.markdown(f"""
-    <div class="weather-gradient">
-        <div style="font-size: 15px; color: #bae6fd; font-weight: 700;">{loc_tag} 실시간 날씨</div>
-        <div style="font-size: 30px; font-weight: 900; margin-top: 6px; letter-spacing: -0.02em;">{weather_val} {temp_val}</div>
-        <div style="font-size: 14px; color: #e0f2fe; margin-top: 4px;">습도 {humid_val} | 외출 및 출퇴근 추천 날씨</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # 2) 오늘의 To-Do 요약 카드
-    home_todos = load_todos()
-    with st.container(border=True):
-        st.markdown("**✅ 오늘의 할 일 (To-Do)**")
-        if home_todos:
-            for t in home_todos[:3]:
-                st.markdown(f"• **{t}**")
-            if len(home_todos) > 3:
-                st.caption(f"외 {len(home_todos)-3}개의 할 일이 더 있습니다. (📋 데일리 탭에서 관리)")
-        else:
-            st.info("등록된 할 일이 없습니다.")
-
-    # 3) 내 자산 한 줄 요약 (병렬 로딩)
-    home_portfolio = load_portfolio()
-    p_tickers = [it["티커"] for it in home_portfolio]
-    batch_prices = get_batch_market_data(p_tickers)
-    
-    total_eval_h = 0
-    total_buy_h = 0
-    for it in home_portfolio:
-        cp, _ = batch_prices.get(it["티커"], (None, None))
-        if cp is None:
-            cp = it["매입단가"]
-        total_eval_h += cp * it["보유수량"]
-        total_buy_h += it["매입단가"] * it["보유수량"]
-    diff_h = total_eval_h - total_buy_h
-    rate_h = (diff_h / total_buy_h) * 100 if total_buy_h > 0 else 0
-
-    with st.container(border=True):
-        st.markdown("**💼 내 포트폴리오 요약**")
-        ch1, ch2 = st.columns(2)
-        with ch1:
-            st.metric("총 평가금액", f"{total_eval_h:,.0f}원", f"{rate_h:+.2f}%")
-        with ch2:
-            st.metric("총 평가손익", f"{diff_h:+,.0f}원")
-
-    # 4) 1순위 스포츠 응원팀 다음 경기 일정 요약 (캐시에서 즉시 표시)
-    home_teams = load_sports_teams()
-    home_sb = load_sports_briefings()
-    first_team = home_teams[0] if home_teams else None
-    
-    if first_team:
-        with st.container(border=True):
-            st.markdown(f"**⭐ 1순위: {first_team['종목']} {first_team['팀명']} ({first_team['리그']}) 일정**")
-            if first_team["팀명"] in home_sb:
-                briefing_preview = home_sb[first_team["팀명"]].get("text", "")
-                st.markdown(briefing_preview[:280] + ("..." if len(briefing_preview) > 280 else ""))
-            else:
-                st.caption("🏆 2026/27 시즌 주요 경기 진행 중 (⚽ 스포츠 허브 탭에서 ⚡ 브리핑 생성 가능)")
-
-    # 5) 실시간 간단 뉴스 헤드라인 (3줄 요약)
-    quick_news = fetch_google_news("코스피 OR 반도체 OR 연준 금리", max_results=3)
-    with st.container(border=True):
-        st.markdown("**📰 오늘의 핵심 3줄 뉴스**")
-        for qn in quick_news:
-            st.markdown(f"• [{qn['title']}]({qn['link']}) <span style='font-size:12px;color:#94a3b8;'>({qn['source']})</span>", unsafe_allow_html=True)
-
-# -------------------------------------------------------------
-# TAB 1: 내 실제 포트폴리오 & 배당금 계산기
-# -------------------------------------------------------------
-with tab_portfolio:
+def render_portfolio_section():
     st.subheader("💼 내 주식·ETF 포트폴리오")
     user_portfolio = load_portfolio()
     
@@ -737,11 +652,10 @@ with tab_portfolio:
 
         calculated_rows.append({
             "종목명": item["종목명"],
-            "보유수량": f"{item['보유수량']:,}주",
-            "매입단가": f"{item['매입단가']:,.0f}원" if is_krw else f"${item['매입단가']:.2f}",
-            "현재가 (실시간)": f"{cur_p:,.0f}원" if is_krw else f"${cur_p:.2f}",
+            "수량": f"{item['보유수량']:,}주",
+            "매입가": f"{item['매입단가']:,.0f}원" if is_krw else f"${item['매입단가']:.2f}",
+            "현재가": f"{cur_p:,.0f}원" if is_krw else f"${cur_p:.2f}",
             "평가금액": f"{eval_amount:,.0f}원" if is_krw else f"${eval_amount:,.2f}",
-            "평가손익": f"{profit_amount:+,.0f}원" if is_krw else f"${profit_amount:+.2f}",
             "수익률": f"{profit_rate:+.2f}%"
         })
 
@@ -754,224 +668,154 @@ with tab_portfolio:
     with c2:
         st.metric("총 평가손익", f"{total_profit_krw:+,.0f}원", f"매입총액: {total_buy_krw:,.0f}원")
 
-    st.markdown("---")
-    st.write("📋 **보유 종목 실시간 현황표**")
     st.dataframe(pd.DataFrame(calculated_rows), use_container_width=True)
 
-    # 💰 배당금 / 분배금 계산기
-    st.markdown("---")
-    with st.expander("💰 내 배당금 / 커버드콜 월 분배금 계산기", expanded=False):
-        st.write("보유 중인 `KODEX 200타겟위클리커버드콜` 등 고배당 ETF의 예상 배당 수익을 계산합니다.")
-        div_shares = st.number_input("커버드콜 보유 수량(주)", value=863, min_value=0)
-        div_per_share = st.number_input("주당 예상 월 분배금(원)", value=270, min_value=0)
-        
-        monthly_div = div_shares * div_per_share
-        annual_div = monthly_div * 12
-        
-        cd1, cd2 = st.columns(2)
-        with cd1:
-            st.metric("예상 월 분배금", f"{monthly_div:,.0f}원")
-        with cd2:
-            st.metric("예상 연간 배당 소득", f"{annual_div:,.0f}원")
-
-    # 📸 캡처 사진 자동 업데이트
-    st.markdown("---")
-    with st.expander("📸 새 잔고 사진으로 포트폴리오 업데이트"):
-        uploaded_file = st.file_uploader("증권사 잔고 캡처 사진 올리기", type=["png", "jpg", "jpeg"])
-        if uploaded_file is not None:
-            st.image(uploaded_file, use_container_width=True)
-            k_input = st.text_input("Gemini API Key 입력", value=st.session_state.saved_gemini_key, type="password")
-            if k_input:
-                st.session_state.saved_gemini_key = k_input
-                
-            if st.button("✨ AI로 잔고 사진 분석 및 저장"):
-                if not st.session_state.saved_gemini_key:
-                    st.warning("API Key를 입력해 주세요.")
-                else:
-                    with st.spinner("AI 분석 중..."):
-                        parsed, status = analyze_portfolio_image(uploaded_file.getvalue(), st.session_state.saved_gemini_key)
-                        if status == "SUCCESS" and parsed:
-                            save_portfolio(parsed)
-                            st.success("🎉 포트폴리오가 영구 저장되었습니다!")
-                            st.rerun()
-                        else:
-                            st.error(f"{status}")
-
-# -------------------------------------------------------------
-# TAB 2: 실시간 시황 (병렬 0.2초 로딩)
-# -------------------------------------------------------------
-with tab_market:
-    st.subheader("🌐 글로벌 & 국내 주요 지수 (실시간)")
+def render_calendar_section():
+    st.subheader("📅 통합 스마트 캘린더 & 배당 플래너")
     
+    # 월 배당금 현황 요약
+    user_portfolio = load_portfolio()
+    cover_shares = 863
+    div_per = 270
+    for p in user_portfolio:
+        if "커버드콜" in p["종목명"]:
+            cover_shares = p["보유수량"]
+            
+    monthly_est_div = cover_shares * div_per
+    
+    st.markdown(f"""
+    <div class="subs-card">
+        <div style="font-size: 15px; color: #e9d5ff; font-weight: 700;">💰 월 배당금(분배금) 예상 수령액</div>
+        <div style="font-size: 30px; font-weight: 900; margin-top: 4px;">{monthly_est_div:,.0f}원 / 월</div>
+        <div style="font-size: 14px; color: #d8b4fe; margin-top: 4px;">KODEX 200위클리커버드콜({cover_shares:,}주) 기준 | 연간 약 {monthly_est_div*12:,.0f}원</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    timeline_events = [
+        {"날짜": "2026-08-22", "분류": "🎬 구독 결제", "내용": "넷플릭스 (17,000원) 결제일 (D-6)", "중요도": "🟡 정기"},
+        {"날짜": "2026-08-26", "분류": "🎯 AI반도체", "내용": "엔비디아(NVDA) 2분기 실적 발표 (미국)", "중요도": "🔴 핵심"},
+        {"날짜": "2026-08-28", "분류": "🌐 거시경제", "내용": "미국 잭슨홀 심포지엄 (파월 의장 연설)", "중요도": "🔴 높음"},
+        {"날짜": "2026-09-01", "분류": "💰 배당금 입금", "내용": "KODEX 커버드콜 월 분배금 입금 예정일", "중요도": "🟢 수익"},
+        {"날짜": "2026-09-01", "분류": "🎵 구독 결제", "내용": "Spotify (11,990원) 결제일", "중요도": "🟡 정기"},
+        {"날짜": "2026-09-08", "분류": "🛍️ 구독 결제", "내용": "쿠팡 와우멤버십 (7,890원) 결제일", "중요도": "🟡 정기"},
+        {"날짜": "2026-09-10", "분류": "🎯 파생만기", "내용": "국내 선물·옵션 동시 만기일 (네 마녀의 날)", "중요도": "🔴 변동성"},
+        {"날짜": "2026-09-15", "분류": "⚽ 구독 결제", "내용": "SPOTV NOW (19,900원) 결제일", "중요도": "🟡 정기"},
+        {"날짜": "2026-09-16", "분류": "🌐 거시경제", "내용": "미국 9월 FOMC 기준금리 결정 회의", "중요도": "🔴 높음"}
+    ]
+    st.write("📋 **통합 일정 타임라인**")
+    st.dataframe(pd.DataFrame(timeline_events), use_container_width=True)
+
+def render_subscriptions_section():
+    st.subheader("💳 고정 구독료 관리자")
+    subs_list = load_subscriptions()
+    
+    total_sub_monthly = sum(s["월요금"] for s in subs_list)
+    monthly_est_div = 863 * 270
+    coverage_rate = (monthly_est_div / total_sub_monthly * 100) if total_sub_monthly > 0 else 0
+
+    c_s1, c_s2 = st.columns(2)
+    with c_s1:
+        st.metric("월 고정 구독료 합계", f"{total_sub_monthly:,.0f}원", f"총 {len(subs_list)}개 서비스")
+    with c_s2:
+        st.metric("배당금 방어율", f"{coverage_rate:.1f}%", f"월 배당 {monthly_est_div:,.0f}원")
+
+    st.markdown(f"""
+    <div class="summary-card" style="border-left: 4px solid #10b981;">
+        <div style="font-weight: 700; color: #34d399;">🛡️ 배당금 방어 성공!</div>
+        <div style="font-size: 15px; color: #cbd5e1; margin-top: 4px;">
+            매월 발생하는 커버드콜 배당금({monthly_est_div:,.0f}원)이 고정 구독료({total_sub_monthly:,.0f}원)를 초과하여 <b>모든 OTT 및 멤버십을 배당금만으로 전액 무료 충당</b>하고 있습니다.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    for idx, s in enumerate(subs_list):
+        col_name, col_cost, col_dday = st.columns([0.5, 0.25, 0.25])
+        with col_name:
+            st.markdown(f"**{s['카테고리']} {s['서비스']}**")
+        with col_cost:
+            st.markdown(f"{s['월요금']:,}원 / 월")
+        with col_dday:
+            st.markdown(f"매월 **{s['결제일']}일**")
+
+    st.markdown("---")
+    with st.expander("➕ 새 구독 서비스 추가 / 관리"):
+        with st.form("add_sub_form"):
+            new_s_name = st.text_input("서비스명 (예: 유튜브 프리미엄, Goodnotes)", value="유튜브 프리미엄")
+            new_s_cost = st.number_input("월 구독료(원)", value=14900, step=1000)
+            new_s_day = st.number_input("매월 결제일 (1~31일)", value=1, min_value=1, max_value=31)
+            new_s_cat = st.selectbox("카테고리", ["🎬 OTT/영상", "⚽ 스포츠", "🎵 음악", "💼 생산성/클라우드", "🛍️ 쇼핑/기타"])
+            
+            if st.form_submit_button("구독 서비스 등록"):
+                if new_s_name.strip():
+                    subs_list.append({"서비스": new_s_name.strip(), "월요금": int(new_s_cost), "결제일": int(new_s_day), "카테고리": new_s_cat})
+                    save_subscriptions(subs_list)
+                    st.success(f"'{new_s_name}' 서비스가 등록되었습니다!")
+                    st.rerun()
+
+        if len(subs_list) > 1:
+            del_sub_idx = st.selectbox("삭제할 구독 선택", range(len(subs_list)), format_func=lambda x: f"{subs_list[x]['서비스']} ({subs_list[x]['월요금']:,}원)")
+            if st.button("선택한 구독 삭제"):
+                removed_s = subs_list.pop(del_sub_idx)
+                save_subscriptions(subs_list)
+                st.success(f"'{removed_s['서비스']}' 구독이 삭제되었습니다.")
+                st.rerun()
+
+def render_market_section():
+    st.subheader("🌐 글로벌 & 국내 시황")
     market_tickers = ["^KS11", "^GSPC", "^IXIC", "BZ=F", "005930", "000660", "005380", "NVDA"]
     m_prices = get_batch_market_data(market_tickers)
     
     kospi_p, kospi_d = m_prices.get("^KS11", (None, None))
     sp500_p, sp500_d = m_prices.get("^GSPC", (None, None))
-    nasdaq_p, nasdaq_d = m_prices.get("^IXIC", (None, None))
-    oil_p, oil_d = m_prices.get("BZ=F", (None, None))
+    samsung_p, samsung_d = m_prices.get("005930", (None, None))
+    nvda_p, nvda_d = m_prices.get("NVDA", (None, None))
     
     c1, c2 = st.columns(2)
     with c1:
         st.metric("코스피 (KOSPI)", f"{kospi_p:,.2f}" if kospi_p else "6,977.94", f"{kospi_d:+.2f}%" if kospi_d else "+2.42%")
-        st.metric("S&P 500", f"{sp500_p:,.2f}" if sp500_p else "5,554.20", f"{sp500_d:+.2f}%" if sp500_d else "-0.20%")
-    with c2:
-        st.metric("나스닥 (NASDAQ)", f"{nasdaq_p:,.2f}" if nasdaq_p else "17,594.50", f"{nasdaq_d:+.2f}%" if nasdaq_d else "+0.12%")
-        st.metric("브렌트유 (Oil)", f"${oil_p:.2f}" if oil_p else "$88.59", f"{oil_d:+.2f}%" if oil_d else "+1.75%")
-
-    st.markdown("---")
-    st.subheader("🏢 주요 대형주 시세 (한국거래소 pykrx 연동)")
-    samsung_p, samsung_d = m_prices.get("005930", (None, None))
-    hynix_p, hynix_d = m_prices.get("000660", (None, None))
-    hyundai_p, hyundai_d = m_prices.get("005380", (None, None))
-    nvda_p, nvda_d = m_prices.get("NVDA", (None, None))
-    
-    ca, cb = st.columns(2)
-    with ca:
         st.metric("삼성전자", f"{samsung_p:,.0f}원" if samsung_p else "84,500원", f"{samsung_d:+.2f}%" if samsung_d else "+2.43%")
-        st.metric("SK하이닉스", f"{hynix_p:,.0f}원" if hynix_p else "193,000원", f"{hynix_d:+.2f}%" if hynix_d else "+3.30%")
-    with cb:
-        st.metric("현대차", f"{hyundai_p:,.0f}원" if hyundai_p else "256,000원", f"{hyundai_d:+.2f}%" if hynix_d else "+8.24%")
+    with c2:
+        st.metric("S&P 500", f"{sp500_p:,.2f}" if sp500_p else "5,554.20", f"{sp500_d:+.2f}%" if sp500_d else "-0.20%")
         st.metric("엔비디아 (NVDA)", f"${nvda_p:.2f}" if nvda_p else "$224.92", f"{nvda_d:+.2f}%" if nvda_d else "-0.18%")
 
-# -------------------------------------------------------------
-# TAB 3: 내 보유 종목 맞춤 뉴스 피드
-# -------------------------------------------------------------
-with tab_news:
-    st.subheader("📰 실시간 뉴스 피드")
-    user_portfolio = load_portfolio()
-    my_stock_names = [item["종목명"] for item in user_portfolio]
-    
-    category_options = (
-        ["📌 [전체] 내 보유 종목 뉴스 모아보기"] + 
-        [f"🎯 {name}" for name in my_stock_names] + 
-        ["🇰🇷 국내 증시·경제", "🇺🇸 미국·글로벌 증시", "🤖 AI·반도체", "🔍 직접 검색"]
-    )
-    selected_cat = st.selectbox("뉴스 카테고리 선택", category_options, index=0)
-    
-    if selected_cat == "📌 [전체] 내 보유 종목 뉴스 모아보기":
-        query = " OR ".join([f'"{name}"' for name in my_stock_names]) + " OR AI반도체 OR 커버드콜"
-    elif selected_cat.startswith("🎯 "):
-        stock_name = selected_cat.replace("🎯 ", "")
-        if "AI반도체" in stock_name:
-            query = f'"{stock_name}" OR "AI반도체" OR "삼성전자 반도체"'
-        elif "커버드콜" in stock_name:
-            query = f'"{stock_name}" OR "커버드콜" OR "코스피200 분배금"'
-        else:
-            query = f'"{stock_name}"'
-    elif selected_cat == "🇰🇷 국내 증시·경제":
-        query = "코스피 OR 국내증시 OR 환율"
-    elif selected_cat == "🇺🇸 미국·글로벌 증시":
-        query = "뉴욕증시 OR 연준 금리 OR S&P500"
-    elif selected_cat == "🤖 AI·반도체":
-        query = "엔비디아 OR 반도체 HBM OR 인공지능"
-    else:
-        query = st.text_input("검색 키워드", value="삼성전자")
-    
-    if query:
-        news_list = fetch_google_news(query, max_results=8)
-        if news_list:
-            for item in news_list:
-                st.markdown(f"""
-                <div class="news-card">
-                    <a class="news-title" href="{item['link']}" target="_blank">🔗 {item['title']}</a>
-                    <div class="news-meta">📰 {item['source']} &nbsp;|&nbsp; 🕒 {item['date']}</div>
-                </div>
-                """, unsafe_allow_html=True)
-
-# -------------------------------------------------------------
-# TAB 4: 실시간 AI 브리핑 & 음성 읽어주기 (TTS)
-# -------------------------------------------------------------
-with tab_briefing:
+def render_briefing_section():
     st.subheader("💡 실시간 맞춤형 AI 모닝 브리핑")
-    
     user_portfolio = load_portfolio()
     recent_news = fetch_google_news("코스피 OR 반도체 OR 연준 금리 OR 엔비디아", max_results=12)
     
-    k_input_b = st.text_input("Gemini API Key 입력 (브리핑용)", value=st.session_state.saved_gemini_key, type="password", key="briefing_key")
-    if k_input_b:
-        st.session_state.saved_gemini_key = k_input_b
-        
-    c_btn1, c_btn2 = st.columns(2)
-    with c_btn1:
-        if st.button("✨ 오늘자 AI 브리핑 재생성"):
-            if not st.session_state.saved_gemini_key:
-                st.warning("상단에 Gemini API Key를 입력해 주세요.")
-            else:
-                with st.spinner("구글 Gemini AI가 종합 분석 중입니다..."):
-                    briefing_result, status = generate_ai_briefing(recent_news, user_portfolio, st.session_state.saved_gemini_key)
-                    if status == "SUCCESS" and briefing_result:
-                        now_str = datetime.now(KST).strftime('%Y년 %m월 %d일 %H:%M:%S')
-                        save_briefing(briefing_result, now_str)
-                        st.success("✅ AI 모닝 브리핑 생성 및 저장 완료!")
-                        st.rerun()
-                    else:
-                        st.error(f"{status}")
+    k_input_b = st.text_input("Gemini API Key (브리핑용)", value=st.session_state.saved_gemini_key, type="password", key="briefing_key_view")
+    if k_input_b: st.session_state.saved_gemini_key = k_input_b
+    
+    if st.button("✨ 오늘자 AI 브리핑 재생성", key="btn_regen_briefing"):
+        if not st.session_state.saved_gemini_key:
+            st.warning("API Key를 입력해 주세요.")
+        else:
+            with st.spinner("구글 Gemini AI 분석 중..."):
+                b_res, status = generate_ai_briefing(recent_news, user_portfolio, st.session_state.saved_gemini_key)
+                if status == "SUCCESS" and b_res:
+                    now_str = datetime.now(KST).strftime('%Y년 %m월 %d일 %H:%M:%S')
+                    save_briefing(b_res, now_str)
+                    st.success("브리핑 생성 완료!")
+                    st.rerun()
 
     saved_briefing_text, saved_time = load_briefing()
-
-    with c_btn2:
-        if saved_briefing_text:
-            clean_speech = saved_briefing_text.replace("#", "").replace("*", "").replace("\n", " ").replace('"', '')[:300]
-            tts_html = f"""
-            <button onclick="speakBriefing()" style="background-color: #8b5cf6; color: white; border: none; padding: 10px 16px; border-radius: 8px; font-weight: 700; cursor: pointer; width: 100%;">
-                🔊 음성으로 듣기 (TTS)
-            </button>
-            <script>
-            function speakBriefing() {{
-                if ('speechSynthesis' in window) {{
-                    window.speechSynthesis.cancel();
-                    const ut = new SpeechSynthesisUtterance("{clean_speech}");
-                    ut.lang = 'ko-KR';
-                    ut.rate = 1.0;
-                    window.speechSynthesis.speak(ut);
-                }} else {{
-                    alert("음성 합성을 지원하지 않는 브라우저입니다.");
-                }}
-            }}
-            </script>
-            """
-            components.html(tts_html, height=45)
-
     if saved_briefing_text:
-        st.caption(f"🕒 **마지막 브리핑 생성 시각**: {saved_time}")
+        st.caption(f"🕒 생성 시각: {saved_time}")
         with st.container(border=True):
             st.markdown(saved_briefing_text)
-    else:
-        st.info("💡 위의 **[✨ 오늘자 AI 브리핑 재생성]** 버튼을 누르면 AI가 맞춤형 리포트를 즉시 작성해 영구 보존합니다.")
 
-    st.markdown("---")
-    st.subheader("📅 내 보유 종목 맞춤형 이벤트 캘린더")
-    events = [
-        {"날짜": "2026-08-26", "구분": "🎯 AI반도체", "이벤트": "엔비디아(NVDA) 2분기 실적 발표 (미국 현지시간)", "중요도": "🔴 핵심"},
-        {"날짜": "2026-08-28", "구분": "🌐 거시경제", "이벤트": "미국 잭슨홀 심포지엄 (파월 연준의장 기조연설)", "중요도": "🔴 높음"},
-        {"날짜": "2026-09-10", "구분": "🎯 커버드콜", "이벤트": "국내 선물·옵션 동시 만기일 (네 마녀의 날)", "중요도": "🔴 변동성"},
-        {"날짜": "2026-09-16", "구분": "🌐 거시경제", "이벤트": "미국 9월 FOMC 기준금리 결정 회의", "중요도": "🔴 높음"},
-        {"날짜": "매주 목요일", "구분": "🎯 커버드콜", "이벤트": "위클리 옵션 만기 및 프리미엄 정산", "중요도": "🟡 정기"}
-    ]
-    st.dataframe(pd.DataFrame(events), use_container_width=True)
-
-# -------------------------------------------------------------
-# TAB 5: 1:1 대화형 AI 투자 챗봇 (404 오류 완벽 해결)
-# -------------------------------------------------------------
-with tab_chat:
+def render_chat_section():
     st.subheader("🤖 1:1 AI 투자 비서 챗봇")
-    st.caption("내 포트폴리오를 기반으로 무엇이든 질문하세요!")
-    
     if "chat_messages" not in st.session_state:
         st.session_state.chat_messages = [
-            {"role": "assistant", "content": "안녕하세요! 고객님의 포트폴리오(KODEX AI반도체, KODEX 200커버드콜)를 기반으로 맞춤 투자 분석을 도와드립니다. 무엇이든 물어보세요!"}
+            {"role": "assistant", "content": "안녕하세요! 고객님의 포트폴리오(KODEX AI반도체, KODEX 200커버드콜)를 기반으로 맞춤 투자 분석을 도와드립니다."}
         ]
 
     for msg in st.session_state.chat_messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    k_input_c = st.text_input("Gemini API Key 입력 (챗봇용)", value=st.session_state.saved_gemini_key, type="password", key="chat_key")
-    if k_input_c:
-        st.session_state.saved_gemini_key = k_input_c
-
-    user_input = st.chat_input("AI 투자 비서에게 질문하기...")
+    user_input = st.chat_input("AI 비서에게 질문하기...", key="chat_input_field")
     if user_input:
         st.session_state.chat_messages.append({"role": "user", "content": user_input})
         with st.chat_message("user"):
@@ -979,25 +823,22 @@ with tab_chat:
 
         if not st.session_state.saved_gemini_key:
             with st.chat_message("assistant"):
-                st.warning("챗봇 사용을 위해 상단에 Gemini API Key를 입력해 주세요.")
+                st.warning("상단에 Gemini API Key를 입력해 주세요.")
         else:
             with st.chat_message("assistant"):
-                with st.spinner("AI 비서가 분석 중입니다..."):
-                    bot_reply = ask_gemini_chat(st.session_state.chat_messages, user_input, user_portfolio, st.session_state.saved_gemini_key)
+                with st.spinner("AI 비서 답변 생성 중..."):
+                    user_port = load_portfolio()
+                    bot_reply = ask_gemini_chat(st.session_state.chat_messages, user_input, user_port, st.session_state.saved_gemini_key)
                     st.markdown(bot_reply)
                     st.session_state.chat_messages.append({"role": "assistant", "content": bot_reply})
 
-# -------------------------------------------------------------
-# TAB 6: [한국 시간 KST 기준] 스포츠 허브
-# -------------------------------------------------------------
-with tab_sports:
+def render_sports_section():
     st.subheader("🏆 내 응원팀 스포츠 허브")
-    
     my_teams = load_sports_teams()
     sports_briefings = load_sports_briefings()
     
     team_names = [f"{idx+1}. {t['종목']} {t['팀명']} ({t['리그']})" for idx, t in enumerate(my_teams)]
-    selected_team_idx = st.selectbox("응원하는 팀 선택", range(len(team_names)), format_func=lambda x: team_names[x])
+    selected_team_idx = st.selectbox("응원하는 팀 선택", range(len(team_names)), format_func=lambda x: team_names[x], key="sp_team_select")
     
     current_team = my_teams[selected_team_idx]
     team_key = current_team["팀명"]
@@ -1009,11 +850,11 @@ with tab_sports:
     with c_s1:
         st.write(f"### {current_team['종목']} {current_team['팀명']} ({current_team['리그']})")
     with c_s2:
-        if st.button("⚡ 실시간 경기 & 구단 브리핑 생성", key=f"btn_sb_{team_key}"):
+        if st.button("⚡ 실시간 경기 브리핑 생성", key=f"btn_sb_view_{team_key}"):
             if not st.session_state.saved_gemini_key:
                 st.warning("API Key가 필요합니다.")
             else:
-                with st.spinner(f"{team_key}의 최신 경기 일정과 결과를 AI가 분석 중입니다 (한국시간 기준)..."):
+                with st.spinner(f"{team_key} 일정 분석 중..."):
                     briefing_text = generate_team_briefing(
                         current_team['팀명'], current_team['종목'], current_team['리그'], team_news, st.session_state.saved_gemini_key
                     )
@@ -1021,174 +862,204 @@ with tab_sports:
                         now_str = datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S')
                         sports_briefings[team_key] = {"text": briefing_text, "updated_at": now_str}
                         save_sports_briefings(sports_briefings)
-                        st.success("구단 브리핑이 성공적으로 업데이트되었습니다!")
+                        st.success("업데이트 완료!")
                         st.rerun()
 
     if team_key in sports_briefings:
         b_data = sports_briefings[team_key]
-        st.caption(f"🕒 **마지막 업데이트 시각**: {b_data.get('updated_at', '')} (모든 경기 시간은 한국시간 KST 기준)")
+        st.caption(f"🕒 업데이트 시각: {b_data.get('updated_at', '')} (KST 기준)")
         with st.container(border=True):
             st.markdown(b_data.get("text", ""))
-    else:
-        st.info(f"💡 우측 상단의 **[⚡ 실시간 경기 & 구단 브리핑 생성]** 버튼을 누르면 AI가 {team_key}의 **다음 경기 일정(한국시간), 최근 스코어, 구단 이슈**를 실시간으로 분석해 드립니다.")
 
-    st.markdown("---")
-    st.write(f"📰 **{current_team['팀명']} 실시간 경기 뉴스**")
-    if team_news:
-        for n in team_news:
+
+# =============================================================
+# [화면 렌더링 분기: 듀얼뷰(대화면 2열) vs 탭 네비게이션]
+# =============================================================
+
+if st.session_state.dual_view_mode:
+    # ---------------------------------------------------------
+    # 📖 폴드 펼침 대화면 2열 듀얼 뷰 모드
+    # ---------------------------------------------------------
+    st.info("💡 **갤럭시 Z 폴드 대화면 듀얼 뷰 활성화됨** : 좌측(자산·캘린더·구독) / 우측(AI 브리핑·챗봇·스포츠)")
+    
+    col_left, col_right = st.columns([0.5, 0.5])
+    
+    with col_left:
+        with st.container(border=True):
+            render_portfolio_section()
+        
+        with st.container(border=True):
+            render_calendar_section()
+
+        with st.container(border=True):
+            render_subscriptions_section()
+
+        with st.container(border=True):
+            render_market_section()
+
+    with col_right:
+        temp_val, weather_val, humid_val, loc_tag = get_current_weather(
+            current_loc_data.get("lat", 37.2410),
+            current_loc_data.get("lon", 127.1775),
+            current_loc_data.get("name", "경기도 용인시")
+        )
+        st.markdown(f"""
+        <div class="weather-gradient">
+            <div style="font-size: 15px; color: #bae6fd; font-weight: 700;">{loc_tag} 실시간 날씨</div>
+            <div style="font-size: 30px; font-weight: 900; margin-top: 6px;">{weather_val} {temp_val} (습도 {humid_val})</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        with st.container(border=True):
+            render_briefing_section()
+
+        with st.container(border=True):
+            render_chat_section()
+
+        with st.container(border=True):
+            render_sports_section()
+
+else:
+    # ---------------------------------------------------------
+    # 📱 커버 화면 최적화 탭 네비게이션 모드
+    # ---------------------------------------------------------
+    tabs = st.tabs([
+        "🏠 데일리 요약", "💼 포트폴리오", "📅 캘린더", "💳 구독료 관리",
+        "📊 실시간 시황", "📰 주요 뉴스", "💡 AI 브리핑", "🤖 AI 챗봇", "⚽ 스포츠 허브", "📋 데일리 & 날씨"
+    ])
+
+    with tabs[0]:
+        st.subheader("오늘의 핵심 데일리 요약")
+        temp_val, weather_val, humid_val, loc_tag = get_current_weather(
+            current_loc_data.get("lat", 37.2410),
+            current_loc_data.get("lon", 127.1775),
+            current_loc_data.get("name", "경기도 용인시")
+        )
+        st.markdown(f"""
+        <div class="weather-gradient">
+            <div style="font-size: 15px; color: #bae6fd; font-weight: 700;">{loc_tag} 실시간 날씨</div>
+            <div style="font-size: 30px; font-weight: 900; margin-top: 6px; letter-spacing: -0.02em;">{weather_val} {temp_val}</div>
+            <div style="font-size: 14px; color: #e0f2fe; margin-top: 4px;">습도 {humid_val} | 외출 및 출퇴근 추천 날씨</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # To-Do 요약
+        home_todos = load_todos()
+        with st.container(border=True):
+            st.markdown("**✅ 오늘의 할 일 (To-Do)**")
+            if home_todos:
+                for t in home_todos[:3]:
+                    st.markdown(f"• **{t}**")
+            else:
+                st.info("등록된 할 일이 없습니다.")
+
+        # 자산 요약
+        home_portfolio = load_portfolio()
+        p_tickers = [it["티커"] for it in home_portfolio]
+        batch_prices = get_batch_market_data(p_tickers)
+        total_eval_h = 0
+        total_buy_h = 0
+        for it in home_portfolio:
+            cp, _ = batch_prices.get(it["티커"], (None, None))
+            if cp is None: cp = it["매입단가"]
+            total_eval_h += cp * it["보유수량"]
+            total_buy_h += it["매입단가"] * it["보유수량"]
+        diff_h = total_eval_h - total_buy_h
+        rate_h = (diff_h / total_buy_h) * 100 if total_buy_h > 0 else 0
+
+        with st.container(border=True):
+            st.markdown("**💼 내 포트폴리오 요약**")
+            ch1, ch2 = st.columns(2)
+            with ch1: st.metric("총 평가금액", f"{total_eval_h:,.0f}원", f"{rate_h:+.2f}%")
+            with ch2: st.metric("총 평가손익", f"{diff_h:+,.0f}원")
+
+        # 3줄 뉴스
+        quick_news = fetch_google_news("코스피 OR 반도체 OR 연준 금리", max_results=3)
+        with st.container(border=True):
+            st.markdown("**📰 오늘의 핵심 3줄 뉴스**")
+            for qn in quick_news:
+                st.markdown(f"• [{qn['title']}]({qn['link']}) <span style='font-size:12px;color:#94a3b8;'>({qn['source']})</span>", unsafe_allow_html=True)
+
+    with tabs:
+        render_portfolio_section()
+
+    with tabs[2]:
+        render_calendar_section()
+
+    with tabs[3]:
+        render_subscriptions_section()
+
+    with tabs[4]:
+        render_market_section()
+
+    with tabs[5]:
+        st.subheader("📰 실시간 뉴스 피드")
+        user_portfolio = load_portfolio()
+        my_stock_names = [item["종목명"] for item in user_portfolio]
+        category_options = ["📌 [전체] 내 보유 종목 뉴스 모아보기"] + [f"🎯 {name}" for name in my_stock_names] + ["🇰🇷 국내 증시", "🇺🇸 미국 증시", "🤖 AI·반도체"]
+        selected_cat = st.selectbox("뉴스 카테고리 선택", category_options, index=0)
+        query = "코스피 OR 반도체"
+        if selected_cat.startswith("🎯 "): query = selected_cat.replace("🎯 ", "")
+        news_list = fetch_google_news(query, max_results=8)
+        for item in news_list:
             st.markdown(f"""
             <div class="news-card">
-                <a class="news-title" href="{n['link']}" target="_blank">📣 {n['title']}</a>
-                <div class="news-meta">📰 {n['source']} &nbsp;|&nbsp; 🕒 {n['date']}</div>
+                <a class="news-title" href="{item['link']}" target="_blank">🔗 {item['title']}</a>
+                <div class="news-meta">📰 {item['source']} &nbsp;|&nbsp; 🕒 {item['date']}</div>
             </div>
             """, unsafe_allow_html=True)
 
-    # 🔄 내 응원팀 순서 변경 및 우선순위 관리
-    st.markdown("---")
-    with st.expander("🔄 내 응원팀 순서 변경 (우선순위 설정)"):
-        st.write("위쪽에 위치한 팀이 **1순위 대표팀**으로 첫 화면 요약 및 자동 브리핑에 우선 반영됩니다.")
-        for idx, t in enumerate(my_teams):
-            col_t_name, col_up, col_down, col_top = st.columns([0.45, 0.18, 0.18, 0.19])
-            with col_t_name:
-                st.markdown(f"**{idx+1}위**: {t['종목']} {t['팀명']}")
-            with col_up:
-                if idx > 0:
-                    if st.button("⬆️ 위로", key=f"up_{idx}"):
-                        my_teams[idx], my_teams[idx-1] = my_teams[idx-1], my_teams[idx]
-                        save_sports_teams(my_teams)
-                        st.rerun()
-            with col_down:
-                if idx < len(my_teams) - 1:
-                    if st.button("⬇️ 아래", key=f"down_{idx}"):
-                        my_teams[idx], my_teams[idx+1] = my_teams[idx+1], my_teams[idx]
-                        save_sports_teams(my_teams)
-                        st.rerun()
-            with col_top:
-                if idx > 0:
-                    if st.button("⭐ 1순위", key=f"top_{idx}"):
-                        fav = my_teams.pop(idx)
-                        my_teams.insert(0, fav)
-                        save_sports_teams(my_teams)
-                        st.rerun()
+    with tabs[6]:
+        render_briefing_section()
 
-    # ➕ 새 팀 추가 및 삭제
-    st.markdown("---")
-    with st.expander("➕ 새 응원팀 직접 검색 및 추가하기"):
-        with st.form("add_team_form"):
-            sports_type = st.selectbox("종목 선택", ["⚽ 축구", "⚾ 야구", "🏀 농구", "🏐 배구", "🎮 e스포츠", "🏎️ 모터스포츠/기타"])
-            new_team_name = st.text_input("팀명 입력 (예: 토트넘, 한화 이글스, T1)", value="한화 이글스")
-            new_league = st.text_input("리그명 (예: KBO, EPL, LCK, NBA)", value="KBO")
-            new_keyword = st.text_input("뉴스 검색 키워드", value="한화 이글스")
-            
-            if st.form_submit_button("내 응원팀에 추가하기"):
-                if new_team_name.strip():
-                    my_teams.append({
-                        "종목": sports_type,
-                        "팀명": new_team_name.strip(),
-                        "리그": new_league.strip(),
-                        "키워드": new_keyword.strip() if new_keyword.strip() else new_team_name.strip()
-                    })
-                    save_sports_teams(my_teams)
-                    st.success(f"'{new_team_name}' 팀이 성공적으로 추가되었습니다!")
-                    st.rerun()
+    with tabs[7]:
+        render_chat_section()
 
-        if len(my_teams) > 1:
-            del_idx = st.selectbox("삭제할 팀 선택", range(len(my_teams)), format_func=lambda x: f"{my_teams[x]['종목']} {my_teams[x]['팀명']}", key="del_team_sel")
-            if st.button("선택한 팀 삭제", key="btn_del_team"):
-                removed = my_teams.pop(del_idx)
-                save_sports_teams(my_teams)
-                if removed['팀명'] in sports_briefings:
-                    sports_briefings.pop(removed['팀명'])
-                    save_sports_briefings(sports_briefings)
-                st.success(f"'{removed['팀명']}' 팀이 삭제되었습니다.")
-                st.rerun()
+    with tabs[8]:
+        render_sports_section()
 
-# -------------------------------------------------------------
-# TAB 7: 데일리 생산성 & 날씨 (위치 설정 지원)
-# -------------------------------------------------------------
-with tab_daily:
-    st.subheader("📋 데일리 생산성 & 라이프")
-    
-    # 실시간 날씨 카드
-    temp_val, weather_val, humid_val, loc_tag = get_current_weather(
-        current_loc_data.get("lat", 37.2410),
-        current_loc_data.get("lon", 127.1775),
-        current_loc_data.get("name", "경기도 용인시")
-    )
-    st.markdown(f"""
-    <div class="weather-card">
-        <div style="font-size: 16px; font-weight: 700;">{loc_tag} 오늘 날씨</div>
-        <div style="font-size: 30px; font-weight: 900; margin-top: 6px;">{weather_val} {temp_val}</div>
-        <div style="font-size: 14px; color: #e0f2fe; margin-top: 4px;">습도: {humid_val} | 외출 및 출퇴근 추천 날씨</div>
-    </div>
-    """, unsafe_allow_html=True)
+    with tabs[9]:
+        st.subheader("📋 데일리 생산성 & 라이프")
+        temp_val, weather_val, humid_val, loc_tag = get_current_weather(
+            current_loc_data.get("lat", 37.2410),
+            current_loc_data.get("lon", 127.1775),
+            current_loc_data.get("name", "경기도 용인시")
+        )
+        st.markdown(f"""
+        <div class="weather-card">
+            <div style="font-size: 16px; font-weight: 700;">{loc_tag} 오늘 날씨</div>
+            <div style="font-size: 30px; font-weight: 900; margin-top: 6px;">{weather_val} {temp_val} (습도 {humid_val})</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-    # 📍 내 지역 변경 및 GPS 즉시 연동 메뉴
-    with st.expander("📍 날씨 지역 변경 / GPS 위치 설정"):
-        preset_names = list(LOCATION_PRESETS.keys())
-        cur_preset_idx = 0
-        for i, pname in enumerate(preset_names):
-            if LOCATION_PRESETS[pname]["name"] == current_loc_data.get("name"):
-                cur_preset_idx = i
-                break
-        
-        sel_preset = st.selectbox("지역 선택", preset_names, index=cur_preset_idx)
-        c_loc1, c_loc2 = st.columns(2)
-        with c_loc1:
+        with st.expander("📍 날씨 지역 변경 / GPS 위치 설정"):
+            preset_names = list(LOCATION_PRESETS.keys())
+            sel_preset = st.selectbox("지역 선택", preset_names, index=0)
             if st.button("선택 지역으로 날씨 저장"):
                 chosen = LOCATION_PRESETS[sel_preset]
                 save_location(chosen)
                 st.success(f"'{chosen['name']}'(으)로 날씨 위치가 저장되었습니다!")
                 st.rerun()
-        with c_loc2:
-            components.html("""
-            <button onclick="getGPS()" style="background: #0284c7; color: white; border: none; padding: 8px 14px; border-radius: 8px; font-weight: 700; cursor: pointer; width: 100%;">
-                📍 현재 GPS 위치로 자동 설정
-            </button>
-            <script>
-            function getGPS() {
-                if (navigator.geolocation) {
-                    navigator.geolocation.getCurrentPosition(function(pos) {
-                        const lat = pos.coords.latitude.toFixed(4);
-                        const lon = pos.coords.longitude.toFixed(4);
-                        const url = new URL(window.top.location.href);
-                        url.searchParams.set('lat', lat);
-                        url.searchParams.set('lon', lon);
-                        window.top.location.replace(url.href);
-                    }, function(err) {
-                        alert("위치 권한을 허용해 주세요.");
-                    });
-                } else {
-                    alert("GPS를 지원하지 않는 브라우저입니다.");
-                }
-            }
-            </script>
-            """, height=45)
 
-    st.markdown("---")
-    st.subheader("✅ 오늘의 할 일 (To-Do List)")
-    
-    current_todos = load_todos()
-    
-    to_delete = None
-    for idx, todo_item in enumerate(current_todos):
-        col_t1, col_t2 = st.columns([0.85, 0.15])
-        with col_t1:
-            st.write(f"• **{todo_item}**")
-        with col_t2:
-            if st.button("완료", key=f"del_{idx}"):
-                to_delete = idx
+        st.markdown("---")
+        st.subheader("✅ 오늘의 할 일 (To-Do List)")
+        current_todos = load_todos()
+        to_delete = None
+        for idx, todo_item in enumerate(current_todos):
+            col_t1, col_t2 = st.columns([0.85, 0.15])
+            with col_t1: st.write(f"• **{todo_item}**")
+            with col_t2:
+                if st.button("완료", key=f"del_{idx}"): to_delete = idx
+        if to_delete is not None:
+            current_todos.pop(to_delete)
+            save_todos(current_todos)
+            st.rerun()
 
-    if to_delete is not None:
-        current_todos.pop(to_delete)
-        save_todos(current_todos)
-        st.rerun()
-
-    with st.form("new_todo_form"):
-        new_todo = st.text_input("새로운 할 일 입력")
-        if st.form_submit_button("추가하기"):
-            if new_todo.strip():
-                current_todos.append(new_todo.strip())
-                save_todos(current_todos)
-                st.success("할 일이 추가되었습니다!")
-                st.rerun()
+        with st.form("new_todo_form"):
+            new_todo = st.text_input("새로운 할 일 입력")
+            if st.form_submit_button("추가하기"):
+                if new_todo.strip():
+                    current_todos.append(new_todo.strip())
+                    save_todos(current_todos)
+                    st.success("할 일이 추가되었습니다!")
+                    st.rerun()
