@@ -78,9 +78,9 @@ st.markdown("""
     font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
 }
 
-/* 상단 잘림 방지 (padding-top 2.5rem) */
+/* 상단 잘림 방지 (padding-top 2.2rem) */
 .block-container {
-    padding-top: 2.5rem !important;
+    padding-top: 2.2rem !important;
     padding-bottom: 2.5rem !important;
     padding-left: 0.6rem !important;
     padding-right: 0.6rem !important;
@@ -94,8 +94,8 @@ html, body, p, span, div, label, li {
 
 .mori-header {
     margin-top: 0px !important;
-    margin-bottom: 16px !important;
-    padding-bottom: 12px;
+    margin-bottom: 12px !important;
+    padding-bottom: 10px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 .mori-title {
@@ -816,22 +816,26 @@ def render_chat_section():
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    user_input = st.chat_input("AI 비서에게 질문하기...", key="chat_input_field")
-    if user_input:
-        st.session_state.chat_messages.append({"role": "user", "content": user_input})
-        with st.chat_message("user"):
-            st.markdown(user_input)
+    # st.form 기반으로 안전하게 렌더링 (컬럼 내부에서도 100% 충돌 없음)
+    with st.form("chat_input_form", clear_on_submit=True):
+        col_ci1, col_ci2 = st.columns([0.8, 0.2])
+        with col_ci1:
+            user_input = st.text_input("질문 입력", placeholder="AI 비서에게 질문을 입력하세요...", label_visibility="collapsed")
+        with col_ci2:
+            send_btn = st.form_submit_button("전송 🚀", use_container_width=True)
+
+    if send_btn and user_input.strip():
+        user_msg_text = user_input.strip()
+        st.session_state.chat_messages.append({"role": "user", "content": user_msg_text})
 
         if not st.session_state.saved_gemini_key:
-            with st.chat_message("assistant"):
-                st.warning("상단에 Gemini API Key를 입력해 주세요.")
+            st.warning("상단에 Gemini API Key를 입력해 주세요.")
         else:
-            with st.chat_message("assistant"):
-                with st.spinner("AI 비서 답변 생성 중..."):
-                    user_port = load_portfolio()
-                    bot_reply = ask_gemini_chat(st.session_state.chat_messages, user_input, user_port, st.session_state.saved_gemini_key)
-                    st.markdown(bot_reply)
-                    st.session_state.chat_messages.append({"role": "assistant", "content": bot_reply})
+            with st.spinner("AI 비서 답변 생성 중..."):
+                user_port = load_portfolio()
+                bot_reply = ask_gemini_chat(st.session_state.chat_messages, user_msg_text, user_port, st.session_state.saved_gemini_key)
+                st.session_state.chat_messages.append({"role": "assistant", "content": bot_reply})
+                st.rerun()
 
 def render_sports_section():
     st.subheader("🏆 내 응원팀 스포츠 허브")
@@ -890,15 +894,15 @@ if "lat" in st.query_params and "lon" in st.query_params:
 if "saved_gemini_key" not in st.session_state:
     st.session_state.saved_gemini_key = st.secrets.get("GEMINI_API_KEY", "")
 
-if "dual_view_mode" not in st.session_state:
-    st.session_state["dual_view_mode"] = False
+if "view_mode" not in st.session_state:
+    st.session_state["view_mode"] = "📱 탭 모드"
 
 
 # =============================================================
-# [메인 헤더 & 반응형 듀얼 뷰 토글]
+# [메인 헤더 & 확실한 라디오 화면 모드 전환기]
 # =============================================================
 
-col_h1, col_h2 = st.columns([0.62, 0.38])
+col_h1, col_h2 = st.columns([0.55, 0.45])
 with col_h1:
     st.markdown("""
     <div class="mori-header">
@@ -909,14 +913,21 @@ with col_h1:
     """, unsafe_allow_html=True)
 with col_h2:
     st.write("")
-    st.toggle("📖 듀얼뷰 (폴드 펼침)", key="dual_view_mode")
+    selected_view = st.radio(
+        "화면 모드 선택",
+        ["📱 탭 모드", "📖 듀얼뷰 (대화면)"],
+        horizontal=True,
+        key="view_mode_choice"
+    )
+
+is_dual_mode = (selected_view == "📖 듀얼뷰 (대화면)")
 
 
 # =============================================================
 # [화면 렌더링 분기: 듀얼뷰 vs 탭 네비게이션]
 # =============================================================
 
-if st.session_state["dual_view_mode"]:
+if is_dual_mode:
     # ---------------------------------------------------------
     # 📖 폴드 펼침 대화면 2열 듀얼 뷰 모드
     # ---------------------------------------------------------
