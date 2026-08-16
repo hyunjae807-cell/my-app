@@ -56,7 +56,7 @@ def get_mori_app_icon():
     d.line([(cx-11, cy), (cx+11, cy)], fill=sc, width=3)
     d.line([(cx, cy-11), (cx, cy+11)], fill=sc, width=3)
     d.line([(cx-6, cy-6), (cx+6, cy+6)], fill=sc, width=2)
-    d.line([(cx-6, cy-6), (cx+6, cy+6)], fill=sc, width=2)
+    d.line([(cx-6, cy+6), (cx+6, cy-6)], fill=sc, width=2)
 
     return icon_img
 
@@ -378,7 +378,7 @@ def save_subscriptions(subs):
             json.dump(subs, f, ensure_ascii=False, indent=2)
     except Exception as e: st.error(f"구독 정보 저장 오류: {e}")
 
-# 7. 실시간 위치 기반 날씨 데이터 조회 (GPS 및 용인/성남 연동)
+# 7. 실시간 위치 기반 날씨 데이터 조회
 @st.cache_data(ttl=1800)
 def get_current_weather(lat=37.2410, lon=127.1775, default_name="경기도 용인시"):
     try:
@@ -673,7 +673,6 @@ def render_portfolio_section():
 def render_calendar_section():
     st.subheader("📅 통합 스마트 캘린더 & 배당 플래너")
     
-    # 월 배당금 현황 요약
     user_portfolio = load_portfolio()
     cover_shares = 863
     div_per = 270
@@ -873,10 +872,46 @@ def render_sports_section():
 
 
 # =============================================================
-# [화면 렌더링 분기: 듀얼뷰(대화면 2열) vs 탭 네비게이션]
+# 위치 정보 및 세션 안전 초기화
 # =============================================================
 
-if st.session_state.dual_view_mode:
+current_loc_data = load_location()
+
+if "lat" in st.query_params and "lon" in st.query_params:
+    try:
+        gps_lat = float(st.query_params["lat"])
+        gps_lon = float(st.query_params["lon"])
+        current_loc_data = {"name": "현재 GPS 위치", "lat": gps_lat, "lon": gps_lon}
+        save_location(current_loc_data)
+    except Exception: pass
+
+if "saved_gemini_key" not in st.session_state:
+    st.session_state.saved_gemini_key = st.secrets.get("GEMINI_API_KEY", "")
+
+if "dual_view_mode" not in st.session_state:
+    st.session_state["dual_view_mode"] = False
+
+
+# =============================================================
+# [화면 렌더링 분기: 듀얼뷰 vs 탭 네비게이션]
+# =============================================================
+
+col_h1, col_h2 = st.columns([0.7, 0.3])
+with col_h1:
+    st.markdown("""
+    <div class="mori-header">
+        <div class="mori-title">MORI</div>
+        <div class="mori-subtitle">Everything about you, in one place.</div>
+        <div class="mori-time">대한민국 표준시(KST) : """ + datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S') + """</div>
+    </div>
+    """, unsafe_allow_html=True)
+with col_h2:
+    st.write("")
+    is_dual = st.toggle("📖 듀얼뷰 (폴드 펼침 모드)", value=st.session_state.get("dual_view_mode", False))
+    st.session_state["dual_view_mode"] = is_dual
+
+
+if st.session_state.get("dual_view_mode", False):
     # ---------------------------------------------------------
     # 📖 폴드 펼침 대화면 2열 듀얼 뷰 모드
     # ---------------------------------------------------------
@@ -943,7 +978,6 @@ else:
         </div>
         """, unsafe_allow_html=True)
 
-        # To-Do 요약
         home_todos = load_todos()
         with st.container(border=True):
             st.markdown("**✅ 오늘의 할 일 (To-Do)**")
@@ -953,7 +987,6 @@ else:
             else:
                 st.info("등록된 할 일이 없습니다.")
 
-        # 자산 요약
         home_portfolio = load_portfolio()
         p_tickers = [it["티커"] for it in home_portfolio]
         batch_prices = get_batch_market_data(p_tickers)
@@ -973,7 +1006,6 @@ else:
             with ch1: st.metric("총 평가금액", f"{total_eval_h:,.0f}원", f"{rate_h:+.2f}%")
             with ch2: st.metric("총 평가손익", f"{diff_h:+,.0f}원")
 
-        # 3줄 뉴스
         quick_news = fetch_google_news("코스피 OR 반도체 OR 연준 금리", max_results=3)
         with st.container(border=True):
             st.markdown("**📰 오늘의 핵심 3줄 뉴스**")
@@ -983,7 +1015,7 @@ else:
     with tabs:
         render_portfolio_section()
 
-    with tabs[2]:
+    with tabs:
         render_calendar_section()
 
     with tabs[3]:
