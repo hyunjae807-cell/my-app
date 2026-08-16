@@ -14,10 +14,17 @@ import urllib.request
 import xml.etree.ElementTree as ET
 import urllib.parse
 
-# 1. 한국 표준시(KST) 정의
+# 1. pykrx 모듈 안전 임포트 (한국거래소 정밀 연동)
+try:
+    from pykrx import stock
+    HAS_PYKRX = True
+except Exception:
+    HAS_PYKRX = False
+
+# 2. 한국 표준시(KST) 정의
 KST = timezone(timedelta(hours=9))
 
-# 2. 배경화면과 어울리는 프리미엄 MORI 앱 아이콘 생성
+# 3. 배경화면과 어울리는 프리미엄 MORI 앱 아이콘 생성
 def get_mori_app_icon():
     size = 256
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
@@ -54,7 +61,7 @@ def get_mori_app_icon():
 
 mori_icon_image = get_mori_app_icon()
 
-# 3. 모바일 최적화 페이지 설정
+# 4. 모바일 최적화 페이지 설정
 st.set_page_config(
     page_title="MORI",
     page_icon=mori_icon_image,
@@ -62,7 +69,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 4. 갤럭시 폴드(커버화면 & 펼친화면) 반응형 폰트 확대 & 다크 테마 커스텀 CSS
+# 5. 폴드 커버화면 및 다크 테마 커스텀 CSS
 st.markdown("""
 <style>
 @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
@@ -70,21 +77,31 @@ st.markdown("""
     font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
 }
 
-/* 기본 폰트 크기 및 줄간격 시원하게 확대 */
-html, body, p, span, div, label, li {
-    font-size: 16px;
-    line-height: 1.6;
+/* 1. 폴드 좁은 화면 좌우 여백 축소 (가로 표시 영역 최대화) */
+.block-container {
+    padding-top: 1rem !important;
+    padding-bottom: 2.5rem !important;
+    padding-left: 0.6rem !important;
+    padding-right: 0.6rem !important;
+    max-width: 100% !important;
 }
 
+/* 2. 전체 기본 글씨 크기 대폭 확대 */
+html, body, p, span, div, label, li {
+    font-size: 18px !important;
+    line-height: 1.65 !important;
+}
+
+/* 3. MORI 메인 헤더 */
 .mori-header {
     margin-top: -10px;
     margin-bottom: 18px;
     padding-bottom: 14px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 .mori-title {
-    font-size: 36px;
-    font-weight: 900;
+    font-size: 38px !important;
+    font-weight: 900 !important;
     letter-spacing: -0.03em;
     background: linear-gradient(135deg, #60a5fa 0%, #a855f7 50%, #38bdf8 100%);
     -webkit-background-clip: text;
@@ -93,25 +110,24 @@ html, body, p, span, div, label, li {
     line-height: 1.2;
 }
 .mori-subtitle {
-    font-size: 15px;
-    font-weight: 400;
+    font-size: 16px !important;
+    font-weight: 500 !important;
     color: #94a3b8;
     margin-top: 5px;
     letter-spacing: -0.01em;
 }
 .mori-time {
-    font-size: 12px;
+    font-size: 13px !important;
     color: #64748b;
     margin-top: 6px;
 }
 
-/* 다크 글래스 카드 텍스트 가독성 */
+/* 4. 다크 글래스 카드 */
 .summary-card {
-    background: rgba(30, 41, 59, 0.7);
+    background: rgba(30, 41, 59, 0.75);
     backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
     padding: 18px;
     margin-bottom: 14px;
     color: #f8fafc;
@@ -119,20 +135,20 @@ html, body, p, span, div, label, li {
 }
 
 .news-card {
-    background: rgba(30, 41, 59, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 12px;
+    background: rgba(30, 41, 59, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
     padding: 16px;
     margin-bottom: 12px;
     transition: transform 0.2s ease, border-color 0.2s ease;
 }
 .news-card:hover {
     transform: translateY(-2px);
-    border-color: rgba(96, 165, 250, 0.4);
+    border-color: rgba(96, 165, 250, 0.5);
 }
 .news-title {
-    font-size: 16px;
-    font-weight: 700;
+    font-size: 18px !important;
+    font-weight: 700 !important;
     color: #f1f5f9;
     text-decoration: none;
     line-height: 1.5;
@@ -141,15 +157,15 @@ html, body, p, span, div, label, li {
     color: #60a5fa;
 }
 .news-meta {
-    font-size: 12px;
+    font-size: 13px !important;
     color: #94a3b8;
-    margin-top: 6px;
+    margin-top: 8px;
 }
 
 .weather-gradient {
     background: linear-gradient(135deg, #0f766e 0%, #0369a1 50%, #1e1b4b 100%);
-    border: 1px solid rgba(56, 189, 248, 0.3);
-    border-radius: 14px;
+    border: 1px solid rgba(56, 189, 248, 0.4);
+    border-radius: 16px;
     padding: 18px;
     color: white;
     margin-bottom: 14px;
@@ -158,73 +174,75 @@ html, body, p, span, div, label, li {
 
 .sports-card {
     background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-    border: 1px solid rgba(147, 51, 234, 0.3);
-    border-radius: 14px;
+    border: 1px solid rgba(147, 51, 234, 0.4);
+    border-radius: 16px;
     padding: 18px;
     color: white;
     margin-bottom: 14px;
 }
 
-/* 스트림릿 기본 지표(Metric) 글씨 크기 대폭 확대 */
+/* 5. 지표(Metric) 숫자 큼직하게 확대 */
 [data-testid="stMetricValue"] {
-    font-size: 26px !important;
-    font-weight: 800 !important;
+    font-size: 28px !important;
+    font-weight: 900 !important;
 }
 [data-testid="stMetricLabel"] {
-    font-size: 14px !important;
-    font-weight: 600 !important;
+    font-size: 15px !important;
+    font-weight: 700 !important;
     color: #94a3b8 !important;
 }
+[data-testid="stMetricDelta"] {
+    font-size: 14px !important;
+    font-weight: 700 !important;
+}
 
-/* 탭 스타일 고급화 & 글자 크기 확대 */
+/* 6. 탭(Tab) 글자 크기 및 터치 영역 확대 */
 .stTabs [data-baseweb="tab-list"] {
-    gap: 6px;
+    gap: 8px;
 }
 .stTabs [data-baseweb="tab"] {
-    height: 46px;
-    border-radius: 8px;
-    padding: 8px 14px;
-    font-size: 14px;
-    font-weight: 700;
+    height: 48px !important;
+    border-radius: 10px;
+    padding: 8px 16px !important;
+    font-size: 15px !important;
+    font-weight: 800 !important;
     color: #94a3b8;
-    background-color: transparent;
-    border: none;
 }
 .stTabs [aria-selected="true"] {
-    background-color: rgba(59, 130, 246, 0.15) !important;
+    background-color: rgba(59, 130, 246, 0.2) !important;
     color: #60a5fa !important;
     border-bottom: 2px solid #3b82f6 !important;
 }
 
-/* 갤럭시 폴드 커버 화면(좁은 화면 <= 500px) 전용 고해상도 최적화 */
-@media screen and (max-width: 500px) {
-    html, body, p, span, div, label, li {
-        font-size: 16px !important;
-    }
-    .mori-title {
-        font-size: 32px !important;
-    }
-    .mori-subtitle {
-        font-size: 14px !important;
-    }
-    [data-testid="stMetricValue"] {
-        font-size: 24px !important;
-    }
-    [data-testid="stMetricLabel"] {
-        font-size: 14px !important;
-    }
-    .news-title {
-        font-size: 16px !important;
-    }
-    .stTabs [data-baseweb="tab"] {
-        font-size: 14px !important;
-        padding: 6px 10px !important;
-    }
+/* 7. 버튼 및 폼 요소 큼직하게 */
+button {
+    font-size: 16px !important;
+    font-weight: 700 !important;
+    border-radius: 10px !important;
+}
+input, select, textarea {
+    font-size: 16px !important;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# 5. [영구 저장소 파일 관리]
+# 기기 GPS 위치 정보 자동 요청 스크립트
+components.html("""
+<script>
+if (navigator.geolocation && !window.top.location.search.includes('lat=')) {
+    navigator.geolocation.getCurrentPosition(function(pos) {
+        const lat = pos.coords.latitude.toFixed(4);
+        const lon = pos.coords.longitude.toFixed(4);
+        const url = new URL(window.top.location.href);
+        url.searchParams.set('lat', lat);
+        url.searchParams.set('lon', lon);
+        window.top.location.replace(url.href);
+    }, function(err) {});
+}
+</script>
+""", height=0)
+
+# 6. [영구 저장소 파일 관리]
 PORTFOLIO_FILE = "portfolio.json"
 BRIEFING_FILE = "briefing.json"
 TODOS_FILE = "todos.json"
@@ -232,8 +250,8 @@ SPORTS_FILE = "sports_teams.json"
 SPORTS_BRIEFINGS_FILE = "sports_briefings.json"
 
 DEFAULT_PORTFOLIO = [
-    {"종목명": "KODEX AI반도체TOP2플러스", "티커": "395160.KS", "매입단가": 13234.0, "보유수량": 126},
-    {"종목명": "KODEX 200타겟위클리커버드콜", "티커": "498400.KS", "매입단가": 13012.0, "보유수량": 863}
+    {"종목명": "KODEX AI반도체TOP2플러스", "티커": "395160", "매입단가": 13234.0, "보유수량": 126},
+    {"종목명": "KODEX 200타겟위클리커버드콜", "티커": "498400", "매입단가": 13012.0, "보유수량": 863}
 ]
 
 DEFAULT_SPORTS_TEAMS = [
@@ -316,78 +334,11 @@ def save_sports_briefings(briefings):
             json.dump(briefings, f, ensure_ascii=False, indent=2)
     except Exception as e: pass
 
-# 6. 아침 7시 시스템 알람 컴포넌트
-alarm_component = """
-<div id="alarmCard" style="background: rgba(30, 41, 59, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(59, 130, 246, 0.3); padding: 14px; border-radius: 12px; color: white; margin-bottom: 12px; transition: all 0.3s ease;">
-    <div style="font-weight: 700; font-size: 13px; color: #60a5fa; margin-bottom: 2px;">시스템 알람 설정 (오전 7:00 KST)</div>
-    <div style="font-size: 11px; color: #94a3b8; margin-bottom: 8px;">버튼을 누르면 테스트 알람이 울리고 설정창이 자동으로 닫힙니다.</div>
-    <button id="alarmBtn" onclick="initAlarm()" style="background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border: none; padding: 7px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; width: 100%;">
-        알람 켜기 & 테스트
-    </button>
-</div>
-
-<script>
-function hideCard() {
-    const card = document.getElementById("alarmCard");
-    if (card) card.style.display = "none";
-}
-
-function playAlarmSound() {
-    try {
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.type = "sine";
-        osc.frequency.setValueAtTime(880, audioCtx.currentTime);
-        gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
-        osc.start();
-        osc.stop(audioCtx.currentTime + 1.2);
-    } catch(e) {}
-}
-
-function triggerSystemNotification() {
-    playAlarmSound();
-    if (Notification.permission === "granted") {
-        new Notification("🌅 [MORI] 오늘의 모닝 브리핑 도착!", {
-            body: "코스피 및 뉴욕증시 최신 시황과 핵심 뉴스를 확인하세요.",
-            icon: "https://img.icons8.com/color/96/bullish.png"
-        });
-    }
-}
-
-function checkTimeForAlarm() {
-    const now = new Date();
-    if (now.getHours() === 7 && now.getMinutes() === 0 && now.getSeconds() === 0) {
-        triggerSystemNotification();
-    }
-}
-
-function initAlarm() {
-    if (!("Notification" in window)) return alert("알림을 지원하지 않는 브라우저입니다.");
-    Notification.requestPermission().then(permission => {
-        if (permission === "granted") {
-            localStorage.setItem("alarm_enabled", "true");
-            triggerSystemNotification();
-            setInterval(checkTimeForAlarm, 1000);
-            setTimeout(hideCard, 500);
-        }
-    });
-}
-
-if (Notification.permission === "granted" || localStorage.getItem("alarm_enabled") === "true") {
-    hideCard();
-    setInterval(checkTimeForAlarm, 1000);
-}
-</script>
-"""
-
-# 7. 실시간 날씨 데이터 조회 (용인시 기준)
+# 7. 실시간 위치 기반 날씨 데이터 조회 (GPS 및 용인시 기본값)
 @st.cache_data(ttl=1800)
-def get_yongin_weather():
+def get_current_weather(lat=37.2410, lon=127.1775):
     try:
-        url = "https://api.open-meteo.com/v1/forecast?latitude=37.2410&longitude=127.1775&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=Asia%2FTokyo"
+        url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto"
         res = requests.get(url, timeout=4).json()
         current = res.get("current", {})
         temp = current.get("temperature_2m", 28.0)
@@ -400,15 +351,45 @@ def get_yongin_weather():
         elif code in (51, 53, 55, 61, 63, 65, 80, 81, 82): weather_desc = "비 🌧️"
         elif code in (71, 73, 75, 85, 86): weather_desc = "눈 ❄️"
         
-        return f"{temp:.1f}°C", weather_desc, f"{humidity}%"
+        loc_label = "📍 현재 내 위치"
+        if abs(lat - 37.2410) < 0.05 and abs(lon - 127.1775) < 0.05:
+            loc_label = "📍 경기도 용인시"
+            
+        return f"{temp:.1f}°C", weather_desc, f"{humidity}%", loc_label
     except Exception:
-        return "28.0°C", "맑음 ☀️", "60%"
+        return "28.0°C", "맑음 ☀️", "60%", "📍 경기도 용인시"
 
-# 8. 실시간 주가 및 뉴스 로딩 함수
+# 8. [pykrx + yfinance 하이브리드 엔진] 실시간 주가 로딩 함수
 @st.cache_data(ttl=60)
 def get_live_market_data(ticker_symbol):
+    clean_code = str(ticker_symbol).replace(".KS", "").replace(".KQ", "").strip()
+
+    # 1) 국내 6자리 종목/ETF는 pykrx로 정밀 조회 (한국거래소 직접 연동)
+    if clean_code.isdigit() and len(clean_code) == 6 and HAS_PYKRX:
+        try:
+            today_dt = datetime.now(KST)
+            start_dt = today_dt - timedelta(days=7)
+            s_str = start_dt.strftime("%Y%m%d")
+            e_str = today_dt.strftime("%Y%m%d")
+            
+            df = stock.get_market_ohlcv_by_date(s_str, e_str, clean_code)
+            if not df.empty and len(df) >= 2:
+                cur_close = float(df['종가'].iloc[-1])
+                prev_close = float(df['종가'].iloc[-2])
+                pct = ((cur_close - prev_close) / prev_close) * 100 if prev_close > 0 else 0.0
+                return cur_close, pct
+            elif not df.empty and len(df) == 1:
+                return float(df['종가'].iloc[-1]), 0.0
+        except Exception:
+            pass
+
+    # 2) 해외 종목(NVDA, 지수 등) 및 pykrx 백업은 yfinance로 안정적 조회
     try:
-        t = yf.Ticker(ticker_symbol)
+        yf_symbol = ticker_symbol
+        if clean_code.isdigit() and len(clean_code) == 6 and not (yf_symbol.endswith(".KS") or yf_symbol.endswith(".KQ")):
+            yf_symbol = f"{clean_code}.KS"
+
+        t = yf.Ticker(yf_symbol)
         hist = t.history(period="2d")
         if len(hist) >= 2:
             current = hist['Close'].iloc[-1]
@@ -457,11 +438,11 @@ def analyze_portfolio_image(image_bytes, api_key):
     base64_img = base64.b64encode(image_bytes).decode('utf-8')
     prompt = """
     이 이미지는 증권사 주식/ETF 잔고 화면입니다.
-    보유 중인 종목명, 야후파이낸스 티커(국내 종목/ETF는 6자리코드.KS 또는 .KQ, 미국 주식은 알파벳), 평균 매입단가(숫자), 보유 수량(정수)을 추출해주세요.
+    보유 중인 종목명, 야후파이낸스 또는 한국거래소 티커(국내 종목/ETF는 6자리코드, 미국 주식은 알파벳), 평균 매입단가(숫자), 보유 수량(정수)을 추출해주세요.
     반드시 순수 JSON 배열 형식으로만 응답해주세요:
     [
-        {"종목명": "KODEX AI반도체TOP2플러스", "티커": "395160.KS", "매입단가": 13234.0, "보유수량": 126},
-        {"종목명": "KODEX 200타겟위클리커버드콜", "티커": "498400.KS", "매입단가": 13012.0, "보유수량": 863}
+        {"종목명": "KODEX AI반도체TOP2플러스", "티커": "395160", "매입단가": 13234.0, "보유수량": 126},
+        {"종목명": "KODEX 200타겟위클리커버드콜", "티커": "498400", "매입단가": 13012.0, "보유수량": 863}
     ]
     """
     payload = {"contents": [{"parts": [{"text": prompt}, {"inline_data": {"mime_type": "image/jpeg", "data": base64_img}}]}]}
@@ -602,7 +583,51 @@ def ask_gemini_chat(chat_history, user_msg, portfolio_items, api_key):
 
 
 # =============================================================
-# 메인 UI 렌더링 (MORI 프리미엄 헤더)
+# 위치 좌표 파싱 및 자동 초기화
+# =============================================================
+
+# 1) GPS 좌표 추출
+query_lat = float(st.query_params.get("lat", 37.2410))
+query_lon = float(st.query_params.get("lon", 127.1775))
+
+if "saved_gemini_key" not in st.session_state:
+    st.session_state.saved_gemini_key = st.secrets.get("GEMINI_API_KEY", "")
+
+# 2) [최초 앱 실행 시 1회 AI 자동 생성 트리거]
+if "auto_ai_initialized" not in st.session_state:
+    st.session_state.auto_ai_initialized = True
+    g_key = st.session_state.saved_gemini_key
+    if g_key:
+        s_b_text, s_b_time = load_briefing()
+        today_date_str = datetime.now(KST).strftime('%Y년 %m월 %d일')
+        if not s_b_text or (s_b_time and today_date_str not in s_b_time):
+            with st.spinner("🌅 모닝 AI 맞춤 증시 브리핑을 자동 생성 중입니다..."):
+                recent_news_auto = fetch_google_news("코스피 OR 반도체 OR 연준 금리 OR 엔비디아", max_results=12)
+                user_port_auto = load_portfolio()
+                auto_res, st_code = generate_ai_briefing(recent_news_auto, user_port_auto, g_key)
+                if st_code == "SUCCESS" and auto_res:
+                    now_str = datetime.now(KST).strftime('%Y년 %m월 %d일 %H:%M:%S')
+                    save_briefing(auto_res, now_str)
+
+        teams_init = load_sports_teams()
+        sports_brief_init = load_sports_briefings()
+        if teams_init:
+            primary_team = teams_init[0]
+            p_name = primary_team["팀명"]
+            today_ymd = datetime.now(KST).strftime('%Y-%m-%d')
+            if p_name not in sports_brief_init or (sports_brief_init[p_name].get("updated_at") and today_ymd not in sports_brief_init[p_name].get("updated_at")):
+                with st.spinner(f"⚽ 1순위 응원팀 '{p_name}' 최신 경기 일정을 AI가 분석 중입니다..."):
+                    p_query = f'"{p_name}" AND (경기 OR 일정 OR 결과 OR 승리 OR 패배 OR 하이라이트)'
+                    p_news = fetch_google_news(p_query, max_results=8)
+                    p_brief_res = generate_team_briefing(p_name, primary_team['종목'], primary_team['리그'], p_news, g_key)
+                    if p_brief_res:
+                        now_str = datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S')
+                        sports_brief_init[p_name] = {"text": p_brief_res, "updated_at": now_str}
+                        save_sports_briefings(sports_brief_init)
+
+
+# =============================================================
+# 메인 UI 렌더링 (MORI 프리미엄 대화면 헤더)
 # =============================================================
 
 st.markdown("""
@@ -612,11 +637,6 @@ st.markdown("""
     <div class="mori-time">대한민국 표준시(KST) : """ + datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S') + """</div>
 </div>
 """, unsafe_allow_html=True)
-
-components.html(alarm_component, height=85)
-
-if "saved_gemini_key" not in st.session_state:
-    st.session_state.saved_gemini_key = st.secrets.get("GEMINI_API_KEY", "")
 
 # 8개 탭 구성
 tab_home, tab_portfolio, tab_market, tab_news, tab_briefing, tab_chat, tab_sports, tab_daily = st.tabs(
@@ -629,13 +649,13 @@ tab_home, tab_portfolio, tab_market, tab_news, tab_briefing, tab_chat, tab_sport
 with tab_home:
     st.subheader("오늘의 핵심 데일리 요약")
     
-    # 1) 날씨 요약 카드
-    temp_val, weather_val, humid_val = get_yongin_weather()
+    # 1) GPS 연동 실시간 위치 날씨 카드
+    temp_val, weather_val, humid_val, loc_tag = get_current_weather(query_lat, query_lon)
     st.markdown(f"""
     <div class="weather-gradient">
-        <div style="font-size: 13px; color: #bae6fd; font-weight: 600;">📍 경기도 용인시 날씨</div>
-        <div style="font-size: 26px; font-weight: 800; margin-top: 4px; letter-spacing: -0.02em;">{weather_val} {temp_val}</div>
-        <div style="font-size: 12px; color: #e0f2fe; margin-top: 2px;">습도 {humid_val} | 외출 및 출퇴근 추천 날씨</div>
+        <div style="font-size: 15px; color: #bae6fd; font-weight: 700;">{loc_tag} 실시간 날씨</div>
+        <div style="font-size: 30px; font-weight: 900; margin-top: 6px; letter-spacing: -0.02em;">{weather_val} {temp_val}</div>
+        <div style="font-size: 14px; color: #e0f2fe; margin-top: 4px;">습도 {humid_val} | 외출 및 출퇴근 추천 날씨</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -645,7 +665,7 @@ with tab_home:
         st.markdown("**✅ 오늘의 할 일 (To-Do)**")
         if home_todos:
             for t in home_todos[:3]:
-                st.markdown(f"• {t}")
+                st.markdown(f"• **{t}**")
             if len(home_todos) > 3:
                 st.caption(f"외 {len(home_todos)-3}개의 할 일이 더 있습니다. (📋 데일리 탭에서 관리)")
         else:
@@ -672,26 +692,26 @@ with tab_home:
         with ch2:
             st.metric("총 평가손익", f"{diff_h:+,.0f}원")
 
-    # 4) 스포츠 응원팀 다음 경기 일정 요약 (한국 시간 기준)
+    # 4) 1순위 스포츠 응원팀 다음 경기 일정 요약 (한국 시간 기준)
     home_teams = load_sports_teams()
     home_sb = load_sports_briefings()
     first_team = home_teams[0] if home_teams else None
     
     if first_team:
         with st.container(border=True):
-            st.markdown(f"**{first_team['종목']} {first_team['팀명']} ({first_team['리그']}) 일정 요약**")
+            st.markdown(f"**⭐ 1순위: {first_team['종목']} {first_team['팀명']} ({first_team['리그']}) 일정**")
             if first_team["팀명"] in home_sb:
                 briefing_preview = home_sb[first_team["팀명"]].get("text", "")
                 st.markdown(briefing_preview[:280] + ("..." if len(briefing_preview) > 280 else ""))
             else:
-                st.caption("🏆 2026/27 시즌 주요 경기 진행 중 (⚽ 스포츠 허브 탭에서 실시간 업데이트 확인)")
+                st.caption("🏆 2026/27 시즌 주요 경기 진행 중 (⚽ 스포츠 허브 탭에서 확인)")
 
     # 5) 실시간 간단 뉴스 헤드라인 (3줄 요약)
     quick_news = fetch_google_news("코스피 OR 반도체 OR 연준 금리", max_results=3)
     with st.container(border=True):
         st.markdown("**📰 오늘의 핵심 3줄 뉴스**")
         for qn in quick_news:
-            st.markdown(f"• [{qn['title']}]({qn['link']}) <span style='font-size:11px;color:#94a3b8;'>({qn['source']})</span>", unsafe_allow_html=True)
+            st.markdown(f"• [{qn['title']}]({qn['link']}) <span style='font-size:12px;color:#94a3b8;'>({qn['source']})</span>", unsafe_allow_html=True)
 
 # -------------------------------------------------------------
 # TAB 1: 내 실제 포트폴리오 & 배당금 계산기
@@ -708,7 +728,8 @@ with tab_portfolio:
         if cur_p is None:
             cur_p = item["매입단가"]
 
-        is_krw = ".KS" in item["티커"] or ".KQ" in item["티커"]
+        clean_t = str(item["티커"]).replace(".KS", "").replace(".KQ", "").strip()
+        is_krw = clean_t.isdigit()
         eval_amount = cur_p * item["보유수량"]
         buy_amount = item["매입단가"] * item["보유수량"]
         profit_amount = eval_amount - buy_amount
@@ -781,7 +802,7 @@ with tab_portfolio:
                             st.error(f"오류: {status}")
 
 # -------------------------------------------------------------
-# TAB 2: 실시간 시황
+# TAB 2: 실시간 시황 (pykrx 연동)
 # -------------------------------------------------------------
 with tab_market:
     st.subheader("🌐 글로벌 & 국내 주요 지수 (실시간)")
@@ -799,10 +820,10 @@ with tab_market:
         st.metric("브렌트유 (Oil)", f"${oil_p:.2f}" if oil_p else "$88.59", f"{oil_d:+.2f}%" if oil_d else "+1.75%")
 
     st.markdown("---")
-    st.subheader("🏢 주요 대형주 시세")
-    samsung_p, samsung_d = get_live_market_data("005930.KS")
-    hynix_p, hynix_d = get_live_market_data("000660.KS")
-    hyundai_p, hyundai_d = get_live_market_data("005380.KS")
+    st.subheader("🏢 주요 대형주 시세 (한국거래소 pykrx 연동)")
+    samsung_p, samsung_d = get_live_market_data("005930")
+    hynix_p, hynix_d = get_live_market_data("000660")
+    hyundai_p, hyundai_d = get_live_market_data("005380")
     nvda_p, nvda_d = get_live_market_data("NVDA")
     
     ca, cb = st.columns(2)
@@ -873,7 +894,7 @@ with tab_briefing:
         
     c_btn1, c_btn2 = st.columns(2)
     with c_btn1:
-        if st.button("✨ 오늘자 AI 브리핑 생성"):
+        if st.button("✨ 오늘자 AI 브리핑 재생성"):
             if not st.session_state.saved_gemini_key:
                 st.warning("API Key를 입력해 주세요.")
             else:
@@ -893,7 +914,7 @@ with tab_briefing:
         if saved_briefing_text:
             clean_speech = saved_briefing_text.replace("#", "").replace("*", "").replace("\n", " ").replace('"', '')[:300]
             tts_html = f"""
-            <button onclick="speakBriefing()" style="background-color: #8b5cf6; color: white; border: none; padding: 9px 15px; border-radius: 8px; font-weight: 600; cursor: pointer; width: 100%;">
+            <button onclick="speakBriefing()" style="background-color: #8b5cf6; color: white; border: none; padding: 10px 16px; border-radius: 8px; font-weight: 700; cursor: pointer; width: 100%;">
                 🔊 음성으로 듣기 (TTS)
             </button>
             <script>
@@ -975,7 +996,7 @@ with tab_sports:
     my_teams = load_sports_teams()
     sports_briefings = load_sports_briefings()
     
-    team_names = [f"{t['종목']} {t['팀명']} ({t['리그']})" for t in my_teams]
+    team_names = [f"{idx+1}. {t['종목']} {t['팀명']} ({t['리그']})" for idx, t in enumerate(my_teams)]
     selected_team_idx = st.selectbox("응원하는 팀 선택", range(len(team_names)), format_func=lambda x: team_names[x])
     
     current_team = my_teams[selected_team_idx]
@@ -1022,6 +1043,35 @@ with tab_sports:
             </div>
             """, unsafe_allow_html=True)
 
+    # 🔄 [신규] 내 응원팀 순서 변경 및 우선순위 관리
+    st.markdown("---")
+    with st.expander("🔄 내 응원팀 순서 변경 (우선순위 설정)"):
+        st.write("위쪽에 위치한 팀이 **1순위 대표팀**으로 첫 화면 요약 및 자동 브리핑에 우선 반영됩니다.")
+        for idx, t in enumerate(my_teams):
+            col_t_name, col_up, col_down, col_top = st.columns([0.45, 0.18, 0.18, 0.19])
+            with col_t_name:
+                st.markdown(f"**{idx+1}위**: {t['종목']} {t['팀명']}")
+            with col_up:
+                if idx > 0:
+                    if st.button("⬆️ 위로", key=f"up_{idx}"):
+                        my_teams[idx], my_teams[idx-1] = my_teams[idx-1], my_teams[idx]
+                        save_sports_teams(my_teams)
+                        st.rerun()
+            with col_down:
+                if idx < len(my_teams) - 1:
+                    if st.button("⬇️ 아래", key=f"down_{idx}"):
+                        my_teams[idx], my_teams[idx+1] = my_teams[idx+1], my_teams[idx]
+                        save_sports_teams(my_teams)
+                        st.rerun()
+            with col_top:
+                if idx > 0:
+                    if st.button("⭐ 1순위", key=f"top_{idx}"):
+                        fav = my_teams.pop(idx)
+                        my_teams.insert(0, fav)
+                        save_sports_teams(my_teams)
+                        st.rerun()
+
+    # ➕ 새 팀 추가 및 삭제
     st.markdown("---")
     with st.expander("➕ 새 응원팀 직접 검색 및 추가하기"):
         with st.form("add_team_form"):
@@ -1054,17 +1104,17 @@ with tab_sports:
                 st.rerun()
 
 # -------------------------------------------------------------
-# TAB 7: 데일리 생산성 & 날씨 (용인시 기준)
+# TAB 7: 데일리 생산성 & 날씨 (GPS 연동)
 # -------------------------------------------------------------
 with tab_daily:
     st.subheader("📋 데일리 생산성 & 라이프")
     
-    temp_val, weather_val, humid_val = get_yongin_weather()
+    temp_val, weather_val, humid_val, loc_tag = get_current_weather(query_lat, query_lon)
     st.markdown(f"""
     <div class="weather-card">
-        <div style="font-size: 16px; font-weight: 700;">📍 경기도 용인시 오늘 날씨</div>
-        <div style="font-size: 24px; font-weight: 800; margin-top: 6px;">{weather_val} {temp_val}</div>
-        <div style="font-size: 12px; color: #e0f2fe; margin-top: 4px;">습도: {humid_val} | 외출 및 출퇴근 추천 날씨</div>
+        <div style="font-size: 16px; font-weight: 700;">{loc_tag} 오늘 날씨</div>
+        <div style="font-size: 30px; font-weight: 900; margin-top: 6px;">{weather_val} {temp_val}</div>
+        <div style="font-size: 14px; color: #e0f2fe; margin-top: 4px;">습도: {humid_val} | 외출 및 출퇴근 추천 날씨</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -1077,7 +1127,7 @@ with tab_daily:
     for idx, todo_item in enumerate(current_todos):
         col_t1, col_t2 = st.columns([0.85, 0.15])
         with col_t1:
-            st.write(f"• {todo_item}")
+            st.write(f"• **{todo_item}**")
         with col_t2:
             if st.button("완료", key=f"del_{idx}"):
                 to_delete = idx
