@@ -70,7 +70,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 5. 폴드 커버화면 및 다크 테마 커스텀 CSS (상단 잘림 완벽 방지)
+# 5. 폴드 커버화면 및 다크 테마 커스텀 CSS (상단 여백 넉넉하게 설정)
 st.markdown("""
 <style>
 @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
@@ -961,14 +961,15 @@ if st.session_state.get("dual_view_mode", False):
 
 else:
     # ---------------------------------------------------------
-    # 📱 커버 화면 최적화 탭 네비게이션 모드 (10개 탭 정상 인덱스)
+    # 📱 커버 화면 최적화 탭 네비게이션 모드 (개별 변수 언패킹으로 에러 완전 제거)
     # ---------------------------------------------------------
-    tabs = st.tabs([
+    (tab_home, tab_port, tab_cal, tab_subs, tab_mkt,
+     tab_news, tab_brief, tab_chat, tab_sport, tab_day) = st.tabs([
         "🏠 데일리 요약", "💼 포트폴리오", "📅 캘린더", "💳 구독료 관리",
         "📊 실시간 시황", "📰 주요 뉴스", "💡 AI 브리핑", "🤖 AI 챗봇", "⚽ 스포츠 허브", "📋 데일리 & 날씨"
     ])
 
-    with tabs[0]:
+    with tab_home:
         st.subheader("오늘의 핵심 데일리 요약")
         temp_val, weather_val, humid_val, loc_tag = get_current_weather(
             current_loc_data.get("lat", 37.2410),
@@ -1017,19 +1018,19 @@ else:
             for qn in quick_news:
                 st.markdown(f"• [{qn['title']}]({qn['link']}) <span style='font-size:12px;color:#94a3b8;'>({qn['source']})</span>", unsafe_allow_html=True)
 
-    with tabs:
+    with tab_port:
         render_portfolio_section()
 
-    with tabs:
+    with tab_cal:
         render_calendar_section()
 
-    with tabs:
+    with tab_subs:
         render_subscriptions_section()
 
-    with tabs[4]:
+    with tab_mkt:
         render_market_section()
 
-    with tabs[5]:
+    with tab_news:
         st.subheader("📰 실시간 뉴스 피드")
         user_portfolio = load_portfolio()
         my_stock_names = [item["종목명"] for item in user_portfolio]
@@ -1046,16 +1047,16 @@ else:
             </div>
             """, unsafe_allow_html=True)
 
-    with tabs[6]:
+    with tab_brief:
         render_briefing_section()
 
-    with tabs[7]:
+    with tab_chat:
         render_chat_section()
 
-    with tabs[8]:
+    with tab_sport:
         render_sports_section()
 
-    with tabs[9]:
+    with tab_day:
         st.subheader("📋 데일리 생산성 & 라이프")
         temp_val, weather_val, humid_val, loc_tag = get_current_weather(
             current_loc_data.get("lat", 37.2410),
