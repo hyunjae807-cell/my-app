@@ -8,6 +8,7 @@ import json
 import os
 import base64
 import io
+import calendar
 import concurrent.futures
 from PIL import Image, ImageDraw
 from datetime import datetime, timezone, timedelta
@@ -619,257 +620,56 @@ def ask_gemini_chat(chat_history, user_msg, portfolio_items, api_key):
         return fb_text
     return f"⚠️ AI 비서 응답 중 오류가 발생했습니다: {text if text else status}"
 
+# 10. [데일리 요약용 월간 달력 HTML 위젯 생성기]
+def render_monthly_calendar_widget(year=2026, month=8, today_day=16):
+    events = {
+        15: [{"title": "SPOTV결제", "color": "#a855f7"}],
+        16: [{"title": "오늘", "color": "#3b82f6"}],
+        22: [{"title": "넷플릭스", "color": "#ef4444"}],
+        23: [{"title": "오픽발표", "color": "#f59e0b"}],
+        26: [{"title": "NVDA실적", "color": "#10b981"}],
+        28: [{"title": "잭슨홀연설", "color": "#06b6d4"}]
+    }
 
-# =============================================================
-# [공통 모듈 렌더링 함수들]
-# =============================================================
-
-def render_portfolio_section():
-    st.subheader("💼 내 주식·ETF 포트폴리오")
-    user_portfolio = load_portfolio()
+    cal = calendar.monthcalendar(year, month)
+    days_header = ["월", "화", "수", "목", "금", "토", "일"]
     
-    port_tickers = [item["티커"] for item in user_portfolio]
-    live_prices_map = get_batch_market_data(port_tickers)
-
-    total_eval_krw = 0
-    total_buy_krw = 0
-    calculated_rows = []
-
-    for item in user_portfolio:
-        cur_p, _ = live_prices_map.get(item["티커"], (None, None))
-        if cur_p is None:
-            cur_p = item["매입단가"]
-
-        clean_t = str(item["티커"]).replace(".KS", "").replace(".KQ", "").strip()
-        is_krw = clean_t.isdigit()
-        eval_amount = cur_p * item["보유수량"]
-        buy_amount = item["매입단가"] * item["보유수량"]
-        profit_amount = eval_amount - buy_amount
-        profit_rate = (profit_amount / buy_amount) * 100 if buy_amount > 0 else 0
-
-        if is_krw:
-            total_eval_krw += eval_amount
-            total_buy_krw += buy_amount
-
-        calculated_rows.append({
-            "종목명": item["종목명"],
-            "수량": f"{item['보유수량']:,}주",
-            "매입가": f"{item['매입단가']:,.0f}원" if is_krw else f"${item['매입단가']:.2f}",
-            "현재가": f"{cur_p:,.0f}원" if is_krw else f"${cur_p:.2f}",
-            "평가금액": f"{eval_amount:,.0f}원" if is_krw else f"${eval_amount:,.2f}",
-            "수익률": f"{profit_rate:+.2f}%"
-        })
-
-    total_profit_krw = total_eval_krw - total_buy_krw
-    total_rate_krw = (total_profit_krw / total_buy_krw) * 100 if total_buy_krw > 0 else 0
-
-    c1, c2 = st.columns(2)
-    with c1:
-        st.metric("총 평가금액", f"{total_eval_krw:,.0f}원", f"{total_rate_krw:+.2f}%")
-    with c2:
-        st.metric("총 평가손익", f"{total_profit_krw:+,.0f}원", f"매입총액: {total_buy_krw:,.0f}원")
-
-    st.dataframe(pd.DataFrame(calculated_rows), use_container_width=True)
-
-def render_calendar_section():
-    st.subheader("📅 통합 스마트 캘린더 & 배당 플래너")
-    
-    user_portfolio = load_portfolio()
-    cover_shares = 863
-    div_per = 270
-    for p in user_portfolio:
-        if "커버드콜" in p["종목명"]:
-            cover_shares = p["보유수량"]
-            
-    monthly_est_div = cover_shares * div_per
-    
-    st.markdown(f"""
-    <div class="subs-card">
-        <div style="font-size: 15px; color: #e9d5ff; font-weight: 700;">💰 월 배당금(분배금) 예상 수령액</div>
-        <div style="font-size: 30px; font-weight: 900; margin-top: 4px;">{monthly_est_div:,.0f}원 / 월</div>
-        <div style="font-size: 14px; color: #d8b4fe; margin-top: 4px;">KODEX 200위클리커버드콜({cover_shares:,}주) 기준 | 연간 약 {monthly_est_div*12:,.0f}원</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    timeline_events = [
-        {"날짜": "2026-08-22", "분류": "🎬 구독 결제", "내용": "넷플릭스 (17,000원) 결제일 (D-6)", "중요도": "🟡 정기"},
-        {"날짜": "2026-08-26", "분류": "🎯 AI반도체", "내용": "엔비디아(NVDA) 2분기 실적 발표 (미국)", "중요도": "🔴 핵심"},
-        {"날짜": "2026-08-28", "분류": "🌐 거시경제", "내용": "미국 잭슨홀 심포지엄 (파월 의장 연설)", "중요도": "🔴 높음"},
-        {"날짜": "2026-09-01", "분류": "💰 배당금 입금", "내용": "KODEX 커버드콜 월 분배금 입금 예정일", "중요도": "🟢 수익"},
-        {"날짜": "2026-09-01", "분류": "🎵 구독 결제", "내용": "Spotify (11,990원) 결제일", "중요도": "🟡 정기"},
-        {"날짜": "2026-09-08", "분류": "🛍️ 구독 결제", "내용": "쿠팡 와우멤버십 (7,890원) 결제일", "중요도": "🟡 정기"},
-        {"날짜": "2026-09-10", "분류": "🎯 파생만기", "내용": "국내 선물·옵션 동시 만기일 (네 마녀의 날)", "중요도": "🔴 변동성"},
-        {"날짜": "2026-09-15", "분류": "⚽ 구독 결제", "내용": "SPOTV NOW (19,900원) 결제일", "중요도": "🟡 정기"},
-        {"날짜": "2026-09-16", "분류": "🌐 거시경제", "내용": "미국 9월 FOMC 기준금리 결정 회의", "중요도": "🔴 높음"}
-    ]
-    st.write("📋 **통합 일정 타임라인**")
-    st.dataframe(pd.DataFrame(timeline_events), use_container_width=True)
-
-def render_subscriptions_section():
-    st.subheader("💳 고정 구독료 관리자")
-    subs_list = load_subscriptions()
-    
-    total_sub_monthly = sum(s["월요금"] for s in subs_list)
-    monthly_est_div = 863 * 270
-    coverage_rate = (monthly_est_div / total_sub_monthly * 100) if total_sub_monthly > 0 else 0
-
-    c_s1, c_s2 = st.columns(2)
-    with c_s1:
-        st.metric("월 고정 구독료 합계", f"{total_sub_monthly:,.0f}원", f"총 {len(subs_list)}개 서비스")
-    with c_s2:
-        st.metric("배당금 방어율", f"{coverage_rate:.1f}%", f"월 배당 {monthly_est_div:,.0f}원")
-
-    st.markdown(f"""
-    <div class="summary-card" style="border-left: 4px solid #10b981;">
-        <div style="font-weight: 700; color: #34d399;">🛡️ 배당금 방어 성공!</div>
-        <div style="font-size: 15px; color: #cbd5e1; margin-top: 4px;">
-            매월 발생하는 커버드콜 배당금({monthly_est_div:,.0f}원)이 고정 구독료({total_sub_monthly:,.0f}원)를 초과하여 <b>모든 OTT 및 멤버십을 배당금만으로 전액 무료 충당</b>하고 있습니다.
+    html = f"""
+    <div style="background: rgba(30, 41, 59, 0.75); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 14px; margin-bottom: 14px;">
+        <div style="font-size: 16px; font-weight: 800; color: #f8fafc; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+            <span>📅 {year}년 {month}월 스마트 일정 캘린더</span>
+            <span style="font-size: 13px; color: #60a5fa; font-weight: 700;">오늘: {month}월 {today_day}일</span>
         </div>
-    </div>
-    """, unsafe_allow_html=True)
+        <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; text-align: center; font-size: 12px; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">
+    """
+    for d in days_header:
+        html += f"<div>{d}</div>"
+    html += "</div><div style='display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; text-align: center;'>"
 
-    for idx, s in enumerate(subs_list):
-        col_name, col_cost, col_dday = st.columns([0.5, 0.25, 0.25])
-        with col_name:
-            st.markdown(f"**{s['카테고리']} {s['서비스']}**")
-        with col_cost:
-            st.markdown(f"{s['월요금']:,}원 / 월")
-        with col_dday:
-            st.markdown(f"매월 **{s['결제일']}일**")
-
-    st.markdown("---")
-    with st.expander("➕ 새 구독 서비스 추가 / 관리"):
-        with st.form("add_sub_form"):
-            new_s_name = st.text_input("서비스명 (예: 유튜브 프리미엄, Goodnotes)", value="유튜브 프리미엄")
-            new_s_cost = st.number_input("월 구독료(원)", value=14900, step=1000)
-            new_s_day = st.number_input("매월 결제일 (1~31일)", value=1, min_value=1, max_value=31)
-            new_s_cat = st.selectbox("카테고리", ["🎬 OTT/영상", "⚽ 스포츠", "🎵 음악", "💼 생산성/클라우드", "🛍️ 쇼핑/기타"])
-            
-            if st.form_submit_button("구독 서비스 등록"):
-                if new_s_name.strip():
-                    subs_list.append({"서비스": new_s_name.strip(), "월요금": int(new_s_cost), "결제일": int(new_s_day), "카테고리": new_s_cat})
-                    save_subscriptions(subs_list)
-                    st.success(f"'{new_s_name}' 서비스가 등록되었습니다!")
-                    st.rerun()
-
-        if len(subs_list) > 1:
-            del_sub_idx = st.selectbox("삭제할 구독 선택", range(len(subs_list)), format_func=lambda x: f"{subs_list[x]['서비스']} ({subs_list[x]['월요금']:,}원)")
-            if st.button("선택한 구독 삭제"):
-                removed_s = subs_list.pop(del_sub_idx)
-                save_subscriptions(subs_list)
-                st.success(f"'{removed_s['서비스']}' 구독이 삭제되었습니다.")
-                st.rerun()
-
-def render_market_section():
-    st.subheader("🌐 글로벌 & 국내 시황")
-    market_tickers = ["^KS11", "^GSPC", "^IXIC", "BZ=F", "005930", "000660", "005380", "NVDA"]
-    m_prices = get_batch_market_data(market_tickers)
-    
-    kospi_p, kospi_d = m_prices.get("^KS11", (None, None))
-    sp500_p, sp500_d = m_prices.get("^GSPC", (None, None))
-    samsung_p, samsung_d = m_prices.get("005930", (None, None))
-    nvda_p, nvda_d = m_prices.get("NVDA", (None, None))
-    
-    c1, c2 = st.columns(2)
-    with c1:
-        st.metric("코스피 (KOSPI)", f"{kospi_p:,.2f}" if kospi_p else "6,977.94", f"{kospi_d:+.2f}%" if kospi_d else "+2.42%")
-        st.metric("삼성전자", f"{samsung_p:,.0f}원" if samsung_p else "84,500원", f"{samsung_d:+.2f}%" if samsung_d else "+2.43%")
-    with c2:
-        st.metric("S&P 500", f"{sp500_p:,.2f}" if sp500_p else "5,554.20", f"{sp500_d:+.2f}%" if sp500_d else "-0.20%")
-        st.metric("엔비디아 (NVDA)", f"${nvda_p:.2f}" if nvda_p else "$224.92", f"{nvda_d:+.2f}%" if nvda_d else "-0.18%")
-
-def render_briefing_section():
-    st.subheader("💡 실시간 맞춤형 AI 모닝 브리핑")
-    user_portfolio = load_portfolio()
-    recent_news = fetch_google_news("코스피 OR 반도체 OR 연준 금리 OR 엔비디아", max_results=12)
-    
-    k_input_b = st.text_input("Gemini API Key (브리핑용)", value=st.session_state.saved_gemini_key, type="password", key="briefing_key_view")
-    if k_input_b: st.session_state.saved_gemini_key = k_input_b
-    
-    if st.button("✨ 오늘자 AI 브리핑 재생성", key="btn_regen_briefing"):
-        if not st.session_state.saved_gemini_key:
-            st.warning("API Key를 입력해 주세요.")
-        else:
-            with st.spinner("구글 Gemini AI 분석 중..."):
-                b_res, status = generate_ai_briefing(recent_news, user_portfolio, st.session_state.saved_gemini_key)
-                if status == "SUCCESS" and b_res:
-                    now_str = datetime.now(KST).strftime('%Y년 %m월 %d일 %H:%M:%S')
-                    save_briefing(b_res, now_str)
-                    st.success("브리핑 생성 완료!")
-                    st.rerun()
-
-    saved_briefing_text, saved_time = load_briefing()
-    if saved_briefing_text:
-        st.caption(f"🕒 생성 시각: {saved_time}")
-        with st.container(border=True):
-            st.markdown(saved_briefing_text)
-
-def render_chat_section():
-    st.subheader("🤖 1:1 AI 투자 비서 챗봇")
-    if "chat_messages" not in st.session_state:
-        st.session_state.chat_messages = [
-            {"role": "assistant", "content": "안녕하세요! 고객님의 포트폴리오(KODEX AI반도체, KODEX 200커버드콜)를 기반으로 맞춤 투자 분석을 도와드립니다."}
-        ]
-
-    for msg in st.session_state.chat_messages:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
-
-    user_input = st.chat_input("AI 비서에게 질문하기...", key="chat_input_field")
-    if user_input:
-        st.session_state.chat_messages.append({"role": "user", "content": user_input})
-        with st.chat_message("user"):
-            st.markdown(user_input)
-
-        if not st.session_state.saved_gemini_key:
-            with st.chat_message("assistant"):
-                st.warning("상단에 Gemini API Key를 입력해 주세요.")
-        else:
-            with st.chat_message("assistant"):
-                with st.spinner("AI 비서 답변 생성 중..."):
-                    user_port = load_portfolio()
-                    bot_reply = ask_gemini_chat(st.session_state.chat_messages, user_input, user_port, st.session_state.saved_gemini_key)
-                    st.markdown(bot_reply)
-                    st.session_state.chat_messages.append({"role": "assistant", "content": bot_reply})
-
-def render_sports_section():
-    st.subheader("🏆 내 응원팀 스포츠 허브")
-    my_teams = load_sports_teams()
-    sports_briefings = load_sports_briefings()
-    
-    team_names = [f"{idx+1}. {t['종목']} {t['팀명']} ({t['리그']})" for idx, t in enumerate(my_teams)]
-    selected_team_idx = st.selectbox("응원하는 팀 선택", range(len(team_names)), format_func=lambda x: team_names[x], key="sp_team_select")
-    
-    current_team = my_teams[selected_team_idx]
-    team_key = current_team["팀명"]
-
-    search_query = f'"{current_team["팀명"]}" AND (경기 OR 일정 OR 결과 OR 승리 OR 패배 OR 하이라이트)'
-    team_news = fetch_google_news(search_query, max_results=8)
-
-    c_s1, c_s2 = st.columns([0.65, 0.35])
-    with c_s1:
-        st.write(f"### {current_team['종목']} {current_team['팀명']} ({current_team['리그']})")
-    with c_s2:
-        if st.button("⚡ 실시간 경기 브리핑 생성", key=f"btn_sb_view_{team_key}"):
-            if not st.session_state.saved_gemini_key:
-                st.warning("API Key가 필요합니다.")
+    for week in cal:
+        for day in week:
+            if day == 0:
+                html += "<div style='height: 44px; background: rgba(255,255,255,0.02); border-radius: 6px;'></div>"
             else:
-                with st.spinner(f"{team_key} 일정 분석 중..."):
-                    briefing_text = generate_team_briefing(
-                        current_team['팀명'], current_team['종목'], current_team['리그'], team_news, st.session_state.saved_gemini_key
-                    )
-                    if briefing_text:
-                        now_str = datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S')
-                        sports_briefings[team_key] = {"text": briefing_text, "updated_at": now_str}
-                        save_sports_briefings(sports_briefings)
-                        st.success("업데이트 완료!")
-                        st.rerun()
-
-    if team_key in sports_briefings:
-        b_data = sports_briefings[team_key]
-        st.caption(f"🕒 업데이트 시각: {b_data.get('updated_at', '')} (KST 기준)")
-        with st.container(border=True):
-            st.markdown(b_data.get("text", ""))
+                is_today = (day == today_day)
+                day_events = events.get(day, [])
+                
+                bg = "rgba(59, 130, 246, 0.28)" if is_today else "rgba(255,255,255,0.05)"
+                border = "2px solid #3b82f6" if is_today else "1px solid rgba(255,255,255,0.07)"
+                text_color = "#60a5fa" if is_today else "#f8fafc"
+                
+                badge_html = ""
+                for ev in day_events:
+                    badge_html += f"<div style='font-size: 9px; background: {ev['color']}; color: white; border-radius: 3px; padding: 1px; margin-top: 1px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;'>{ev['title']}</div>"
+                    
+                html += f"""
+                <div style="height: 48px; background: {bg}; border: {border}; border-radius: 6px; padding: 2px; display: flex; flex-direction: column; justify-content: flex-start;">
+                    <span style="font-size: 11px; font-weight: 800; color: {text_color};">{day}</span>
+                    {badge_html}
+                </div>
+                """
+    html += "</div></div>"
+    return html
 
 
 # =============================================================
@@ -894,10 +694,10 @@ if "dual_view_mode" not in st.session_state:
 
 
 # =============================================================
-# [메인 헤더 & 듀얼 뷰 토글]
+# [메인 헤더 & 반응형 듀얼 뷰 토글]
 # =============================================================
 
-col_h1, col_h2 = st.columns([0.6, 0.4])
+col_h1, col_h2 = st.columns([0.62, 0.38])
 with col_h1:
     st.markdown("""
     <div class="mori-header">
@@ -908,15 +708,15 @@ with col_h1:
     """, unsafe_allow_html=True)
 with col_h2:
     st.write("")
-    is_dual = st.toggle("📖 듀얼뷰 모드", value=st.session_state.get("dual_view_mode", False))
-    st.session_state["dual_view_mode"] = is_dual
+    # Streamlit 네이티브 session_state 키를 직접 연결하여 100% 즉각 반응
+    st.toggle("📖 듀얼뷰 (폴드 펼침)", key="dual_view_mode")
 
 
 # =============================================================
 # [화면 렌더링 분기: 듀얼뷰 vs 탭 네비게이션]
 # =============================================================
 
-if st.session_state.get("dual_view_mode", False):
+if st.session_state["dual_view_mode"]:
     # ---------------------------------------------------------
     # 📖 폴드 펼침 대화면 2열 듀얼 뷰 모드
     # ---------------------------------------------------------
@@ -961,7 +761,7 @@ if st.session_state.get("dual_view_mode", False):
 
 else:
     # ---------------------------------------------------------
-    # 📱 커버 화면 최적화 탭 네비게이션 모드 (개별 변수 언패킹으로 에러 완전 제거)
+    # 📱 커버 화면 최적화 탭 네비게이션 모드 (개별 변수 언패킹)
     # ---------------------------------------------------------
     (tab_home, tab_port, tab_cal, tab_subs, tab_mkt,
      tab_news, tab_brief, tab_chat, tab_sport, tab_day) = st.tabs([
@@ -971,6 +771,8 @@ else:
 
     with tab_home:
         st.subheader("오늘의 핵심 데일리 요약")
+        
+        # 1) 날씨 카드
         temp_val, weather_val, humid_val, loc_tag = get_current_weather(
             current_loc_data.get("lat", 37.2410),
             current_loc_data.get("lon", 127.1775),
@@ -984,6 +786,10 @@ else:
         </div>
         """, unsafe_allow_html=True)
 
+        # 2) ⭐ 월간 달력 형태 일정 위젯 (스마트 캘린더)
+        st.markdown(render_monthly_calendar_widget(2026, 8, 16), unsafe_allow_html=True)
+
+        # 3) To-Do 요약
         home_todos = load_todos()
         with st.container(border=True):
             st.markdown("**✅ 오늘의 할 일 (To-Do)**")
@@ -993,6 +799,7 @@ else:
             else:
                 st.info("등록된 할 일이 없습니다.")
 
+        # 4) 자산 요약
         home_portfolio = load_portfolio()
         p_tickers = [it["티커"] for it in home_portfolio]
         batch_prices = get_batch_market_data(p_tickers)
@@ -1012,6 +819,7 @@ else:
             with ch1: st.metric("총 평가금액", f"{total_eval_h:,.0f}원", f"{rate_h:+.2f}%")
             with ch2: st.metric("총 평가손익", f"{diff_h:+,.0f}원")
 
+        # 5) 3줄 뉴스
         quick_news = fetch_google_news("코스피 OR 반도체 OR 연준 금리", max_results=3)
         with st.container(border=True):
             st.markdown("**📰 오늘의 핵심 3줄 뉴스**")
