@@ -70,7 +70,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 5. 폴드 커버화면 및 다크 테마 커스텀 CSS (초고속 렌더링)
+# 5. 폴드 커버화면 및 다크 테마 커스텀 CSS
 st.markdown("""
 <style>
 @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
@@ -220,28 +220,13 @@ input, select, textarea {
 </style>
 """, unsafe_allow_html=True)
 
-# 기기 GPS 위치 정보 자동 요청 스크립트
-components.html("""
-<script>
-if (navigator.geolocation && !window.top.location.search.includes('lat=')) {
-    navigator.geolocation.getCurrentPosition(function(pos) {
-        const lat = pos.coords.latitude.toFixed(4);
-        const lon = pos.coords.longitude.toFixed(4);
-        const url = new URL(window.top.location.href);
-        url.searchParams.set('lat', lat);
-        url.searchParams.set('lon', lon);
-        window.top.location.replace(url.href);
-    }, function(err) {});
-}
-</script>
-""", height=0)
-
 # 6. [영구 저장소 파일 관리]
 PORTFOLIO_FILE = "portfolio.json"
 BRIEFING_FILE = "briefing.json"
 TODOS_FILE = "todos.json"
 SPORTS_FILE = "sports_teams.json"
 SPORTS_BRIEFINGS_FILE = "sports_briefings.json"
+LOCATION_FILE = "location.json"
 
 DEFAULT_PORTFOLIO = [
     {"종목명": "KODEX AI반도체TOP2플러스", "티커": "395160", "매입단가": 13234.0, "보유수량": 126},
@@ -253,6 +238,39 @@ DEFAULT_SPORTS_TEAMS = [
     {"종목": "⚾ 야구", "팀명": "KIA 타이거즈", "리그": "KBO 리그", "키워드": "KIA 타이거즈"},
     {"종목": "⚾ 야구", "팀명": "LA 다저스", "리그": "메이저리그 (MLB)", "키워드": "LA 다저스 OR 오타니"}
 ]
+
+DEFAULT_LOCATION = {
+    "name": "경기도 성남시",
+    "lat": 37.4200,
+    "lon": 127.1265
+}
+
+LOCATION_PRESETS = {
+    "경기도 성남시 (분당/판교)": {"lat": 37.4200, "lon": 127.1265, "name": "경기도 성남시"},
+    "경기도 용인시": {"lat": 37.2410, "lon": 127.1775, "name": "경기도 용인시"},
+    "서울특별시 강남구": {"lat": 37.4979, "lon": 127.0276, "name": "서울특별시 강남구"},
+    "서울특별시 종로/중구": {"lat": 37.5636, "lon": 126.9976, "name": "서울특별시"},
+    "인천광역시": {"lat": 37.4563, "lon": 126.7052, "name": "인천광역시"},
+    "부산광역시": {"lat": 35.1796, "lon": 129.0756, "name": "부산광역시"},
+    "대전광역시": {"lat": 36.3504, "lon": 127.3845, "name": "대전광역시"},
+    "대구광역시": {"lat": 35.8714, "lon": 128.6014, "name": "대구광역시"},
+    "광주광역시": {"lat": 35.1595, "lon": 126.8526, "name": "광주광역시"}
+}
+
+def load_location():
+    if os.path.exists(LOCATION_FILE):
+        try:
+            with open(LOCATION_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if data and "lat" in data: return data
+        except Exception: pass
+    return DEFAULT_LOCATION
+
+def save_location(loc_data):
+    try:
+        with open(LOCATION_FILE, "w", encoding="utf-8") as f:
+            json.dump(loc_data, f, ensure_ascii=False, indent=2)
+    except Exception as e: pass
 
 def load_portfolio():
     if os.path.exists(PORTFOLIO_FILE):
@@ -328,9 +346,9 @@ def save_sports_briefings(briefings):
             json.dump(briefings, f, ensure_ascii=False, indent=2)
     except Exception as e: pass
 
-# 7. 실시간 위치 기반 날씨 데이터 조회 (초고속 캐싱 30분)
+# 7. 실시간 위치 기반 날씨 데이터 조회 (GPS 및 성남시/용인시 연동)
 @st.cache_data(ttl=1800)
-def get_current_weather(lat=37.2410, lon=127.1775):
+def get_current_weather(lat=37.4200, lon=127.1265, default_name="경기도 성남시"):
     try:
         url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto"
         res = requests.get(url, timeout=3).json()
@@ -345,13 +363,10 @@ def get_current_weather(lat=37.2410, lon=127.1775):
         elif code in (51, 53, 55, 61, 63, 65, 80, 81, 82): weather_desc = "비 🌧️"
         elif code in (71, 73, 75, 85, 86): weather_desc = "눈 ❄️"
         
-        loc_label = "📍 현재 내 위치"
-        if abs(lat - 37.2410) < 0.05 and abs(lon - 127.1775) < 0.05:
-            loc_label = "📍 경기도 용인시"
-            
+        loc_label = f"📍 {default_name}"
         return f"{temp:.1f}°C", weather_desc, f"{humidity}%", loc_label
     except Exception:
-        return "28.0°C", "맑음 ☀️", "60%", "📍 경기도 용인시"
+        return "28.0°C", "맑음 ☀️", "60%", f"📍 {default_name}"
 
 # 8. [초고속 pykrx + yfinance 하이브리드 엔진]
 @st.cache_data(ttl=120)
@@ -441,8 +456,7 @@ def analyze_portfolio_image(image_bytes, api_key):
             active = [m['name'] for m in m_res.json().get('models', []) if 'generateContent' in m.get('supportedGenerationMethods', [])]
             if active:
                 candidate_models = active
-    except Exception:
-        pass
+    except Exception: pass
 
     base64_img = base64.b64encode(image_bytes).decode('utf-8')
     prompt = """
@@ -466,10 +480,8 @@ def analyze_portfolio_image(image_bytes, api_key):
                 raw = res.json()['candidates'][0]['content']['parts'][0]['text']
                 raw = raw.replace("```json", "").replace("```", "").strip()
                 return json.loads(raw), "SUCCESS"
-            else:
-                last_err = f"[{res.status_code}] {res.text[:120]}"
-        except Exception as e:
-            last_err = str(e)
+            else: last_err = f"[{res.status_code}] {res.text[:120]}"
+        except Exception as e: last_err = str(e)
     return None, f"분석 오류: {last_err}"
 
 def generate_ai_briefing(news_headlines, portfolio_items, api_key):
@@ -485,8 +497,7 @@ def generate_ai_briefing(news_headlines, portfolio_items, api_key):
             active = [m['name'] for m in m_res.json().get('models', []) if 'generateContent' in m.get('supportedGenerationMethods', [])]
             if active:
                 candidate_models = [m for m in active if 'flash' in m.lower()] + [m for m in active if 'flash' not in m.lower()]
-    except Exception:
-        pass
+    except Exception: pass
 
     stock_list_str = ", ".join([f"{item['종목명']} ({item['티커']})" for item in portfolio_items]) if portfolio_items else "KODEX AI반도체TOP2플러스, KODEX 200타겟위클리커버드콜"
     news_text = "\n".join([f"- {h['title']} ({h.get('source', '')})" for h in news_headlines[:15]]) if news_headlines else "국내외 주요 증시 시황 및 반도체 뉴스"
@@ -518,10 +529,8 @@ def generate_ai_briefing(news_headlines, portfolio_items, api_key):
             res = requests.post(url, json=payload, headers=headers, timeout=25)
             if res.status_code == 200:
                 return res.json()['candidates'][0]['content']['parts'][0]['text'], "SUCCESS"
-            else:
-                last_err = f"[{res.status_code}] {res.text[:120]}"
-        except Exception as e:
-            last_err = str(e)
+            else: last_err = f"[{res.status_code}] {res.text[:120]}"
+        except Exception as e: last_err = str(e)
             
     return None, f"AI 생성 오류: {last_err}"
 
@@ -539,8 +548,7 @@ def generate_team_briefing(team_name, sports_type, league, team_news, api_key):
             active = [m['name'] for m in m_res.json().get('models', []) if 'generateContent' in m.get('supportedGenerationMethods', [])]
             if active:
                 candidate_models = [m for m in active if 'flash' in m.lower()] + [m for m in active if 'flash' not in m.lower()]
-    except Exception:
-        pass
+    except Exception: pass
 
     news_text = "\n".join([f"- {h['title']} ({h.get('source', '')})" for h in team_news[:10]]) if team_news else f"{team_name} 최신 경기 일정"
     
@@ -605,11 +613,20 @@ def ask_gemini_chat(chat_history, user_msg, portfolio_items, api_key):
 
 
 # =============================================================
-# 위치 좌표 파싱
+# 위치 정보 관리 및 파싱
 # =============================================================
 
-query_lat = float(st.query_params.get("lat", 37.2410))
-query_lon = float(st.query_params.get("lon", 127.1775))
+# 저장된 사용자 위치 불러오기 (기본: 경기도 성남시)
+current_loc_data = load_location()
+
+# URL 쿼리 파라미터에 GPS 좌표가 있으면 우선 적용
+if "lat" in st.query_params and "lon" in st.query_params:
+    try:
+        gps_lat = float(st.query_params["lat"])
+        gps_lon = float(st.query_params["lon"])
+        current_loc_data = {"name": "현재 GPS 위치", "lat": gps_lat, "lon": gps_lon}
+        save_location(current_loc_data)
+    except Exception: pass
 
 if "saved_gemini_key" not in st.session_state:
     st.session_state.saved_gemini_key = st.secrets.get("GEMINI_API_KEY", "")
@@ -638,8 +655,12 @@ tab_home, tab_portfolio, tab_market, tab_news, tab_briefing, tab_chat, tab_sport
 with tab_home:
     st.subheader("오늘의 핵심 데일리 요약")
     
-    # 1) GPS 연동 실시간 위치 날씨 카드
-    temp_val, weather_val, humid_val, loc_tag = get_current_weather(query_lat, query_lon)
+    # 1) 실시간 위치 날씨 카드
+    temp_val, weather_val, humid_val, loc_tag = get_current_weather(
+        current_loc_data.get("lat", 37.4200),
+        current_loc_data.get("lon", 127.1265),
+        current_loc_data.get("name", "경기도 성남시")
+    )
     st.markdown(f"""
     <div class="weather-gradient">
         <div style="font-size: 15px; color: #bae6fd; font-weight: 700;">{loc_tag} 실시간 날씨</div>
@@ -1104,12 +1125,16 @@ with tab_sports:
                 st.rerun()
 
 # -------------------------------------------------------------
-# TAB 7: 데일리 생산성 & 날씨 (GPS 연동)
+# TAB 7: 데일리 생산성 & 날씨 (위치 설정 지원)
 # -------------------------------------------------------------
 with tab_daily:
     st.subheader("📋 데일리 생산성 & 라이프")
     
-    temp_val, weather_val, humid_val, loc_tag = get_current_weather(query_lat, query_lon)
+    temp_val, weather_val, humid_val, loc_tag = get_current_weather(
+        current_loc_data.get("lat", 37.4200),
+        current_loc_data.get("lon", 127.1265),
+        current_loc_data.get("name", "경기도 성남시")
+    )
     st.markdown(f"""
     <div class="weather-card">
         <div style="font-size: 16px; font-weight: 700;">{loc_tag} 오늘 날씨</div>
@@ -1117,6 +1142,48 @@ with tab_daily:
         <div style="font-size: 14px; color: #e0f2fe; margin-top: 4px;">습도: {humid_val} | 외출 및 출퇴근 추천 날씨</div>
     </div>
     """, unsafe_allow_html=True)
+
+    # 📍 내 지역 변경 및 GPS 즉시 연동 메뉴
+    with st.expander("📍 날씨 지역 변경 / GPS 위치 설정"):
+        preset_names = list(LOCATION_PRESETS.keys())
+        cur_preset_idx = 0
+        for i, pname in enumerate(preset_names):
+            if LOCATION_PRESETS[pname]["name"] == current_loc_data.get("name"):
+                cur_preset_idx = i
+                break
+        
+        sel_preset = st.selectbox("지역 선택", preset_names, index=cur_preset_idx)
+        c_loc1, c_loc2 = st.columns(2)
+        with c_loc1:
+            if st.button("선택 지역으로 날씨 저장"):
+                chosen = LOCATION_PRESETS[sel_preset]
+                save_location(chosen)
+                st.success(f"'{chosen['name']}'(으)로 날씨 위치가 저장되었습니다!")
+                st.rerun()
+        with c_loc2:
+            components.html("""
+            <button onclick="getGPS()" style="background: #0284c7; color: white; border: none; padding: 8px 14px; border-radius: 8px; font-weight: 700; cursor: pointer; width: 100%;">
+                📍 현재 GPS 위치로 자동 설정
+            </button>
+            <script>
+            function getGPS() {
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(function(pos) {
+                        const lat = pos.coords.latitude.toFixed(4);
+                        const lon = pos.coords.longitude.toFixed(4);
+                        const url = new URL(window.top.location.href);
+                        url.searchParams.set('lat', lat);
+                        url.searchParams.set('lon', lon);
+                        window.top.location.replace(url.href);
+                    }, function(err) {
+                        alert("위치 권한을 허용해 주세요.");
+                    });
+                } else {
+                    alert("GPS를 지원하지 않는 브라우저입니다.");
+                }
+            }
+            </script>
+            """, height=45)
 
     st.markdown("---")
     st.subheader("✅ 오늘의 할 일 (To-Do List)")
