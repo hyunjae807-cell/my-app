@@ -240,14 +240,14 @@ DEFAULT_SPORTS_TEAMS = [
 ]
 
 DEFAULT_LOCATION = {
-    "name": "경기도 성남시",
-    "lat": 37.4200,
-    "lon": 127.1265
+    "name": "경기도 용인시",
+    "lat": 37.2410,
+    "lon": 127.1775
 }
 
 LOCATION_PRESETS = {
-    "경기도 성남시 (분당/판교)": {"lat": 37.4200, "lon": 127.1265, "name": "경기도 성남시"},
     "경기도 용인시": {"lat": 37.2410, "lon": 127.1775, "name": "경기도 용인시"},
+    "경기도 성남시 (분당/판교)": {"lat": 37.4200, "lon": 127.1265, "name": "경기도 성남시"},
     "서울특별시 강남구": {"lat": 37.4979, "lon": 127.0276, "name": "서울특별시 강남구"},
     "서울특별시 종로/중구": {"lat": 37.5636, "lon": 126.9976, "name": "서울특별시"},
     "인천광역시": {"lat": 37.4563, "lon": 126.7052, "name": "인천광역시"},
@@ -346,9 +346,9 @@ def save_sports_briefings(briefings):
             json.dump(briefings, f, ensure_ascii=False, indent=2)
     except Exception as e: pass
 
-# 7. 실시간 위치 기반 날씨 데이터 조회 (GPS 및 성남시/용인시 연동)
+# 7. 실시간 위치 기반 날씨 데이터 조회 (GPS 및 용인/성남 연동)
 @st.cache_data(ttl=1800)
-def get_current_weather(lat=37.4200, lon=127.1265, default_name="경기도 성남시"):
+def get_current_weather(lat=37.2410, lon=127.1775, default_name="경기도 용인시"):
     try:
         url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto"
         res = requests.get(url, timeout=3).json()
@@ -442,7 +442,7 @@ def fetch_google_news(query, max_results=8):
     except Exception:
         return []
 
-# 9. [초강력 복구 & 멀티모델 지원] AI 비전 이미지 분석 및 브리핑 함수
+# 9. [안정성 극대화 AI 함수군]
 def analyze_portfolio_image(image_bytes, api_key):
     if not api_key or not api_key.strip():
         return None, "API Key가 입력되지 않았습니다."
@@ -450,14 +450,6 @@ def analyze_portfolio_image(image_bytes, api_key):
     headers = {"Content-Type": "application/json", "x-goog-api-key": clean_key}
     candidate_models = ["models/gemini-2.0-flash", "models/gemini-1.5-flash", "models/gemini-1.5-flash-latest", "models/gemini-1.5-pro"]
     
-    try:
-        m_res = requests.get(f"https://generativelanguage.googleapis.com/v1beta/models?key={clean_key}", headers=headers, timeout=5)
-        if m_res.status_code == 200:
-            active = [m['name'] for m in m_res.json().get('models', []) if 'generateContent' in m.get('supportedGenerationMethods', [])]
-            if active:
-                candidate_models = active
-    except Exception: pass
-
     base64_img = base64.b64encode(image_bytes).decode('utf-8')
     prompt = """
     이 이미지는 증권사 주식/ETF 잔고 화면입니다.
@@ -489,15 +481,7 @@ def generate_ai_briefing(news_headlines, portfolio_items, api_key):
         return None, "Gemini API Key가 필요합니다. 상단에 Key를 입력해 주세요."
     clean_key = api_key.strip()
     headers = {"Content-Type": "application/json", "x-goog-api-key": clean_key}
-    
     candidate_models = ["models/gemini-2.0-flash", "models/gemini-1.5-flash", "models/gemini-1.5-flash-latest", "models/gemini-1.5-pro"]
-    try:
-        m_res = requests.get(f"https://generativelanguage.googleapis.com/v1beta/models?key={clean_key}", headers=headers, timeout=5)
-        if m_res.status_code == 200:
-            active = [m['name'] for m in m_res.json().get('models', []) if 'generateContent' in m.get('supportedGenerationMethods', [])]
-            if active:
-                candidate_models = [m for m in active if 'flash' in m.lower()] + [m for m in active if 'flash' not in m.lower()]
-    except Exception: pass
 
     stock_list_str = ", ".join([f"{item['종목명']} ({item['티커']})" for item in portfolio_items]) if portfolio_items else "KODEX AI반도체TOP2플러스, KODEX 200타겟위클리커버드콜"
     news_text = "\n".join([f"- {h['title']} ({h.get('source', '')})" for h in news_headlines[:15]]) if news_headlines else "국내외 주요 증시 시황 및 반도체 뉴스"
@@ -534,21 +518,12 @@ def generate_ai_briefing(news_headlines, portfolio_items, api_key):
             
     return None, f"AI 생성 오류: {last_err}"
 
-# 10. 실시간 구단 경기 일정 및 AI 브리핑 함수
 def generate_team_briefing(team_name, sports_type, league, team_news, api_key):
     if not api_key or not api_key.strip():
         return None
     clean_key = api_key.strip()
     headers = {"Content-Type": "application/json", "x-goog-api-key": clean_key}
-    
     candidate_models = ["models/gemini-2.0-flash", "models/gemini-1.5-flash", "models/gemini-1.5-flash-latest", "models/gemini-1.5-pro"]
-    try:
-        m_res = requests.get(f"https://generativelanguage.googleapis.com/v1beta/models?key={clean_key}", headers=headers, timeout=5)
-        if m_res.status_code == 200:
-            active = [m['name'] for m in m_res.json().get('models', []) if 'generateContent' in m.get('supportedGenerationMethods', [])]
-            if active:
-                candidate_models = [m for m in active if 'flash' in m.lower()] + [m for m in active if 'flash' not in m.lower()]
-    except Exception: pass
 
     news_text = "\n".join([f"- {h['title']} ({h.get('source', '')})" for h in team_news[:10]]) if team_news else f"{team_name} 최신 경기 일정"
     
@@ -581,42 +556,76 @@ def generate_team_briefing(team_name, sports_type, league, team_news, api_key):
         except Exception: pass
     return None
 
-# 11. 1:1 대화형 AI 투자 챗봇 함수
+# 10. [멀티턴 & 단일턴 듀얼 폴백 1:1 AI 챗봇 엔진]
 def ask_gemini_chat(chat_history, user_msg, portfolio_items, api_key):
     if not api_key or not api_key.strip():
-        return "Gemini API Key를 입력해 주세요."
+        return "⚠️ 상단에 Gemini API Key를 입력해 주세요."
     clean_key = api_key.strip()
     headers = {"Content-Type": "application/json", "x-goog-api-key": clean_key}
-    stock_list_str = ", ".join([f"{item['종목명']} ({item['티커']})" for item in portfolio_items])
     
-    system_inst = f"당신은 투자자의 1:1 개인 금융/주식 비서 AI입니다. 투자자가 보유한 종목은 [{stock_list_str}] 입니다. 친절하고 명확하며 통찰력 있는 분석을 한국어로 답변하세요."
-    
+    stock_list_str = ", ".join([f"{item['종목명']} ({item['티커']})" for item in portfolio_items]) if portfolio_items else "KODEX AI반도체TOP2플러스, KODEX 200타겟위클리커버드콜"
+    system_inst = f"당신은 투자자의 1:1 개인 금융/주식 비서 AI 'MORI'입니다. 투자자가 보유한 포트폴리오는 [{stock_list_str}] 입니다. 친절하고 명확하며 실용적인 분석을 한국어로 답변하세요."
+
+    # 역할(user/model)이 겹치지 않도록 깔끔하게 정돈된 멀티턴 구성
     contents = []
+    last_role = None
     for msg in chat_history:
-        if not contents and msg["role"] != "user":
-            continue
         role = "user" if msg["role"] == "user" else "model"
+        if not contents and role != "user":
+            continue
+        if role == last_role:
+            continue
         contents.append({"role": role, "parts": [{"text": msg["content"]}]})
+        last_role = role
         
-    contents.append({"role": "user", "parts": [{"text": f"[{system_inst}]\n\n질문: {user_msg}"}]})
+    if not contents:
+        contents = [{"role": "user", "parts": [{"text": user_msg}]}]
+
+    payload_with_sys = {
+        "contents": contents,
+        "systemInstruction": {"parts": [{"text": system_inst}]}
+    }
+    
+    fallback_payload = {
+        "contents": [{
+            "role": "user",
+            "parts": [{"text": f"[{system_inst}]\n\n질문: {user_msg}"}]
+        }]
+    }
 
     candidate_models = ["models/gemini-2.0-flash", "models/gemini-1.5-flash", "models/gemini-1.5-flash-latest", "models/gemini-1.5-pro"]
+    
+    last_err = ""
     for model_path in candidate_models:
         clean_model = model_path if model_path.startswith("models/") else f"models/{model_path}"
         url = f"https://generativelanguage.googleapis.com/v1beta/{clean_model}:generateContent?key={clean_key}"
+        
+        # 1차 시도: 대화형 멀티턴 요청
         try:
-            res = requests.post(url, json={"contents": contents}, headers=headers, timeout=18)
+            res = requests.post(url, json=payload_with_sys, headers=headers, timeout=20)
             if res.status_code == 200:
                 return res.json()['candidates'][0]['content']['parts'][0]['text']
-        except Exception: pass
-    return "답변을 불러오는 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
+            else:
+                last_err = f"[{res.status_code}] {res.text[:120]}"
+        except Exception as e:
+            last_err = str(e)
+            
+        # 2차 시도: 단일턴 안전 폴백 요청
+        try:
+            res = requests.post(url, json=fallback_payload, headers=headers, timeout=20)
+            if res.status_code == 200:
+                return res.json()['candidates'][0]['content']['parts'][0]['text']
+        except Exception:
+            pass
+
+    return f"⚠️ AI 비서 응답 중 오류가 발생했습니다: {last_err}"
 
 
 # =============================================================
 # 위치 정보 관리 및 파싱
 # =============================================================
 
-# 저장된 사용자 위치 불러오기 (기본: 경기도 성남시)
+# 저장된 사용자 위치 불러오기 (기본: 경기도 용인시)
 current_loc_data = load_location()
 
 # URL 쿼리 파라미터에 GPS 좌표가 있으면 우선 적용
@@ -657,9 +666,9 @@ with tab_home:
     
     # 1) 실시간 위치 날씨 카드
     temp_val, weather_val, humid_val, loc_tag = get_current_weather(
-        current_loc_data.get("lat", 37.4200),
-        current_loc_data.get("lon", 127.1265),
-        current_loc_data.get("name", "경기도 성남시")
+        current_loc_data.get("lat", 37.2410),
+        current_loc_data.get("lon", 127.1775),
+        current_loc_data.get("name", "경기도 용인시")
     )
     st.markdown(f"""
     <div class="weather-gradient">
@@ -973,7 +982,7 @@ with tab_briefing:
     st.dataframe(pd.DataFrame(events), use_container_width=True)
 
 # -------------------------------------------------------------
-# TAB 5: 1:1 대화형 AI 투자 챗봇
+# TAB 5: 1:1 대화형 AI 투자 챗봇 (오류 완벽 해결)
 # -------------------------------------------------------------
 with tab_chat:
     st.subheader("🤖 1:1 AI 투자 비서 챗봇")
@@ -1130,10 +1139,11 @@ with tab_sports:
 with tab_daily:
     st.subheader("📋 데일리 생산성 & 라이프")
     
+    # 실시간 날씨 카드
     temp_val, weather_val, humid_val, loc_tag = get_current_weather(
-        current_loc_data.get("lat", 37.4200),
-        current_loc_data.get("lon", 127.1265),
-        current_loc_data.get("name", "경기도 성남시")
+        current_loc_data.get("lat", 37.2410),
+        current_loc_data.get("lon", 127.1775),
+        current_loc_data.get("name", "경기도 용인시")
     )
     st.markdown(f"""
     <div class="weather-card">
