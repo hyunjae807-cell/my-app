@@ -1961,8 +1961,6 @@ current_tab_param = st.query_params.get("tab", "daily")
 default_tab_name = REV_TAB_QUERY_MAP.get(current_tab_param, "데일리")
 default_tab_idx = MAIN_TABS.index(default_tab_name) if default_tab_name in MAIN_TABS else 0
 
-# 캡슐형 라디오 네) if default_tab_name in MAIN_TABS else 0
-
 # 캡슐형 라디오 네비게이션으로 탭 렌더링
 selected_tab = st.radio(
     "메인 메뉴 선택",
@@ -1984,4 +1982,6 @@ if selected_tab == "데일리":
 elif selected_tab == "주식·금융":
     render_stock_hub()
 elif selected_tab == "스포츠":
-    render_sports_
+    render_sports_hub()
+elif selected_tab == "블로그":
+    render_blog_hub()
