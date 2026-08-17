@@ -1624,9 +1624,3 @@ with tab_sports:
 
 with tab_blog:
     render_blog_hub()
-EOF
-
-python3 -m py_compile /tmp/full_mori_app_v37.py
-echo "PYTHON COMPILE: $?"
-python3 /tmp/test_runner_v33.py
-}}
