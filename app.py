@@ -26,44 +26,30 @@ except Exception:
 # 2. 한국 표준시(KST) 정의
 KST = timezone(timedelta(hours=9))
 
-# 3. 배경화면과 어울리는 프리미엄 MORI 앱 아이콘 생성
+# 3. 미니멀 프리미엄 MORI 앱 아이콘 생성
 def get_mori_app_icon():
     size = 256
-    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    img = Image.new("RGBA", (size, size), (255, 255, 255, 0))
     draw = ImageDraw.Draw(img)
-
-    for y in range(size):
-        r = int(30 + (y / size) * 20)
-        g = int(60 + (y / size) * 25)
-        b = int(50 + (y / size) * 20)
-        draw.line([(0, y), (size, y)], fill=(r, g, b, 255))
 
     mask = Image.new("L", (size, size), 0)
     mask_draw = ImageDraw.Draw(mask)
-    mask_draw.rounded_rectangle([(0, 0), (size, size)], radius=55, fill=255)
+    mask_draw.rounded_rectangle([(0, 0), (size, size)], radius=56, fill=255)
+
+    base = Image.new("RGBA", (size, size), (15, 23, 42, 255))
+    base_draw = ImageDraw.Draw(base)
+    
+    points = [(70, 175), (70, 95), (128, 145), (186, 95), (186, 175)]
+    for i in range(len(points)-1):
+        base_draw.line([points[i], points[i+1]], fill=(248, 250, 252, 255), width=14)
 
     icon_img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    icon_img.paste(img, (0, 0), mask=mask)
-    d = ImageDraw.Draw(icon_img)
-
-    d.ellipse([(35, 35), (size-35, size-35)], outline=(245, 235, 220, 45), width=2)
-
-    points = [(70, 180), (70, 90), (128, 145), (186, 90), (186, 180)]
-    for i in range(len(points)-1):
-        d.line([points[i], points[i+1]], fill=(255, 250, 240, 245), width=12)
-
-    cx, cy = 195, 70
-    sc = (245, 210, 130, 255)
-    d.line([(cx-11, cy), (cx+11, cy)], fill=sc, width=3)
-    d.line([(cx, cy-11), (cx, cy+11)], fill=sc, width=3)
-    d.line([(cx-6, cy-6), (cx+6, cy+6)], fill=sc, width=2)
-    d.line([(cx-6, cy+6), (cx+6, cy-6)], fill=sc, width=2)
-
+    icon_img.paste(base, (0, 0), mask=mask)
     return icon_img
 
 mori_icon_image = get_mori_app_icon()
 
-# 4. 모바일 최적화 페이지 설정
+# 4. 페이지 설정
 st.set_page_config(
     page_title="MORI",
     page_icon=mori_icon_image,
@@ -71,205 +57,211 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 5. 폴드 커버화면 및 다크 테마 커스텀 CSS
+# 5. [네이버 & 토스 스타일 모던 미니멀리즘 CSS]
 st.markdown("""
 <style>
 @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
 * {
     font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+    letter-spacing: -0.015em;
 }
 
 .block-container {
-    padding-top: 2.2rem !important;
-    padding-bottom: 2.5rem !important;
-    padding-left: 0.6rem !important;
-    padding-right: 0.6rem !important;
+    padding-top: 1.8rem !important;
+    padding-bottom: 3rem !important;
+    padding-left: 0.8rem !important;
+    padding-right: 0.8rem !important;
     max-width: 100% !important;
 }
 
-html, body, p, span, div, label, li {
-    font-size: 18px !important;
-    line-height: 1.65 !important;
+/* 상단 미니멀 헤더 */
+.mori-header-wrap {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 12px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
-
-.mori-header {
-    margin-top: 0px !important;
-    margin-bottom: 14px !important;
-    padding-bottom: 10px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-.mori-title {
-    font-size: 38px !important;
+.mori-brand {
+    font-size: 26px !important;
     font-weight: 900 !important;
+    color: #f8fafc;
     letter-spacing: -0.03em;
-    background: linear-gradient(135deg, #60a5fa 0%, #a855f7 50%, #38bdf8 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    margin: 0;
-    line-height: 1.2;
 }
-.mori-subtitle {
-    font-size: 16px !important;
-    font-weight: 500 !important;
+.mori-brand-sub {
+    font-size: 13px !important;
     color: #94a3b8;
-    margin-top: 4px;
-    letter-spacing: -0.01em;
+    font-weight: 500;
+    margin-left: 6px;
 }
-.mori-time {
+.mori-clock {
     font-size: 13px !important;
     color: #64748b;
-    margin-top: 4px;
+    font-weight: 500;
 }
 
-.summary-card {
-    background: rgba(30, 41, 59, 0.75);
-    backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+/* 네이버 스타일 상단 미니멀 위젯 스트립 */
+.widget-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 8px;
+    margin-bottom: 18px;
+}
+.widget-box {
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+.widget-label {
+    font-size: 12px;
+    color: #94a3b8;
+    font-weight: 600;
+    margin-bottom: 3px;
+}
+.widget-value {
+    font-size: 16px;
+    font-weight: 800;
+    color: #f8fafc;
+    line-height: 1.2;
+}
+.widget-sub {
+    font-size: 11px;
+    color: #64748b;
+    margin-top: 3px;
+}
+
+/* 미니멀 카드 스타일 */
+.flat-card {
+    background: rgba(30, 41, 59, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 16px;
     padding: 18px;
     margin-bottom: 14px;
     color: #f8fafc;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+.flat-card-title {
+    font-size: 16px;
+    font-weight: 800;
+    color: #f1f5f9;
+    margin-bottom: 12px;
 }
 
-.news-card {
-    background: rgba(30, 41, 59, 0.65);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 14px;
-    padding: 16px;
-    margin-bottom: 12px;
-    transition: transform 0.2s ease, border-color 0.2s ease;
+/* 뉴스 카드 */
+.news-item {
+    background: rgba(15, 23, 42, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    transition: all 0.2s ease;
 }
-.news-card:hover {
-    transform: translateY(-2px);
-    border-color: rgba(96, 165, 250, 0.5);
+.news-item:hover {
+    border-color: rgba(96, 165, 250, 0.4);
+    background: rgba(30, 41, 59, 0.7);
 }
-.news-title {
-    font-size: 18px !important;
+.news-link {
+    font-size: 16px !important;
     font-weight: 700 !important;
     color: #f1f5f9;
     text-decoration: none;
-    line-height: 1.5;
+    line-height: 1.45;
+    display: block;
 }
-.news-title:hover {
+.news-link:hover {
     color: #60a5fa;
 }
-.news-meta {
-    font-size: 13px !important;
+.news-source {
+    font-size: 12px !important;
     color: #94a3b8;
-    margin-top: 8px;
-}
-
-.weather-gradient {
-    background: linear-gradient(135deg, #0f766e 0%, #0369a1 50%, #1e1b4b 100%);
-    border: 1px solid rgba(56, 189, 248, 0.4);
-    border-radius: 16px;
-    padding: 18px;
-    color: white;
-    margin-bottom: 14px;
-    box-shadow: 0 4px 20px rgba(3, 105, 161, 0.2);
-}
-
-.sports-card {
-    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-    border: 1px solid rgba(147, 51, 234, 0.4);
-    border-radius: 16px;
-    padding: 18px;
-    color: white;
-    margin-bottom: 14px;
-}
-
-.subs-card {
-    background: linear-gradient(135deg, #1e1b4b 0%, #31104b 100%);
-    border: 1px solid rgba(168, 85, 247, 0.4);
-    border-radius: 16px;
-    padding: 18px;
-    color: white;
-    margin-bottom: 14px;
-}
-
-.blog-card {
-    background: linear-gradient(135deg, #064e3b 0%, #065f46 50%, #0f172a 100%);
-    border: 1px solid rgba(52, 211, 153, 0.4);
-    border-radius: 16px;
-    padding: 18px;
-    color: white;
-    margin-bottom: 14px;
-    box-shadow: 0 4px 20px rgba(6, 78, 59, 0.25);
-}
-
-.blog-btn {
-    display: inline-block;
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-    color: white !important;
-    text-decoration: none;
-    font-weight: 800;
-    padding: 8px 14px;
-    border-radius: 10px;
-    font-size: 14px;
     margin-top: 6px;
-    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
-}
-.blog-btn:hover {
-    background: linear-gradient(135deg, #059669 0%, #047857 100%);
 }
 
-.blog-btn-secondary {
-    display: inline-block;
-    background: rgba(255, 255, 255, 0.15);
-    color: white !important;
-    text-decoration: none;
-    font-weight: 700;
-    padding: 8px 14px;
-    border-radius: 10px;
-    font-size: 14px;
-    margin-top: 6px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
+/* 깔끔한 메트릭 */
 [data-testid="stMetricValue"] {
-    font-size: 28px !important;
+    font-size: 26px !important;
     font-weight: 900 !important;
+    letter-spacing: -0.02em;
 }
 [data-testid="stMetricLabel"] {
-    font-size: 15px !important;
-    font-weight: 700 !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
     color: #94a3b8 !important;
 }
 [data-testid="stMetricDelta"] {
-    font-size: 14px !important;
+    font-size: 13px !important;
     font-weight: 700 !important;
 }
 
+/* 탭 바 미니멀 스타일 */
 .stTabs [data-baseweb="tab-list"] {
-    gap: 8px;
+    gap: 6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding-bottom: 4px;
 }
 .stTabs [data-baseweb="tab"] {
-    height: 48px !important;
+    height: 42px !important;
     border-radius: 10px;
-    padding: 8px 16px !important;
-    font-size: 16px !important;
-    font-weight: 800 !important;
+    padding: 6px 16px !important;
+    font-size: 15px !important;
+    font-weight: 700 !important;
     color: #94a3b8;
+    background: transparent;
+    border: none;
 }
 .stTabs [aria-selected="true"] {
-    background-color: rgba(59, 130, 246, 0.25) !important;
+    background-color: rgba(59, 130, 246, 0.15) !important;
     color: #60a5fa !important;
-    border-bottom: 3px solid #3b82f6 !important;
+    font-weight: 800 !important;
+}
+
+/* 미니멀 버튼 */
+.btn-clean-primary {
+    display: inline-block;
+    background: #2563eb;
+    color: #ffffff !important;
+    text-decoration: none;
+    font-weight: 700;
+    padding: 8px 16px;
+    border-radius: 10px;
+    font-size: 14px;
+    border: none;
+    transition: background 0.2s ease;
+}
+.btn-clean-primary:hover {
+    background: #1d4ed8;
+}
+.btn-clean-secondary {
+    display: inline-block;
+    background: rgba(255, 255, 255, 0.08);
+    color: #e2e8f0 !important;
+    text-decoration: none;
+    font-weight: 600;
+    padding: 8px 14px;
+    border-radius: 10px;
+    font-size: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+.btn-clean-secondary:hover {
+    background: rgba(255, 255, 255, 0.14);
 }
 
 button {
-    font-size: 16px !important;
+    font-size: 15px !important;
     font-weight: 700 !important;
     border-radius: 10px !important;
 }
 input, select, textarea {
-    font-size: 16px !important;
+    font-size: 15px !important;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# 6. [영구 저장소 파일 관리]
+# 6. 영구 저장소 파일 관리
 PORTFOLIO_FILE = "portfolio.json"
 BRIEFING_FILE = "briefing.json"
 TODOS_FILE = "todos.json"
@@ -286,23 +278,23 @@ DEFAULT_PORTFOLIO = [
 ]
 
 DEFAULT_SPORTS_TEAMS = [
-    {"종목": "⚽ 축구", "팀명": "맨체스터 유나이티드", "리그": "프리미어리그 (EPL)", "키워드": "맨체스터 유나이티드 OR 맨유"},
-    {"종목": "⚾ 야구", "팀명": "KIA 타이거즈", "리그": "KBO 리그", "키워드": "KIA 타이거즈"},
-    {"종목": "⚾ 야구", "팀명": "LA 다저스", "리그": "메이저리그 (MLB)", "키워드": "LA 다저스 OR 오타니"}
+    {"종목": "축구", "팀명": "맨체스터 유나이티드", "리그": "프리미어리그 (EPL)", "키워드": "맨체스터 유나이티드 OR 맨유"},
+    {"종목": "야구", "팀명": "KIA 타이거즈", "리그": "KBO 리그", "키워드": "KIA 타이거즈"},
+    {"종목": "야구", "팀명": "LA 다저스", "리그": "메이저리그 (MLB)", "키워드": "LA 다저스 OR 오타니"}
 ]
 
 DEFAULT_SUBSCRIPTIONS = [
-    {"서비스": "SPOTV NOW", "월요금": 19900, "결제일": 15, "카테고리": "⚽ 스포츠 중계"},
-    {"서비스": "넷플릭스 (Netflix)", "월요금": 17000, "결제일": 22, "카테고리": "🎬 OTT/영화"},
-    {"서비스": "쿠팡플레이 (와우멤버십)", "월요금": 7890, "결제일": 8, "카테고리": "🛍️ OTT/쇼핑"},
-    {"서비스": "Spotify (스포티파이)", "월요금": 11990, "결제일": 1, "카테고리": "🎵 음악 스트리밍"}
+    {"서비스": "SPOTV NOW", "월요금": 19900, "결제일": 15, "카테고리": "스포츠"},
+    {"서비스": "넷플릭스 (Netflix)", "월요금": 17000, "결제일": 22, "카테고리": "OTT"},
+    {"서비스": "쿠팡 와우멤버십", "월요금": 7890, "결제일": 8, "카테고리": "쇼핑·OTT"},
+    {"서비스": "Spotify (스포티파이)", "월요금": 11990, "결제일": 1, "카테고리": "음악"}
 ]
 
 DEFAULT_BLOG_STATS = {
     "blog_url": "https://m.blog.naver.com/early_leave_lab",
     "blog_id": "early_leave_lab",
-    "blog_name": "칼퇴연구소 | 칼퇴연구원의 테크 랩",
-    "blog_slogan": "반복되는 야근을 줄이고 일상을 되찾는 생산성 치트키",
+    "blog_name": "칼퇴연구소 | 테크·생산성 랩",
+    "blog_slogan": "반복되는 야근을 줄이고 일상을 되찾는 생산성 솔루션",
     "target_monthly_income": 300000,
     "current_monthly_income": 0,
     "manual_today_visitors": 0,
@@ -312,21 +304,21 @@ DEFAULT_BLOG_STATS = {
 DEFAULT_BLOG_POSTS = []
 
 DEFAULT_LOCATION = {
-    "name": "경기도 용인시",
+    "name": "용인시",
     "lat": 37.2410,
     "lon": 127.1775
 }
 
 LOCATION_PRESETS = {
-    "경기도 용인시": {"lat": 37.2410, "lon": 127.1775, "name": "경기도 용인시"},
-    "경기도 성남시 (분당/판교)": {"lat": 37.4200, "lon": 127.1265, "name": "경기도 성남시"},
-    "서울특별시 강남구": {"lat": 37.4979, "lon": 127.0276, "name": "서울특별시 강남구"},
-    "서울특별시 종로/중구": {"lat": 37.5636, "lon": 126.9976, "name": "서울특별시"},
-    "인천광역시": {"lat": 37.4563, "lon": 126.7052, "name": "인천광역시"},
-    "부산광역시": {"lat": 35.1796, "lon": 129.0756, "name": "부산광역시"},
-    "대전광역시": {"lat": 36.3504, "lon": 127.3845, "name": "대전광역시"},
-    "대구광역시": {"lat": 35.8714, "lon": 128.6014, "name": "대구광역시"},
-    "광주광역시": {"lat": 35.1595, "lon": 126.8526, "name": "광주광역시"}
+    "경기도 용인시": {"lat": 37.2410, "lon": 127.1775, "name": "용인시"},
+    "경기도 성남시 (분당/판교)": {"lat": 37.4200, "lon": 127.1265, "name": "성남시"},
+    "서울특별시 강남구": {"lat": 37.4979, "lon": 127.0276, "name": "서울 강남"},
+    "서울특별시 종로/중구": {"lat": 37.5636, "lon": 126.9976, "name": "서울 종로"},
+    "인천광역시": {"lat": 37.4563, "lon": 126.7052, "name": "인천"},
+    "부산광역시": {"lat": 35.1796, "lon": 129.0756, "name": "부산"},
+    "대전광역시": {"lat": 36.3504, "lon": 127.3845, "name": "대전"},
+    "대구광역시": {"lat": 35.8714, "lon": 128.6014, "name": "대구"},
+    "광주광역시": {"lat": 35.1595, "lon": 126.8526, "name": "광주"}
 }
 
 def load_location():
@@ -381,7 +373,7 @@ def load_todos():
                 data = json.load(f)
                 if data: return data
         except Exception: pass
-    return ["주요 증시 캘린더 확인하기", "내 응원팀 경기 일정 체크하기"]
+    return ["주요 증시 캘린더 확인", "응원팀 경기 일정 체크"]
 
 def save_todos(todos):
     try:
@@ -463,7 +455,7 @@ def save_blog_posts(posts):
             json.dump(posts, f, ensure_ascii=False, indent=2)
     except Exception as e: pass
 
-# 7. [네이버 블로그 실시간 방문자 수 및 포스팅 데이터 조회 엔진]
+# 7. 네이버 블로그 방문자 수 및 RSS 조회
 @st.cache_data(ttl=300)
 def fetch_naver_blog_live_data(blog_id="early_leave_lab"):
     visitor_records = []
@@ -513,7 +505,7 @@ def fetch_naver_blog_live_data(blog_id="early_leave_lab"):
 
 # 8. 실시간 위치 기반 날씨 데이터 조회
 @st.cache_data(ttl=1800)
-def get_current_weather(lat=37.2410, lon=127.1775, default_name="경기도 용인시"):
+def get_current_weather(lat=37.2410, lon=127.1775, default_name="용인시"):
     try:
         url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto"
         res = requests.get(url, timeout=3).json()
@@ -522,18 +514,17 @@ def get_current_weather(lat=37.2410, lon=127.1775, default_name="경기도 용�
         humidity = current.get("relative_humidity_2m", 65)
         code = current.get("weather_code", 0)
         
-        weather_desc = "맑음 ☀️"
-        if code == 1 or code == 2: weather_desc = "구름 조금 ⛅"
-        elif code == 3: weather_desc = "흐림 ☁️"
-        elif code in (51, 53, 55, 61, 63, 65, 80, 81, 82): weather_desc = "비 🌧️"
-        elif code in (71, 73, 75, 85, 86): weather_desc = "눈 ❄️"
+        weather_desc = "맑음"
+        if code in (1, 2): weather_desc = "구름 조금"
+        elif code == 3: weather_desc = "흐림"
+        elif code in (51, 53, 55, 61, 63, 65, 80, 81, 82): weather_desc = "비"
+        elif code in (71, 73, 75, 85, 86): weather_desc = "눈"
         
-        loc_label = f"📍 {default_name}"
-        return f"{temp:.1f}°C", weather_desc, f"{humidity}%", loc_label
+        return f"{temp:.1f}°C", weather_desc, f"{humidity}%", default_name
     except Exception:
-        return "28.0°C", "맑음 ☀️", "60%", f"📍 {default_name}"
+        return "28.0°C", "맑음", "60%", default_name
 
-# 9. [초고속 pykrx + yfinance 하이브리드 엔진]
+# 9. 초고속 pykrx + yfinance 하이브리드 엔진
 @st.cache_data(ttl=120)
 def get_live_market_data(ticker_symbol):
     clean_code = str(ticker_symbol).replace(".KS", "").replace(".KQ", "").strip()
@@ -607,7 +598,7 @@ def fetch_news_feed(query, max_results=8):
     except Exception:
         return []
 
-# 10. [통합 제미나이 AI 호출 엔진]
+# 10. AI 호출 엔진
 def call_gemini_api(prompt_text, api_key, system_instruction=None, image_bytes=None, chat_contents=None):
     if not api_key or not api_key.strip():
         return None, "Gemini API Key를 입력해 주세요."
@@ -615,19 +606,7 @@ def call_gemini_api(prompt_text, api_key, system_instruction=None, image_bytes=N
     clean_key = api_key.strip()
     headers = {"Content-Type": "application/json"}
     
-    candidate_models = []
-    try:
-        m_res = requests.get(f"https://generativelanguage.googleapis.com/v1beta/models?key={clean_key}", timeout=5)
-        if m_res.status_code == 200:
-            active = [m['name'].replace("models/", "") for m in m_res.json().get('models', []) if 'generateContent' in m.get('supportedGenerationMethods', [])]
-            flash_models = [m for m in active if 'flash' in m.lower()]
-            other_models = [m for m in active if 'flash' not in m.lower()]
-            candidate_models = flash_models + other_models
-    except Exception:
-        pass
-        
-    if not candidate_models:
-        candidate_models = ["gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-2.0-flash", "gemini-2.5-flash", "gemini-pro"]
+    candidate_models = ["gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-2.0-flash", "gemini-pro"]
 
     if chat_contents:
         contents = chat_contents
@@ -683,7 +662,7 @@ def generate_ai_briefing(news_headlines, portfolio_items, api_key):
     
     prompt = f"""
     당신은 수석 증시 애널리스트 AI 어시스턴트입니다.
-    오늘자 실시간 주요 금융/경제 뉴스 헤드라인과 투자자의 보유 포트폴리오를 바탕으로, 모바일에서 읽기 편한 [오늘자 맞춤형 모닝 증시 브리핑]을 작성해주세요.
+    오늘자 실시간 주요 금융/경제 뉴스 헤드라인과 투자자의 보유 포트폴리오를 바탕으로, 불필요한 미사여구 없이 간결하고 명확한 [모닝 증시 브리핑]을 작성해주세요.
 
     [투자자 보유 종목]
     {stock_list_str}
@@ -692,11 +671,11 @@ def generate_ai_briefing(news_headlines, portfolio_items, api_key):
     {news_text}
 
     [작성 가이드라인]
-    1. 🌐 오늘의 글로벌 & 국내 증시 핵심 요약 (핵심 3줄)
-    2. 🎯 내 보유 종목에 미치는 영향 및 시사점 (KODEX AI반도체 및 커버드콜 등 보유 종목별 맞춤 분석)
-    3. 💡 오늘 장 시작 전 투자 전략 및 관전 포인트 (간결하고 실용적인 가이드)
-    
-    이모지와 함께 모바일 화면에서 한눈에 들어오도록 명확하고 간결하게 마크다운으로 작성해주세요.
+    1. 글로벌 & 국내 증시 핵심 요약 (3줄)
+    2. 보유 종목 영향 및 시사점 (KODEX AI반도체, 커버드콜 맞춤 분석)
+    3. 금일 투자 전략 및 체크포인트
+
+    이모지는 배제하고, 가독성 높은 마크다운 형식으로 작성해주세요.
     """
     return call_gemini_api(prompt, api_key)
 
@@ -704,28 +683,27 @@ def generate_team_briefing(team_name, sports_type, league, team_news, api_key):
     news_text = "\n".join([f"- {h['title']} ({h.get('source', '')})" for h in team_news[:10]]) if team_news else f"{team_name} 최신 경기 일정"
     
     prompt = f"""
-    당신은 스포츠 전문 기자이자 분석가 AI입니다.
-    현재 시점(2026년 8월)을 기준으로 [{sports_type} - {team_name} ({league})] 구단의 최신 경기 일정, 최근 경기 결과, 구단 핵심 이슈를 브리핑해주세요.
+    당신은 스포츠 전문 분석가 AI입니다.
+    현재 시점(2026년 8월)을 기준으로 [{sports_type} - {team_name} ({league})] 구단의 최신 경기 일정, 최근 경기 결과, 핵심 이슈를 간결하게 정리해주세요.
 
-    [중요 규칙]
-    - 경기 일정에 표기되는 모든 날짜와 킥오프/시작 시간은 반드시 **대한민국 표준시 (한국 시간, KST)** 기준으로 표기해주세요 (예: '8월 16일(일) 밤 10:30 (한국 시간)', '새벽 04:00 (한국 시간)').
+    [규칙]
+    - 모든 경기 일정 및 시간은 대한민국 표준시 (한국 시간, KST) 기준으로 표기해주세요.
+    - 불필요한 이모지를 남발하지 말고, 군더더기 없는 문장으로 요약해주세요.
 
-    [최신 관련 뉴스 데이터]
+    [최신 뉴스 데이터]
     {news_text}
 
-    [작성 가이드라인]
-    1. 📅 **다가오는 다음 경기 일정**: (대진 상대, 경기 날짜/한국 시간 KST, 홈/원정)
-    2. 🏆 **최근 경기 결과 & 스코어**: (최근 경기 승패, 스코어, 주요 활약 선수)
-    3. 📰 **구단 핵심 뉴스 & 라인업 이슈**: (부상자, 주요 선수 폼, 최근 팀 분위기 3줄 요약)
-
-    이모지와 함께 모바일 화면에서 한눈에 보기 좋게 마크다운으로 명확하고 간결하게 작성해주세요.
+    [작성 항목]
+    1. 다음 경기 일정: (상대팀, 한국 시간 KST, 홈/원정)
+    2. 최근 경기 결과: (스코어, 주요 기록)
+    3. 구단 핵심 이슈: (부상자, 주요 라인업 3줄 요약)
     """
     text, status = call_gemini_api(prompt, api_key)
     return text if status == "SUCCESS" else None
 
 def ask_gemini_chat(chat_history, user_msg, portfolio_items, api_key):
     stock_list_str = ", ".join([f"{item['종목명']} ({item['티커']})" for item in portfolio_items]) if portfolio_items else "KODEX AI반도체TOP2플러스, KODEX 200타겟위클리커버드콜"
-    system_inst = f"당신은 투자자의 1:1 개인 금융/주식 비서 AI 'MORI'입니다. 투자자가 보유한 포트폴리오는 [{stock_list_str}] 입니다. 친절하고 명확하며 실용적인 분석을 한국어로 답변하세요."
+    system_inst = f"당신은 투자자의 1:1 금융/자산 분석 비서 AI 'MORI'입니다. 투자자가 보유한 포트폴리오는 [{stock_list_str}] 입니다. 이모지를 최소화하고 전문적이며 명확하게 답변하세요."
 
     contents = []
     last_role = None
@@ -749,54 +727,48 @@ def ask_gemini_chat(chat_history, user_msg, portfolio_items, api_key):
     fb_text, fb_status = call_gemini_api(fallback_prompt, api_key)
     if fb_status == "SUCCESS" and fb_text:
         return fb_text
-    return f"⚠️ AI 비서 응답 중 오류가 발생했습니다: {text if text else status}"
+    return f"AI 응답 오류: {text if text else status}"
 
 
 # =============================================================
-# ⭐ [4대 핵심 대분류 렌더링 모듈]
+# ⭐ [4대 핵심 대분류 렌더링 모듈 - 미니멀 클린 UI]
 # =============================================================
 
 # -------------------------------------------------------------
-# 1. 🏠 [데일리 허브 모듈]
+# 1. [데일리 허브 모듈]
 # -------------------------------------------------------------
 def render_daily_hub():
-    st.subheader("🏠 데일리 라이프 & 일정 허브")
-    
-    sub_d1, sub_d2, sub_d3, sub_d4 = st.tabs(["📌 오늘의 요약", "📅 통합 캘린더", "💳 고정 구독료", "📋 To-Do & 날씨"])
+    sub_d1, sub_d2, sub_d3, sub_d4 = st.tabs(["오늘 요약", "통합 캘린더", "고정 구독료", "할 일 관리"])
 
     with sub_d1:
         temp_val, weather_val, humid_val, loc_tag = get_current_weather(
             current_loc_data.get("lat", 37.2410),
             current_loc_data.get("lon", 127.1775),
-            current_loc_data.get("name", "경기도 용인시")
+            current_loc_data.get("name", "용인시")
         )
-        st.markdown(f"""
-        <div class="weather-gradient">
-            <div style="font-size: 15px; color: #bae6fd; font-weight: 700;">{loc_tag} 실시간 날씨</div>
-            <div style="font-size: 30px; font-weight: 900; margin-top: 6px; letter-spacing: -0.02em;">{weather_val} {temp_val}</div>
-            <div style="font-size: 14px; color: #e0f2fe; margin-top: 4px;">습도 {humid_val} | 외출 및 출퇴근 추천 날씨</div>
-        </div>
-        """, unsafe_allow_html=True)
 
         with st.container(border=True):
-            st.markdown("**📅 8월 주요 일정 & D-Day 요약** (오늘: 8월 16일)")
+            st.markdown(f"**{loc_tag} 날씨** : {weather_val} **{temp_val}** (습도 {humid_val})")
+
+        with st.container(border=True):
+            st.markdown("**8월 주요 일정 및 D-Day**")
             cal_summary_events = [
-                {"날짜": "8월 22일(토)", "구분": "🎬 OTT", "일정": "넷플릭스 결제일 (17,000원)", "D-Day": "D-6"},
-                {"날짜": "8월 23일(일)", "구분": "📝 어학", "일정": "오픽(OPIc) 성적 발표 13:00", "D-Day": "D-7"},
-                {"날짜": "8월 26일(수)", "구분": "🎯 반도체", "일정": "엔비디아(NVDA) 실적 발표", "D-Day": "D-10"},
-                {"날짜": "8월 28일(금)", "구분": "🌐 경제", "일정": "미국 잭슨홀 심포지엄 (파월 연설)", "D-Day": "D-12"},
-                {"날짜": "9월 01일(화)", "구분": "💰 배당금", "일정": "KODEX 커버드콜 월 분배금 입금", "D-Day": "D-16"}
+                {"날짜": "8월 22일(토)", "구분": "OTT", "내용": "넷플릭스 결제일 (17,000원)", "D-Day": "D-6"},
+                {"날짜": "8월 23일(일)", "구분": "어학", "내용": "오픽(OPIc) 성적 발표 13:00", "D-Day": "D-7"},
+                {"날짜": "8월 26일(수)", "구분": "반도체", "내용": "엔비디아(NVDA) 실적 발표", "D-Day": "D-10"},
+                {"날짜": "8월 28일(금)", "구분": "경제", "내용": "미국 잭슨홀 심포지엄 (파월 연설)", "D-Day": "D-12"},
+                {"날짜": "9월 01일(화)", "구분": "배당", "내용": "KODEX 커버드콜 월 분배금 입금", "D-Day": "D-16"}
             ]
             st.dataframe(pd.DataFrame(cal_summary_events), use_container_width=True)
 
         home_todos = load_todos()
         with st.container(border=True):
-            st.markdown("**✅ 오늘의 할 일 (To-Do)**")
+            st.markdown("**오늘의 할 일**")
             if home_todos:
                 for t in home_todos[:3]:
-                    st.markdown(f"• **{t}**")
+                    st.markdown(f"• {t}")
             else:
-                st.info("등록된 할 일이 없습니다.")
+                st.caption("등록된 할 일이 없습니다.")
 
         home_portfolio = load_portfolio()
         p_tickers = [it["티커"] for it in home_portfolio]
@@ -812,7 +784,7 @@ def render_daily_hub():
         rate_h = (diff_h / total_buy_h) * 100 if total_buy_h > 0 else 0
 
         with st.container(border=True):
-            st.markdown("**💼 내 포트폴리오 한 줄 요약**")
+            st.markdown("**내 포트폴리오 요약**")
             ch1, ch2 = st.columns(2)
             with ch1: st.metric("총 평가금액", f"{total_eval_h:,.0f}원", f"{rate_h:+.2f}%")
             with ch2: st.metric("총 평가손익", f"{diff_h:+,.0f}원")
@@ -823,26 +795,21 @@ def render_daily_hub():
         for p in user_portfolio:
             if "커버드콜" in p["종목명"]: cover_shares = p["보유수량"]
         monthly_est_div = cover_shares * 270
-        
-        st.markdown(f"""
-        <div class="subs-card">
-            <div style="font-size: 15px; color: #e9d5ff; font-weight: 700;">💰 월 배당금(분배금) 예상 수령액</div>
-            <div style="font-size: 30px; font-weight: 900; margin-top: 4px;">{monthly_est_div:,.0f}원 / 월</div>
-            <div style="font-size: 14px; color: #d8b4fe; margin-top: 4px;">KODEX 200위클리커버드콜({cover_shares:,}주) 기준</div>
-        </div>
-        """, unsafe_allow_html=True)
+
+        with st.container(border=True):
+            st.markdown(f"**월 배당(분배금) 예상 수령액** : **{monthly_est_div:,.0f}원** (KODEX 200위클리커버드콜 {cover_shares:,}주 기준)")
 
         timeline_events = [
-            {"날짜": "8월 22일(토)", "분류": "🎬 구독 결제", "내용": "넷플릭스 (17,000원) 결제일 (D-6)", "중요도": "🟡 정기"},
-            {"날짜": "8월 23일(일)", "분류": "📝 어학 시험", "내용": "오픽(OPIc) 성적 발표 13:00 (D-7)", "중요도": "🔴 필수"},
-            {"날짜": "8월 26일(수)", "분류": "🎯 AI반도체", "내용": "엔비디아(NVDA) 2분기 실적 발표 (D-10)", "중요도": "🔴 핵심"},
-            {"날짜": "8월 28일(금)", "분류": "🌐 거시경제", "내용": "미국 잭슨홀 심포지엄 (파월 의장 연설)", "중요도": "🔴 높음"},
-            {"날짜": "9월 01일(화)", "분류": "💰 배당금 입금", "내용": "KODEX 커버드콜 월 분배금 입금 예정일", "중요도": "🟢 수익"},
-            {"날짜": "9월 01일(화)", "분류": "🎵 구독 결제", "내용": "Spotify (11,990원) 결제일", "중요도": "🟡 정기"},
-            {"날짜": "9월 08일(화)", "분류": "🛍️ 구독 결제", "내용": "쿠팡 와우멤버십 (7,890원) 결제일", "중요도": "🟡 정기"},
-            {"날짜": "9월 10일(목)", "분류": "🎯 파생만기", "내용": "국내 선물·옵션 동시 만기일 (네 마녀의 날)", "중요도": "🔴 변동성"},
-            {"날짜": "9월 15일(화)", "분류": "⚽ 구독 결제", "내용": "SPOTV NOW (19,900원) 결제일", "중요도": "🟡 정기"},
-            {"날짜": "9월 16일(수)", "분류": "🌐 거시경제", "내용": "미국 9월 FOMC 기준금리 결정 회의", "중요도": "🔴 높음"}
+            {"날짜": "8월 22일(토)", "구분": "구독 결제", "내용": "넷플릭스 (17,000원) 결제일 (D-6)"},
+            {"날짜": "8월 23일(일)", "구분": "어학 시험", "내용": "오픽(OPIc) 성적 발표 13:00 (D-7)"},
+            {"날짜": "8월 26일(수)", "구분": "실적 발표", "내용": "엔비디아(NVDA) 2분기 실적 발표 (D-10)"},
+            {"날짜": "8월 28일(금)", "구분": "거시경제", "내용": "미국 잭슨홀 심포지엄 (파월 연설)"},
+            {"날짜": "9월 01일(화)", "구분": "배당 입금", "내용": "KODEX 커버드콜 월 분배금 입금 예정일"},
+            {"날짜": "9월 01일(화)", "구분": "구독 결제", "내용": "Spotify (11,990원) 결제일"},
+            {"날짜": "9월 08일(화)", "구분": "구독 결제", "내용": "쿠팡 와우멤버십 (7,890원) 결제일"},
+            {"날짜": "9월 10일(목)", "구분": "파생만기", "내용": "국내 선물·옵션 동시 만기일"},
+            {"날짜": "9월 15일(화)", "구분": "구독 결제", "내용": "SPOTV NOW (19,900원) 결제일"},
+            {"날짜": "9월 16일(수)", "구분": "거시경제", "내용": "미국 9월 FOMC 기준금리 결정 회의"}
         ]
         st.dataframe(pd.DataFrame(timeline_events), use_container_width=True)
 
@@ -853,53 +820,44 @@ def render_daily_hub():
         coverage_rate = (monthly_est_div / total_sub_monthly * 100) if total_sub_monthly > 0 else 0
 
         c_s1, c_s2 = st.columns(2)
-        with c_s1: st.metric("월 고정 구독료 합계", f"{total_sub_monthly:,.0f}원", f"총 {len(subs_list)}개 서비스")
+        with c_s1: st.metric("월 고정 구독료", f"{total_sub_monthly:,.0f}원", f"총 {len(subs_list)}개 서비스")
         with c_s2: st.metric("배당금 방어율", f"{coverage_rate:.1f}%", f"월 배당 {monthly_est_div:,.0f}원")
 
-        st.markdown(f"""
-        <div class="summary-card" style="border-left: 4px solid #10b981;">
-            <div style="font-weight: 700; color: #34d399;">🛡️ 배당금 방어 성공!</div>
-            <div style="font-size: 15px; color: #cbd5e1; margin-top: 4px;">
-                매월 발생하는 커버드콜 배당금({monthly_est_div:,.0f}원)이 고정 구독료({total_sub_monthly:,.0f}원)를 초과하여 <b>모든 OTT 및 멤버십을 배당금만으로 전액 무료 충당</b>하고 있습니다.
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        for idx, s in enumerate(subs_list):
+        for s in subs_list:
             col_name, col_cost, col_dday = st.columns([0.5, 0.25, 0.25])
-            with col_name: st.markdown(f"**{s['카테고리']} {s['서비스']}**")
+            with col_name: st.markdown(f"**{s['서비스']}** ({s['카테고리']})")
             with col_cost: st.markdown(f"{s['월요금']:,}원 / 월")
             with col_dday: st.markdown(f"매월 **{s['결제일']}일**")
 
-        with st.expander("➕ 새 구독 서비스 추가 / 관리"):
+        with st.expander("구독 서비스 추가"):
             with st.form("add_sub_form"):
-                new_s_name = st.text_input("서비스명 (예: 유튜브 프리미엄, Goodnotes)", value="유튜브 프리미엄")
+                new_s_name = st.text_input("서비스명", value="유튜브 프리미엄")
                 new_s_cost = st.number_input("월 구독료(원)", value=14900, step=1000)
-                new_s_day = st.number_input("매월 결제일 (1~31일)", value=1, min_value=1, max_value=31)
-                new_s_cat = st.selectbox("카테고리", ["🎬 OTT/영상", "⚽ 스포츠", "🎵 음악", "💼 생산성/클라우드", "🛍️ 쇼핑/기타"])
-                if st.form_submit_button("구독 서비스 등록"):
+                new_s_day = st.number_input("결제일 (1~31일)", value=1, min_value=1, max_value=31)
+                new_s_cat = st.selectbox("카테고리", ["OTT·영상", "스포츠", "음악", "생산성", "쇼핑·기타"])
+                if st.form_submit_button("등록"):
                     if new_s_name.strip():
                         subs_list.append({"서비스": new_s_name.strip(), "월요금": int(new_s_cost), "결제일": int(new_s_day), "카테고리": new_s_cat})
                         save_subscriptions(subs_list)
-                        st.success(f"'{new_s_name}' 등록 완료!")
+                        st.success("등록 완료되었습니다.")
                         st.rerun()
 
     with sub_d4:
-        with st.expander("📍 날씨 지역 변경 / GPS 위치 설정"):
+        with st.expander("날씨 지역 설정"):
             preset_names = list(LOCATION_PRESETS.keys())
             sel_preset = st.selectbox("지역 선택", preset_names, index=0)
-            if st.button("선택 지역으로 날씨 저장"):
+            if st.button("지역 저장"):
                 chosen = LOCATION_PRESETS[sel_preset]
                 save_location(chosen)
-                st.success(f"'{chosen['name']}'(으)로 날씨 위치가 저장되었습니다!")
+                st.success("저장되었습니다.")
                 st.rerun()
 
-        st.subheader("✅ 할 일 관리 (To-Do List)")
+        st.markdown("##### 할 일 목록 (To-Do)")
         current_todos = load_todos()
         to_delete = None
         for idx, todo_item in enumerate(current_todos):
             col_t1, col_t2 = st.columns([0.85, 0.15])
-            with col_t1: st.write(f"• **{todo_item}**")
+            with col_t1: st.write(f"• {todo_item}")
             with col_t2:
                 if st.button("완료", key=f"del_d_{idx}"): to_delete = idx
         if to_delete is not None:
@@ -909,21 +867,18 @@ def render_daily_hub():
 
         with st.form("new_todo_form"):
             new_todo = st.text_input("새로운 할 일 입력")
-            if st.form_submit_button("추가하기"):
+            if st.form_submit_button("추가"):
                 if new_todo.strip():
                     current_todos.append(new_todo.strip())
                     save_todos(current_todos)
-                    st.success("할 일이 추가되었습니다!")
                     st.rerun()
 
 # -------------------------------------------------------------
-# 2. 💼 [주식 & 금융 허브 모듈]
+# 2. [주식 & 금융 허브 모듈]
 # -------------------------------------------------------------
 def render_stock_hub():
-    st.subheader("💼 주식 & 금융 인텔리전스 허브")
-    
     sub_s1, sub_s2, sub_s3, sub_s4, sub_s5 = st.tabs([
-        "💼 내 포트폴리오", "📊 실시간 시황", "📰 맞춤 뉴스 & 검색", "💡 AI 모닝 브리핑", "🤖 1:1 투자 비서"
+        "내 포트폴리오", "실시간 시황", "맞춤 뉴스", "모닝 브리핑", "AI 투자 비서"
     ])
 
     with sub_s1:
@@ -963,20 +918,20 @@ def render_stock_hub():
 
         c1, c2 = st.columns(2)
         with c1: st.metric("총 평가금액", f"{total_eval_krw:,.0f}원", f"{total_rate_krw:+.2f}%")
-        with c2: st.metric("총 평가손익", f"{total_profit_krw:+,.0f}원", f"매입총액: {total_buy_krw:,.0f}원")
+        with c2: st.metric("총 평가손익", f"{total_profit_krw:+,.0f}원", f"매입원금: {total_buy_krw:,.0f}원")
 
         st.dataframe(pd.DataFrame(calculated_rows), use_container_width=True)
 
-        with st.expander("📸 잔고 사진으로 포트폴리오 업데이트"):
+        with st.expander("잔고 캡처 이미지로 포트폴리오 업데이트"):
             uploaded_file = st.file_uploader("증권사 잔고 캡처 업로드", type=["png", "jpg", "jpeg"])
-            if uploaded_file and st.button("✨ AI 분석 및 영구 저장"):
+            if uploaded_file and st.button("AI 분석 및 저장"):
                 if not st.session_state.saved_gemini_key:
                     st.warning("Gemini API Key가 필요합니다.")
                 else:
                     parsed, status = analyze_portfolio_image(uploaded_file.getvalue(), st.session_state.saved_gemini_key)
                     if status == "SUCCESS" and parsed:
                         save_portfolio(parsed)
-                        st.success("포트폴리오가 저장되었습니다!")
+                        st.success("포트폴리오가 업데이트되었습니다.")
                         st.rerun()
 
     with sub_s2:
@@ -1000,24 +955,23 @@ def render_stock_hub():
         my_stock_names = [item["종목명"] for item in user_portfolio]
         
         category_options = (
-            ["📌 [전체] 내 보유 종목 뉴스"] +
-            [f"🎯 {name}" for name in my_stock_names] +
-            ["🇰🇷 국내 증시", "🇺🇸 미국 증시", "🤖 AI·반도체", "🔍 직접 검색"]
+            ["[전체] 내 보유 종목 뉴스"] +
+            [f"{name}" for name in my_stock_names] +
+            ["국내 증시", "미국 증시", "AI·반도체", "직접 검색"]
         )
-        selected_cat = st.selectbox("뉴스 카테고리 선택", category_options, index=0)
+        selected_cat = st.selectbox("뉴스 카테고리", category_options, index=0)
         
-        if selected_cat == "🔍 직접 검색":
-            query = st.text_input("검색할 뉴스 키워드 입력", value="삼성전자")
-        elif selected_cat == "📌 [전체] 내 보유 종목 뉴스":
+        if selected_cat == "직접 검색":
+            query = st.text_input("검색어 입력", value="삼성전자")
+        elif selected_cat == "[전체] 내 보유 종목 뉴스":
             query = " OR ".join([f'"{name}"' for name in my_stock_names]) + " OR AI반도체 OR 커버드콜"
-        elif selected_cat.startswith("🎯 "):
-            s_name = selected_cat.replace("🎯 ", "")
-            query = f'"{s_name}"' if "반도체" not in s_name else f'"{s_name}" OR AI반도체'
-        elif selected_cat == "🇰🇷 국내 증시":
+        elif selected_cat in my_stock_names:
+            query = f'"{selected_cat}"' if "반도체" not in selected_cat else f'"{selected_cat}" OR AI반도체'
+        elif selected_cat == "국내 증시":
             query = "코스피 OR 코스닥 OR 환율"
-        elif selected_cat == "🇺🇸 미국 증시":
+        elif selected_cat == "미국 증시":
             query = "뉴욕증시 OR S&P500 OR 나스닥 OR 엔비디아"
-        elif selected_cat == "🤖 AI·반도체":
+        elif selected_cat == "AI·반도체":
             query = "엔비디아 OR 반도체 HBM OR 인공지능 AI"
         else:
             query = "코스피"
@@ -1026,72 +980,70 @@ def render_stock_hub():
             news_list = fetch_news_feed(query, max_results=8)
             for item in news_list:
                 st.markdown(f"""
-                <div class="news-card">
-                    <a class="news-title" href="{item['link']}" target="_blank">🔗 {item['title']}</a>
-                    <div class="news-meta">📰 {item['source']} &nbsp;|&nbsp; 🕒 {item['date']}</div>
+                <div class="news-item">
+                    <a class="news-link" href="{item['link']}" target="_blank">{item['title']}</a>
+                    <div class="news-source">{item['source']} | {item['date']}</div>
                 </div>
                 """, unsafe_allow_html=True)
 
     with sub_s4:
         user_portfolio = load_portfolio()
         recent_news = fetch_news_feed("코스피 OR 반도체 OR 연준 금리 OR 엔비디아", max_results=12)
-        k_input_b = st.text_input("Gemini API Key (브리핑용)", value=st.session_state.saved_gemini_key, type="password", key="brief_k_in")
+        k_input_b = st.text_input("Gemini API Key", value=st.session_state.saved_gemini_key, type="password", key="brief_k_in")
         if k_input_b: st.session_state.saved_gemini_key = k_input_b
         
         c_b1, c_b2 = st.columns(2)
         with c_b1:
-            if st.button("✨ 오늘자 AI 브리핑 재생성", key="btn_b_re"):
+            if st.button("오늘자 AI 브리핑 생성", key="btn_b_re"):
                 if not st.session_state.saved_gemini_key:
-                    st.warning("API Key가 필요합니다.")
+                    st.warning("API Key를 입력해주세요.")
                 else:
-                    with st.spinner("AI 분석 중..."):
+                    with st.spinner("증시 브리핑 작성 중..."):
                         b_res, status = generate_ai_briefing(recent_news, user_portfolio, st.session_state.saved_gemini_key)
                         if status == "SUCCESS" and b_res:
-                            save_briefing(b_res, datetime.now(KST).strftime('%Y년 %m월 %d일 %H:%M:%S'))
-                            st.success("브리핑 완료!")
+                            save_briefing(b_res, datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S'))
                             st.rerun()
         saved_b, saved_t = load_briefing()
         with c_b2:
             if saved_b:
                 clean_speech = saved_b.replace("#", "").replace("*", "").replace("\n", " ").replace('"', '')[:300]
                 tts_html = f"""
-                <button onclick="window.speechSynthesis.speak(new SpeechSynthesisUtterance('{clean_speech}'))" style="background-color: #8b5cf6; color: white; border: none; padding: 10px 16px; border-radius: 8px; font-weight: 700; cursor: pointer; width: 100%;">
-                    🔊 음성으로 듣기 (TTS)
+                <button onclick="window.speechSynthesis.speak(new SpeechSynthesisUtterance('{clean_speech}'))" style="background-color: #475569; color: white; border: none; padding: 9px 16px; border-radius: 8px; font-weight: 700; cursor: pointer; width: 100%;">
+                    음성 듣기 (TTS)
                 </button>
                 """
-                components.html(tts_html, height=45)
+                components.html(tts_html, height=42)
         if saved_b:
-            st.caption(f"🕒 생성 시각: {saved_t}")
+            st.caption(f"생성 시각: {saved_t}")
             st.markdown(saved_b)
 
     with sub_s5:
         if "chat_messages" not in st.session_state:
-            st.session_state.chat_messages = [{"role": "assistant", "content": "안녕하세요! 고객님의 보유 포트폴리오를 기반으로 맞춤 투자 분석을 도와드립니다."}]
+            st.session_state.chat_messages = [{"role": "assistant", "content": "보유 포트폴리오를 기반으로 전문적인 금융·투자 분석을 제공해 드립니다."}]
         for msg in st.session_state.chat_messages:
             with st.chat_message(msg["role"]): st.markdown(msg["content"])
         with st.form("chat_form_s", clear_on_submit=True):
-            col_ci1, col_ci2 = st.columns([0.8, 0.2])
-            with col_ci1: user_input = st.text_input("질문", placeholder="AI 비서에게 질문을 입력하세요...", label_visibility="collapsed")
-            with col_ci2: send_btn = st.form_submit_button("전송 🚀", use_container_width=True)
+            col_ci1, col_ci2 = st.columns([0.82, 0.18])
+            with col_ci1: user_input = st.text_input("질문", placeholder="질문을 입력하세요...", label_visibility="collapsed")
+            with col_ci2: send_btn = st.form_submit_button("전송", use_container_width=True)
         if send_btn and user_input.strip():
             u_text = user_input.strip()
             st.session_state.chat_messages.append({"role": "user", "content": u_text})
             if st.session_state.saved_gemini_key:
-                with st.spinner("AI 분석 중..."):
+                with st.spinner("분석 중..."):
                     reply = ask_gemini_chat(st.session_state.chat_messages, u_text, load_portfolio(), st.session_state.saved_gemini_key)
                     st.session_state.chat_messages.append({"role": "assistant", "content": reply})
                     st.rerun()
 
 # -------------------------------------------------------------
-# 3. ⚽ [스포츠 허브 모듈]
+# 3. [스포츠 허브 모듈]
 # -------------------------------------------------------------
 def render_sports_hub():
-    st.subheader("⚽ 스포츠 & 응원팀 인텔리전스")
     my_teams = load_sports_teams()
     sports_briefings = load_sports_briefings()
 
-    team_names = [f"{idx+1}. {t['종목']} {t['팀명']} ({t['리그']})" for idx, t in enumerate(my_teams)]
-    selected_team_idx = st.selectbox("응원하는 팀 선택", range(len(team_names)), format_func=lambda x: team_names[x], key="sp_sel_main")
+    team_names = [f"{t['팀명']} ({t['리그']})" for t in my_teams]
+    selected_team_idx = st.selectbox("응원팀 선택", range(len(team_names)), format_func=lambda x: team_names[x], key="sp_sel_main")
     
     current_team = my_teams[selected_team_idx]
     team_key = current_team["팀명"]
@@ -1099,138 +1051,109 @@ def render_sports_hub():
     search_query = f'"{current_team["팀명"]}" AND (경기 OR 일정 OR 결과 OR 승리 OR 패배 OR 하이라이트)'
     team_news = fetch_news_feed(search_query, max_results=8)
 
-    c_s1, c_s2 = st.columns([0.65, 0.35])
-    with c_s1: st.write(f"### {current_team['종목']} {current_team['팀명']} ({current_team['리그']})")
+    c_s1, c_s2 = st.columns([0.7, 0.3])
+    with c_s1: st.markdown(f"#### {current_team['팀명']} ({current_team['리그']})")
     with c_s2:
-        if st.button("⚡ 경기 브리핑 생성 (한국시간 기준)", key=f"btn_sb_m_{team_key}"):
+        if st.button("구단 브리핑 생성", key=f"btn_sb_m_{team_key}"):
             if not st.session_state.saved_gemini_key:
                 st.warning("Gemini API Key가 필요합니다.")
             else:
-                with st.spinner(f"{team_key} 일정 및 이슈 AI 분석 중..."):
+                with st.spinner(f"{team_key} 분석 중..."):
                     b_txt = generate_team_briefing(current_team['팀명'], current_team['종목'], current_team['리그'], team_news, st.session_state.saved_gemini_key)
                     if b_txt:
                         sports_briefings[team_key] = {"text": b_txt, "updated_at": datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S')}
                         save_sports_briefings(sports_briefings)
-                        st.success("구단 브리핑 업데이트 완료!")
                         st.rerun()
 
     if team_key in sports_briefings:
         b_data = sports_briefings[team_key]
-        st.caption(f"🕒 업데이트 시각: {b_data.get('updated_at', '')} (모든 경기 시간은 한국시간 KST 기준)")
+        st.caption(f"업데이트: {b_data.get('updated_at', '')} (한국 시간 KST 기준)")
         st.markdown(b_data.get("text", ""))
 
     st.markdown("---")
-    st.write(f"📰 **{current_team['팀명']} 실시간 뉴스 피드**")
+    st.markdown(f"**{current_team['팀명']} 실시간 뉴스**")
     for n in team_news:
         st.markdown(f"""
-        <div class="news-card">
-            <a class="news-title" href="{n['link']}" target="_blank">📣 {n['title']}</a>
-            <div class="news-meta">📰 {n['source']} &nbsp;|&nbsp; 🕒 {n['date']}</div>
+        <div class="news-item">
+            <a class="news-link" href="{n['link']}" target="_blank">{n['title']}</a>
+            <div class="news-source">{n['source']} | {n['date']}</div>
         </div>
         """, unsafe_allow_html=True)
 
-    with st.expander("🔄 내 응원팀 순서 변경 및 추가/삭제"):
+    with st.expander("응원팀 순서 및 목록 설정"):
         for idx, t in enumerate(my_teams):
-            col_t_name, col_up, col_down, col_top = st.columns([0.45, 0.18, 0.18, 0.19])
-            with col_t_name: st.markdown(f"**{idx+1}위**: {t['종목']} {t['팀명']}")
+            col_t_name, col_up, col_down = st.columns([0.6, 0.2, 0.2])
+            with col_t_name: st.markdown(f"**{idx+1}위**: {t['팀명']} ({t['리그']})")
             with col_up:
-                if idx > 0 and st.button("⬆️", key=f"u_{idx}"):
+                if idx > 0 and st.button("위로", key=f"u_{idx}"):
                     my_teams[idx], my_teams[idx-1] = my_teams[idx-1], my_teams[idx]
                     save_sports_teams(my_teams); st.rerun()
             with col_down:
-                if idx < len(my_teams)-1 and st.button("⬇️", key=f"d_{idx}"):
+                if idx < len(my_teams)-1 and st.button("아래로", key=f"d_{idx}"):
                     my_teams[idx], my_teams[idx+1] = my_teams[idx+1], my_teams[idx]
-                    save_sports_teams(my_teams); st.rerun()
-            with col_top:
-                if idx > 0 and st.button("⭐ 1순위", key=f"tp_{idx}"):
-                    f_item = my_teams.pop(idx); my_teams.insert(0, f_item)
                     save_sports_teams(my_teams); st.rerun()
 
 # -------------------------------------------------------------
-# 4. ✍️ [블로그 관리 모듈 - 실시간 통계 & 1초 빠른 동기화 대시보드]
+# 4. [블로그 관리 모듈]
 # -------------------------------------------------------------
 def render_blog_hub():
-    st.subheader("✍️ 내 네이버 블로그 실시간 대시보드")
-    
     blog_stats = load_blog_stats()
     blog_posts = load_blog_posts()
     blog_id = blog_stats.get("blog_id", "early_leave_lab")
 
-    # 1) 네이버 블로그 실시간 데이터 가져오기
     live_data = fetch_naver_blog_live_data(blog_id)
     today_visitors_live = live_data.get("today_visitors", 0)
     history_vis = live_data.get("visitor_history", [])
     total_posts_rss = live_data.get("rss_post_count", 0)
 
-    # 수동 설정값과 라이브값 중 우선 적용
     display_today_vis = today_visitors_live if today_visitors_live > 0 else blog_stats.get("manual_today_visitors", 0)
     display_total_posts = len(blog_posts) if len(blog_posts) > 0 else total_posts_rss
 
-    # 저장된 방문자 히스토리가 있으면 사용
     stored_hist = blog_stats.get("visitor_history", [])
-    if history_vis:
-        final_history = history_vis
-    elif stored_hist:
-        final_history = stored_hist
-    else:
-        final_history = []
+    final_history = history_vis if history_vis else stored_hist
 
-    # 🌟 내 블로그 브랜드 카드 & 정확한 네이버 통계 바로가기 링크 버튼들
+    # 상단 블로그 프로필 & 미니멀 버튼
     st.markdown(f"""
-    <div class="blog-card">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
-            <div>
-                <div style="font-size: 22px; font-weight: 900; color: #6ee7b7;">칼퇴연구소 | 칼퇴연구원의 테크 랩</div>
-                <div style="font-size: 15px; color: #a7f3d0; margin-top: 4px;">반복되는 야근을 줄이고 일상을 되찾는 생산성 치트키</div>
-                <div style="font-size: 13px; color: #d1fae5; margin-top: 4px;">블로그 ID: <b>@{blog_id}</b></div>
-            </div>
-        </div>
-        <div style="margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.15); padding-top: 10px; display: flex; gap: 8px; flex-wrap: wrap;">
-            <a class="blog-btn" href="https://m.blog.naver.com/{blog_id}" target="_blank">
-                🌐 내 블로그 바로가기 ↗️
+    <div class="flat-card">
+        <div style="font-size: 18px; font-weight: 800; color: #f8fafc;">칼퇴연구소 | 테크·생산성 랩</div>
+        <div style="font-size: 13px; color: #94a3b8; margin-top: 3px;">https://m.blog.naver.com/{blog_id}</div>
+        <div style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
+            <a class="btn-clean-primary" href="https://m.blog.naver.com/{blog_id}" target="_blank">
+                블로그 바로가기
             </a>
-            <a class="blog-btn-secondary" href="https://admin.blog.naver.com/{blog_id}/stat/today" target="_blank">
-                📊 네이버 통계센터 (PC/관리자) ↗️
+            <a class="btn-clean-secondary" href="https://admin.blog.naver.com/{blog_id}/stat/today" target="_blank">
+                통계센터 (관리자)
             </a>
-            <a class="blog-btn-secondary" href="https://blog.stat.naver.com/m/blog/daily/cv" target="_blank">
-                📱 모바일 방문자 통계 ↗️
+            <a class="btn-clean-secondary" href="https://blog.stat.naver.com/m/blog/daily/cv" target="_blank">
+                모바일 통계
             </a>
-            <a class="blog-btn-secondary" href="https://adpost.naver.com" target="_blank">
-                💰 애드포스트 수익센터 ↗️
+            <a class="btn-clean-secondary" href="https://adpost.naver.com" target="_blank">
+                애드포스트 센터
             </a>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-    # 📊 실시간 지표 4개 메트릭 카드
+    # 4대 핵심 지표
     target_inc = blog_stats.get("target_monthly_income", 300000)
     curr_inc = blog_stats.get("current_monthly_income", 0)
     achieve_rate = (curr_inc / target_inc * 100) if target_inc > 0 else 0
 
     c_b1, c_b2, c_b3, c_b4 = st.columns(4)
-    with c_b1:
-        st.metric("오늘 방문자 수", f"{display_today_vis:,}명", "네이버 통계 연동")
-    with c_b2:
-        st.metric("총 포스팅 수", f"{display_total_posts:,}편", f"관리 대장: {len(blog_posts)}편")
-    with c_b3:
-        st.metric("애드포스트 수익", f"{curr_inc:,.0f}원", f"목표 {target_inc:,.0f}원")
-    with c_b4:
-        st.metric("수익 목표 달성률", f"{achieve_rate:.1f}%")
+    with c_b1: st.metric("오늘 방문자", f"{display_today_vis:,}명")
+    with c_b2: st.metric("총 포스팅", f"{display_total_posts:,}편")
+    with c_b3: st.metric("애드포스트 수익", f"{curr_inc:,.0f}원")
+    with c_b4: st.metric("목표 달성률", f"{achieve_rate:.1f}%", f"목표 {target_inc:,.0f}원")
 
-    # ⚡ 오늘자 방문자 수 & 애드포스트 1초 간편 업데이트
-    with st.expander("⚡ 오늘 방문자 수 & 애드포스트 수익 1초 간편 갱신", expanded=False):
-        st.caption("💡 위 바로가기 버튼을 통해 확인하신 실제 방문자 수와 수익을 입력하시면 아래 일별 차트와 대시보드에 즉시 날짜별로 누적 기록됩니다.")
+    # 오늘 방문자/수익 빠른 갱신
+    with st.expander("방문자 수 및 수익 갱신"):
         with st.form("quick_blog_sync_form"):
             col_q1, col_q2 = st.columns(2)
-            with col_q1:
-                q_vis = st.number_input("오늘 실제 방문자 수 (명)", value=int(display_today_vis), step=10)
-            with col_q2:
-                q_inc = st.number_input("이번 달 현재 애드포스트 수익 (원)", value=int(curr_inc), step=10000)
-            if st.form_submit_button("통계 갱신 및 차트 반영 💾"):
+            with col_q1: q_vis = st.number_input("오늘 실제 방문자 수 (명)", value=int(display_today_vis), step=10)
+            with col_q2: q_inc = st.number_input("이번 달 애드포스트 수익 (원)", value=int(curr_inc), step=10000)
+            if st.form_submit_button("저장"):
                 blog_stats["manual_today_visitors"] = int(q_vis)
                 blog_stats["current_monthly_income"] = int(q_inc)
-                
-                # 방문자 히스토리에 오늘 날짜 자동 기록
                 today_tag = datetime.now(KST).strftime('%m/%d')
                 curr_hist = blog_stats.get("visitor_history", [])
                 found = False
@@ -1243,44 +1166,39 @@ def render_blog_hub():
                     curr_hist.append({"날짜": today_tag, "방문자수": int(q_vis)})
                 blog_stats["visitor_history"] = curr_hist[-7:]
                 save_blog_stats(blog_stats)
-                st.success("방문자 수와 수익이 성공적으로 반영되었습니다!")
+                st.success("반영되었습니다.")
                 st.rerun()
 
-    # 📈 최근 일별 방문자 수 추이 차트
+    # 최근 방문자 추이 차트
     if final_history:
         df_vis = pd.DataFrame(final_history)
         fig_vis = go.Figure()
         fig_vis.add_trace(go.Bar(
             x=df_vis['날짜'],
             y=df_vis['방문자수'],
-            marker_color='#10b981',
+            marker_color='#3b82f6',
             text=df_vis['방문자수'],
             textposition='auto'
         ))
         fig_vis.update_layout(
-            title="📊 최근 일별 방문자 수 추이",
+            title="일별 방문자 수 추이",
             paper_bgcolor='rgba(0,0,0,0)',
             plot_bgcolor='rgba(0,0,0,0)',
-            font=dict(color='#f8fafc'),
-            margin=dict(l=10, r=10, t=40, b=20),
-            height=240
+            font=dict(color='#94a3b8'),
+            margin=dict(l=10, r=10, t=35, b=20),
+            height=220
         )
         st.plotly_chart(fig_vis, use_container_width=True)
 
-    sub_tab_p, sub_tab_s = st.tabs(["📋 포스팅 관리 대장", "⚙️ 블로그 정보 & 목표 설정"])
+    sub_tab_p, sub_tab_s = st.tabs(["포스팅 관리 대장", "블로그 설정"])
 
-    # ---------------------------------------------------------
-    # 서브탭 1: 포스팅 관리 대장
-    # ---------------------------------------------------------
     with sub_tab_p:
-        st.markdown("##### 📋 내 포스팅 관리 대장")
-        
         if not blog_posts:
-            st.info("💡 **현재 등록된 포스팅이 없습니다.** 아래에서 새로운 포스팅 아이디어나 발행할 글 일정을 등록해보세요!")
+            st.info("등록된 포스팅이 없습니다.")
         else:
             st.dataframe(pd.DataFrame(blog_posts), use_container_width=True)
             
-            with st.expander("✏️ 등록된 포스팅 상태 변경 / 삭제"):
+            with st.expander("상태 변경 및 삭제"):
                 del_idx = st.selectbox(
                     "포스팅 선택",
                     range(len(blog_posts)),
@@ -1292,25 +1210,24 @@ def render_blog_hub():
                     if st.button("상태 저장"):
                         blog_posts[del_idx]["상태"] = new_st_val
                         save_blog_posts(blog_posts)
-                        st.success("상태가 변경되었습니다!")
+                        st.success("수정되었습니다.")
                         st.rerun()
                 with c_del2:
-                    if st.button("🗑️ 선택한 포스팅 삭제"):
+                    if st.button("선택 삭제"):
                         rem = blog_posts.pop(del_idx)
                         save_blog_posts(blog_posts)
-                        st.success(f"'{rem.get('제목', '')}' 포스팅이 삭제되었습니다.")
+                        st.success("삭제되었습니다.")
                         st.rerun()
 
-        # 새 포스팅 추가 폼
-        with st.expander("➕ 새 포스팅 일정 / 아이디어 등록", expanded=(len(blog_posts) == 0)):
+        with st.expander("새 포스팅 일정 등록", expanded=(len(blog_posts) == 0)):
             with st.form("add_new_blog_post_form", clear_on_submit=True):
-                new_title = st.text_input("포스팅 제목", placeholder="예: 직장인 굿노트 서식 3종 공유")
-                new_kw = st.text_input("핵심 타겟 키워드", placeholder="예: 굿노트 서식")
-                new_cat = st.selectbox("카테고리", ["🤖 AI 실무 프롬프트", "📝 스마트 디지털 노트", "⚡ 업무 효율 팁", "💼 직장인 칼퇴 루틴", "📱 IT 기기"])
+                new_title = st.text_input("제목", placeholder="예: 직장인을 위한 굿노트 서식 3종")
+                new_kw = st.text_input("키워드", placeholder="예: 굿노트 서식")
+                new_cat = st.selectbox("카테고리", ["AI 실무", "스마트 노트", "업무 효율", "직장인 루틴", "IT 기기"])
                 new_status = st.selectbox("진행 상태", ["아이디어 기획", "원고 작성중", "발행 완료"])
-                new_date = st.text_input("발행 예정일/완료일 (YYYY-MM-DD)", value=datetime.now(KST).strftime('%Y-%m-%d'))
+                new_date = st.text_input("날짜 (YYYY-MM-DD)", value=datetime.now(KST).strftime('%Y-%m-%d'))
                 
-                if st.form_submit_button("포스팅 등록하기"):
+                if st.form_submit_button("등록"):
                     if new_title.strip():
                         blog_posts.append({
                             "제목": new_title.strip(),
@@ -1320,28 +1237,22 @@ def render_blog_hub():
                             "날짜": new_date
                         })
                         save_blog_posts(blog_posts)
-                        st.success(f"'{new_title}' 포스팅이 성공적으로 등록되었습니다!")
+                        st.success("등록되었습니다.")
                         st.rerun()
-                    else:
-                        st.warning("포스팅 제목을 입력해주세요.")
 
-    # ---------------------------------------------------------
-    # 서브탭 2: 블로그 정보 & 목표 설정
-    # ---------------------------------------------------------
     with sub_tab_s:
-        st.markdown("##### ⚙️ 블로그 정보 및 애드포스트 목표 설정")
         with st.form("edit_blog_info_form"):
-            in_blog_id = st.text_input("네이버 블로그 ID", value=blog_id)
-            in_target_inc = st.number_input("목표 월 애드포스트 수익(원)", value=int(target_inc), step=50000)
-            in_curr_inc = st.number_input("이번 달 현재 애드포스트 수익(원)", value=int(curr_inc), step=10000)
+            in_blog_id = st.text_input("블로그 ID", value=blog_id)
+            in_target_inc = st.number_input("목표 월 수익(원)", value=int(target_inc), step=50000)
+            in_curr_inc = st.number_input("이번 달 수익(원)", value=int(curr_inc), step=10000)
             
-            if st.form_submit_button("설정 저장하기"):
+            if st.form_submit_button("설정 저장"):
                 blog_stats["blog_id"] = in_blog_id.strip()
                 blog_stats["blog_url"] = f"https://m.blog.naver.com/{in_blog_id.strip()}"
                 blog_stats["target_monthly_income"] = int(in_target_inc)
                 blog_stats["current_monthly_income"] = int(in_curr_inc)
                 save_blog_stats(blog_stats)
-                st.success("블로그 설정이 저장되었습니다!")
+                st.success("저장되었습니다.")
                 st.rerun()
 
 
@@ -1364,34 +1275,77 @@ if "saved_gemini_key" not in st.session_state:
 
 
 # =============================================================
-# [메인 헤더]
+# [미니멀 모던 메인 헤더 & 상단 위젯 스트립]
 # =============================================================
 
+# 1) 헤더 바
 st.markdown("""
-<div class="mori-header">
-    <div class="mori-title">MORI</div>
-    <div class="mori-subtitle">Everything about you, in one place.</div>
-    <div class="mori-time">대한민국 표준시(KST) : """ + datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S') + """</div>
+<div class="mori-header-wrap">
+    <div>
+        <span class="mori-brand">MORI</span>
+        <span class="mori-brand-sub">Daily & Asset Intelligence</span>
+    </div>
+    <div class="mori-clock">""" + datetime.now(KST).strftime('%m.%d %H:%M') + """ KST</div>
+</div>
+""", unsafe_allow_html=True)
+
+# 2) 네이버 메인 스타일 상단 4단 미니멀 위젯 스트립
+w_temp, w_desc, w_hum, w_loc = get_current_weather(
+    current_loc_data.get("lat", 37.2410),
+    current_loc_data.get("lon", 127.1775),
+    current_loc_data.get("name", "용인시")
+)
+m_prices_top = get_batch_market_data(["^KS11", "^IXIC", "395160"])
+kospi_val, kospi_del = m_prices_top.get("^KS11", (None, None))
+nasdaq_val, nasdaq_del = m_prices_top.get("^IXIC", (None, None))
+
+kospi_txt = f"{kospi_val:,.1f}" if kospi_val else "6,977.9"
+kospi_d_txt = f"{kospi_del:+.2f}%" if kospi_del else "+2.42%"
+nasdaq_txt = f"{nasdaq_val:,.1f}" if nasdaq_val else "17,599.4"
+nasdaq_d_txt = f"{nasdaq_del:+.2f}%" if nasdaq_del else "-0.18%"
+
+st.markdown(f"""
+<div class="widget-strip">
+    <div class="widget-box">
+        <div class="widget-label">날씨 · {w_loc}</div>
+        <div class="widget-value">{w_desc} {w_temp}</div>
+        <div class="widget-sub">습도 {w_hum}</div>
+    </div>
+    <div class="widget-box">
+        <div class="widget-label">코스피</div>
+        <div class="widget-value">{kospi_txt}</div>
+        <div class="widget-sub" style="color: {'#f87171' if '+' in kospi_d_txt else '#60a5fa'};">{kospi_d_txt}</div>
+    </div>
+    <div class="widget-box">
+        <div class="widget-label">나스닥 종합</div>
+        <div class="widget-value">{nasdaq_txt}</div>
+        <div class="widget-sub" style="color: {'#f87171' if '+' in nasdaq_d_txt else '#60a5fa'};">{nasdaq_d_txt}</div>
+    </div>
+    <div class="widget-box">
+        <div class="widget-label">주요 D-Day</div>
+        <div class="widget-value">오픽 D-7</div>
+        <div class="widget-sub">8.23 13:00 발표</div>
+    </div>
 </div>
 """, unsafe_allow_html=True)
 
 
 # =============================================================
-# [4대 핵심 대분류 탭 모드 (데일리 / 주식 / 스포츠 / 블로그)]
+# [4대 핵심 대분류 탭 - 이모지 제거 및 텍스트 탭]
 # =============================================================
 
-tab_daily_main, tab_stock_main, tab_sports_main, tab_blog_main = st.tabs([
-    "🏠 데일리", "💼 주식 & 금융", "⚽ 스포츠", "✍️ 블로그"
+tab_daily, tab_stock, tab_sports, tab_blog = st.tabs([
+    "데일리", "주식·금융", "스포츠", "블로그"
 ])
 
-with tab_daily_main:
+with tab_daily:
     render_daily_hub()
 
-with tab_stock_main:
+with tab_stock:
     render_stock_hub()
 
-with tab_sports_main:
+with tab_sports:
     render_sports_hub()
 
-with tab_blog_main:
+with tab_blog:
     render_blog_hub()
