@@ -26,7 +26,7 @@ except Exception:
 # 2. 한국 표준시(KST) 정의
 KST = timezone(timedelta(hours=9))
 
-# 3. 프리미엄 미니멀 MORI 앱 아이콘 생성
+# 3. 프리미엄 연보라 MORI 앱 아이콘 생성
 def get_mori_app_icon():
     size = 256
     img = Image.new("RGBA", (size, size), (255, 255, 255, 0))
@@ -34,12 +34,12 @@ def get_mori_app_icon():
     mask_draw = ImageDraw.Draw(mask)
     mask_draw.rounded_rectangle([(0, 0), (size, size)], radius=56, fill=255)
 
-    base = Image.new("RGBA", (size, size), (11, 15, 25, 255))
+    base = Image.new("RGBA", (size, size), (15, 23, 42, 255))
     base_draw = ImageDraw.Draw(base)
     
     points = [(65, 180), (65, 90), (128, 145), (191, 90), (191, 180)]
     for i in range(len(points)-1):
-        base_draw.line([points[i], points[i+1]], fill=(255, 255, 255, 255), width=16)
+        base_draw.line([points[i], points[i+1]], fill=(216, 180, 254, 255), width=16)
 
     icon_img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     icon_img.paste(base, (0, 0), mask=mask)
@@ -55,7 +55,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 5. [최고급 모던 핀테크 & 네이버 감성 프리미엄 CSS] - 상단 짤림 완벽 해결 및 정교한 벤토 그리드
+# 5. [연보라 테마 & 폰트 충돌 방지 최신 CSS]
 st.markdown("""
 <style>
 @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
@@ -64,18 +64,33 @@ st.markdown("""
     --bg-dark: #0b0f19;
     --card-bg: #131b2e;
     --card-border: rgba(255, 255, 255, 0.08);
-    --card-hover: rgba(255, 255, 255, 0.12);
-    --accent-blue: #3b82f6;
-    --accent-green: #10b981;
-    --accent-red: #ef4444;
+    --lavender-primary: #a855f7;
+    --lavender-deep: #9333ea;
+    --lavender-light: #d8b4fe;
+    --lavender-soft: #e9d5ff;
     --text-primary: #f8fafc;
     --text-secondary: #94a3b8;
     --text-muted: #64748b;
 }
 
-* {
-    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif !important;
-    letter-spacing: -0.02em !important;
+/* 폰트 적용 (아이콘 폰트와 충돌 방지) */
+html, body, p, div:not([data-testid*="Icon"]), span:not([data-testid*="Icon"]), label, li, input, select, textarea, button, h1, h2, h3, h4, h5, h6 {
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+    letter-spacing: -0.015em;
+}
+
+/* Streamlit 아이콘 및 _arrow 텍스트 겹침 완벽 방지 */
+[data-testid="stIcon"], [data-testid="stExpanderToggleIcon"], [data-testid="stExpander"] summary span:first-child, .material-symbols-rounded, .material-symbols-outlined, .material-icons {
+    font-family: 'Material Symbols Rounded', 'Material Symbols Outlined', 'Material Icons', sans-serif !important;
+    font-feature-settings: 'liga' 1 !important;
+}
+
+[data-testid="stExpander"] summary {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    font-weight: 700 !important;
+    color: #e2e8f0 !important;
 }
 
 /* 상단 짤림 방지 및 모바일 여백 정밀 조정 */
@@ -102,25 +117,28 @@ st.markdown("""
     align-items: baseline;
     gap: 8px;
 }
+/* 연보라 계열 MORI 간판 */
 .mori-logo {
     font-size: 28px !important;
     font-weight: 900 !important;
-    color: var(--text-primary);
+    background: linear-gradient(135deg, #e9d5ff 0%, #c084fc 50%, #a855f7 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
     letter-spacing: -0.04em !important;
 }
 .mori-desc {
     font-size: 13px !important;
-    color: var(--text-muted);
+    color: #c4b5fd;
     font-weight: 600;
 }
 .mori-badge-time {
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid var(--card-border);
+    background: rgba(192, 132, 252, 0.1);
+    border: 1px solid rgba(192, 132, 252, 0.25);
     padding: 6px 12px;
     border-radius: 20px;
     font-size: 12px !important;
     font-weight: 700;
-    color: var(--text-secondary);
+    color: #d8b4fe;
 }
 
 /* 상단 4단 위젯 스트립 (네이버/토스 스타일) */
@@ -148,7 +166,7 @@ st.markdown("""
     transition: transform 0.2s ease, border-color 0.2s ease;
 }
 .widget-card:hover {
-    border-color: rgba(96, 165, 250, 0.3);
+    border-color: rgba(192, 132, 252, 0.35);
     transform: translateY(-2px);
 }
 .widget-header {
@@ -183,7 +201,7 @@ st.markdown("""
     gap: 2px;
 }
 
-/* 메인 카드 스타일 */
+/* 메인 벤토 카드 스타일 */
 .bento-card {
     background: var(--card-bg);
     border: 1px solid var(--card-border);
@@ -203,10 +221,10 @@ st.markdown("""
     align-items: center;
 }
 
-/* 버튼 스타일 */
+/* 버튼 스타일 (연보라 포인트) */
 .btn-action-primary {
     display: inline-block;
-    background: #2563eb;
+    background: linear-gradient(135deg, #a855f7 0%, #9333ea 100%);
     color: #ffffff !important;
     text-decoration: none;
     font-weight: 700;
@@ -214,11 +232,11 @@ st.markdown("""
     border-radius: 12px;
     font-size: 14px;
     border: none;
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+    box-shadow: 0 4px 14px rgba(168, 85, 247, 0.35);
     transition: all 0.2s ease;
 }
 .btn-action-primary:hover {
-    background: #1d4ed8;
+    background: linear-gradient(135deg, #9333ea 0%, #7e22ce 100%);
     transform: translateY(-1px);
 }
 .btn-action-secondary {
@@ -234,8 +252,9 @@ st.markdown("""
     transition: all 0.2s ease;
 }
 .btn-action-secondary:hover {
-    background: rgba(255, 255, 255, 0.12);
-    border-color: rgba(255, 255, 255, 0.2);
+    background: rgba(192, 132, 252, 0.15);
+    border-color: rgba(192, 132, 252, 0.3);
+    color: #e9d5ff !important;
 }
 
 /* 뉴스 피드 아이템 */
@@ -249,7 +268,7 @@ st.markdown("""
 }
 .news-row:hover {
     background: rgba(255, 255, 255, 0.05);
-    border-color: rgba(96, 165, 250, 0.3);
+    border-color: rgba(192, 132, 252, 0.3);
 }
 .news-heading {
     font-size: 16px !important;
@@ -260,7 +279,7 @@ st.markdown("""
     display: block;
 }
 .news-heading:hover {
-    color: #60a5fa;
+    color: #c084fc;
 }
 .news-info {
     font-size: 12px !important;
@@ -268,30 +287,60 @@ st.markdown("""
     margin-top: 6px;
 }
 
-/* 세그먼트 탭 스타일 */
-.stTabs [data-baseweb="tab-list"] {
+/* ⭐ [대메뉴 vs 소메뉴 채도 및 스타일 차별화] ⭐ */
+
+/* 1) 대메뉴 (최상단 메인 탭) : 선명하고 진한 연보라/퍼플 솔리드 캡슐 */
+div[data-testid="stTabs"]:first-of-type > [data-baseweb="tab-list"] {
     gap: 8px;
-    background: rgba(255, 255, 255, 0.03);
-    padding: 4px;
+    background: rgba(147, 51, 234, 0.08);
+    padding: 6px;
     border-radius: 14px;
-    border: 1px solid var(--card-border);
-    margin-bottom: 16px;
+    border: 1px solid rgba(192, 132, 252, 0.2);
+    margin-bottom: 20px;
 }
-.stTabs [data-baseweb="tab"] {
-    height: 40px !important;
+div[data-testid="stTabs"]:first-of-type > [data-baseweb="tab-list"] [data-baseweb="tab"] {
+    height: 42px !important;
     border-radius: 10px;
-    padding: 6px 18px !important;
+    padding: 6px 20px !important;
     font-size: 15px !important;
     font-weight: 700 !important;
-    color: var(--text-secondary);
+    color: #cbd5e1;
     background: transparent;
     border: none;
-    transition: all 0.2s ease;
 }
-.stTabs [aria-selected="true"] {
-    background: #2563eb !important;
+div[data-testid="stTabs"]:first-of-type > [data-baseweb="tab-list"] [aria-selected="true"] {
+    background: linear-gradient(135deg, #a855f7 0%, #9333ea 100%) !important;
     color: #ffffff !important;
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+    font-weight: 800 !important;
+    box-shadow: 0 4px 14px rgba(168, 85, 247, 0.35) !important;
+}
+
+/* 2) 소메뉴 (서브 내부 탭) : 은은하고 부드러운 파스텔 연보라 틴트 & 언더라인 */
+div[data-testid="stTabs"] div[data-testid="stTabs"] [data-baseweb="tab-list"] {
+    gap: 6px;
+    background: transparent !important;
+    padding: 2px 0 !important;
+    border-radius: 0px !important;
+    border: none !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+    margin-bottom: 14px !important;
+}
+div[data-testid="stTabs"] div[data-testid="stTabs"] [data-baseweb="tab"] {
+    height: 36px !important;
+    border-radius: 8px;
+    padding: 4px 14px !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    color: #94a3b8;
+    background: transparent;
+    border: none;
+}
+div[data-testid="stTabs"] div[data-testid="stTabs"] [aria-selected="true"] {
+    background: rgba(192, 132, 252, 0.15) !important;
+    color: #e9d5ff !important;
+    font-weight: 700 !important;
+    border-bottom: 2.5px solid #c084fc !important;
+    box-shadow: none !important;
 }
 
 /* 메트릭 스타일 */
@@ -789,7 +838,7 @@ def ask_gemini_chat(chat_history, user_msg, portfolio_items, api_key):
 
 
 # =============================================================
-# ⭐ [4대 핵심 대분류 렌더링 모듈 - 벤토 그리드 모던 UI]
+# ⭐ [4대 핵심 대분류 렌더링 모듈]
 # =============================================================
 
 # -------------------------------------------------------------
@@ -1152,7 +1201,7 @@ def render_sports_hub():
                     save_sports_teams(my_teams); st.rerun()
 
 # -------------------------------------------------------------
-# 4. [블로그 관리 모듈 - 정교한 벤토 그리드]
+# 4. [블로그 관리 모듈]
 # -------------------------------------------------------------
 def render_blog_hub():
     blog_stats = load_blog_stats()
@@ -1175,7 +1224,7 @@ def render_blog_hub():
     <div class="bento-card">
         <div class="bento-title">
             <span>칼퇴연구소 | 테크·생산성 랩</span>
-            <span style="font-size: 13px; font-weight: 600; color: #94a3b8;">@{blog_id}</span>
+            <span style="font-size: 13px; font-weight: 600; color: #c4b5fd;">@{blog_id}</span>
         </div>
         <div style="font-size: 14px; color: #94a3b8; margin-bottom: 14px;">
             반복되는 야근을 줄이고 일상을 되찾는 실무 AI & 생산성 치트키
@@ -1232,7 +1281,7 @@ def render_blog_hub():
                 st.success("반영되었습니다.")
                 st.rerun()
 
-    # 최근 방문자 추이 차트
+    # 최근 방문자 추이 차트 (연보라 톤 바 차트)
     if final_history:
         df_vis = pd.DataFrame(final_history)
         fig_vis = go.Figure()
@@ -1240,8 +1289,8 @@ def render_blog_hub():
             x=df_vis['날짜'],
             y=df_vis['방문자수'],
             marker=dict(
-                color='#3b82f6',
-                line=dict(color='#60a5fa', width=1)
+                color='#a855f7',
+                line=dict(color='#c084fc', width=1)
             ),
             text=df_vis['방문자수'],
             textposition='auto'
@@ -1250,7 +1299,7 @@ def render_blog_hub():
             title="일별 방문자 수 추이",
             paper_bgcolor='rgba(0,0,0,0)',
             plot_bgcolor='rgba(0,0,0,0)',
-            font=dict(color='#94a3b8', family='Pretendard'),
+            font=dict(color='#c4b5fd', family='Pretendard'),
             margin=dict(l=10, r=10, t=35, b=20),
             height=220,
             xaxis=dict(gridcolor='rgba(255,255,255,0.05)'),
@@ -1376,7 +1425,7 @@ st.markdown(f"""
 <div class="widget-grid">
     <div class="widget-card">
         <div class="widget-header"><span>날씨</span><span>{w_loc}</span></div>
-        <div class="widget-main">{w_desc} {w_temp}</div>
+        <div class="widget-main">{weather_val} {temp_val}</div>
         <div class="widget-footer" style="color: #94a3b8;">습도 {w_hum}</div>
     </div>
     <div class="widget-card">
@@ -1399,7 +1448,7 @@ st.markdown(f"""
 
 
 # =============================================================
-# [4대 핵심 대분류 탭 - 세그먼트 캡슐형 탭]
+# [4대 핵심 대분류 탭 - 선명한 연보라 대메뉴 vs 은은한 파스텔 소메뉴]
 # =============================================================
 
 tab_daily, tab_stock, tab_sports, tab_blog = st.tabs([
