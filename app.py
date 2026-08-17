@@ -93,7 +93,7 @@ html, body, p, span, div, label, li {
 
 .mori-header {
     margin-top: 0px !important;
-    margin-bottom: 12px !important;
+    margin-bottom: 14px !important;
     padding-bottom: 10px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
@@ -188,12 +188,29 @@ html, body, p, span, div, label, li {
 }
 
 .blog-card {
-    background: linear-gradient(135deg, #064e3b 0%, #0f172a 100%);
+    background: linear-gradient(135deg, #064e3b 0%, #065f46 50%, #0f172a 100%);
     border: 1px solid rgba(52, 211, 153, 0.4);
     border-radius: 16px;
     padding: 18px;
     color: white;
     margin-bottom: 14px;
+    box-shadow: 0 4px 20px rgba(6, 78, 59, 0.25);
+}
+
+.blog-btn {
+    display: inline-block;
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white !important;
+    text-decoration: none;
+    font-weight: 800;
+    padding: 10px 18px;
+    border-radius: 10px;
+    font-size: 15px;
+    margin-top: 10px;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+.blog-btn:hover {
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
 }
 
 [data-testid="stMetricValue"] {
@@ -268,16 +285,19 @@ DEFAULT_SUBSCRIPTIONS = [
 ]
 
 DEFAULT_BLOG_STATS = {
+    "blog_url": "https://m.blog.naver.com/early_leave_lab",
+    "blog_id": "early_leave_lab",
+    "blog_name": "칼퇴연구소 | 칼퇴연구원의 테크 랩",
+    "blog_slogan": "반복되는 야근을 줄이고 일상을 되찾는 생산성 치트키",
     "target_monthly_income": 300000,
-    "current_monthly_income": 142500,
-    "daily_avg_visitors": 1850,
-    "total_posts": 48
+    "current_monthly_income": 0,
+    "daily_avg_visitors": 0,
+    "total_posts": 0
 }
 
 DEFAULT_BLOG_POSTS = [
-    {"제목": "직장인을 위한 제미나이 1.5 프로 업무 자동화 꿀팁 3가지", "키워드": "제미나이 업무 활용", "카테고리": "🤖 AI 생산성", "상태": "발행 완료", "날짜": "2026-08-14"},
-    {"제목": "아이패드 & 갤럭시탭 굿노트 다이어리 무료 서식 공유", "키워드": "굿노트 서식", "카테고리": "📝 스마트워크", "상태": "발행 완료", "날짜": "2026-08-10"},
-    {"제목": "갤럭시 Z폴드 멀티태스킹으로 칼퇴하는 실전 세팅법", "키워드": "갤럭시 Z폴드 생산성", "카테고리": "📱 IT 기기", "상태": "원고 작성중", "날짜": "2026-08-17"}
+    {"제목": "직장인을 위한 제미나이 1.5 프로 업무 자동화 꿀팁 3가지", "키워드": "제미나이 업무 활용", "카테고리": "🤖 AI 실무 프롬프트", "상태": "아이디어 기획", "날짜": "2026-08-17"},
+    {"제목": "아이패드 & 갤럭시탭 굿노트 다이어리 무료 서식 공유", "키워드": "굿노트 서식", "카테고리": "📝 스마트 디지털 노트", "상태": "아이디어 기획", "날짜": "2026-08-18"}
 ]
 
 DEFAULT_LOCATION = {
@@ -507,35 +527,6 @@ def get_batch_market_data(ticker_list):
                 results[t] = (None, None)
     return results
 
-# 9. [네이버 검색 API & 구글 뉴스 하이브리드 조회 엔진]
-def search_naver_blog_api(query, client_id, client_secret, display=6):
-    if not client_id or not client_secret:
-        return None, "NAVER_API_KEY_REQUIRED"
-    enc_text = urllib.parse.quote(query)
-    url = f"https://openapi.naver.com/v1/search/blog.json?query={enc_text}&display={display}&sort=sim"
-    request = urllib.request.Request(url)
-    request.add_header("X-Naver-Client-Id", client_id.strip())
-    request.add_header("X-Naver-Client-Secret", client_secret.strip())
-    try:
-        response = urllib.request.urlopen(request, timeout=3)
-        if response.getcode() == 200:
-            data = json.loads(response.read().decode('utf-8'))
-            items = []
-            for item in data.get('items', []):
-                clean_title = item.get('title', '').replace('<b>', '').replace('</b>', '')
-                clean_desc = item.get('description', '').replace('<b>', '').replace('</b>', '')
-                items.append({
-                    "title": clean_title,
-                    "link": item.get('link', '#'),
-                    "desc": clean_desc,
-                    "blogger": item.get('bloggername', ''),
-                    "date": item.get('postdate', '')
-                })
-            return items, "SUCCESS"
-    except Exception as e:
-        return None, str(e)
-    return None, "FAILED"
-
 @st.cache_data(ttl=300)
 def fetch_news_feed(query, max_results=8):
     try:
@@ -557,7 +548,7 @@ def fetch_news_feed(query, max_results=8):
     except Exception:
         return []
 
-# 10. [통합 제미나이 AI 호출 엔진 - 404 모델 에러 방지]
+# 9. [통합 제미나이 AI 호출 엔진]
 def call_gemini_api(prompt_text, api_key, system_instruction=None, image_bytes=None, chat_contents=None):
     if not api_key or not api_key.strip():
         return None, "Gemini API Key를 입력해 주세요."
@@ -706,7 +697,10 @@ def generate_blog_draft(topic_keyword, sub_category, api_key):
     당신은 네이버 블로그 '칼퇴연구소'의 전문 테크/생산성 에디터 '칼퇴연구원'입니다.
     네이버 애드포스트 수익 최적화와 C-Rank/D.I.A. 알고리즘에 부합하는 네이버 스마트에디터 ONE 전용 [블로그 포스팅 원고]를 작성해주세요.
 
-    [주제 및 핵심 키워드]
+    [블로그 브랜딩]
+    - 블로그명: 칼퇴연구소 | 칼퇴연구원의 테크 랩
+    - 블로그 주소: https://m.blog.naver.com/early_leave_lab (@early_leave_lab)
+    - 슬로건: 반복되는 야근을 줄이고 일상을 되찾는 생산성 치트키
     - 카테고리: {sub_category}
     - 주제/핵심 키워드: {topic_keyword}
 
@@ -766,7 +760,7 @@ def generate_blog_thumbnail_image(title_text, category_badge="칼퇴연구소 | 
 
 
 # =============================================================
-# ⭐ [4대 대분류 렌더링 모듈 정의]
+# ⭐ [4대 핵심 대분류 렌더링 모듈]
 # =============================================================
 
 # -------------------------------------------------------------
@@ -777,7 +771,6 @@ def render_daily_hub():
     
     sub_d1, sub_d2, sub_d3, sub_d4 = st.tabs(["📌 오늘의 요약", "📅 통합 캘린더", "💳 고정 구독료", "📋 To-Do & 날씨"])
 
-    # 서브 1: 오늘의 핵심 요약
     with sub_d1:
         temp_val, weather_val, humid_val, loc_tag = get_current_weather(
             current_loc_data.get("lat", 37.2410),
@@ -831,7 +824,6 @@ def render_daily_hub():
             with ch1: st.metric("총 평가금액", f"{total_eval_h:,.0f}원", f"{rate_h:+.2f}%")
             with ch2: st.metric("총 평가손익", f"{diff_h:+,.0f}원")
 
-    # 서브 2: 통합 캘린더
     with sub_d2:
         user_portfolio = load_portfolio()
         cover_shares = 863
@@ -861,7 +853,6 @@ def render_daily_hub():
         ]
         st.dataframe(pd.DataFrame(timeline_events), use_container_width=True)
 
-    # 서브 3: 고정 구독료 관리자
     with sub_d3:
         subs_list = load_subscriptions()
         total_sub_monthly = sum(s["월요금"] for s in subs_list)
@@ -900,7 +891,6 @@ def render_daily_hub():
                         st.success(f"'{new_s_name}' 등록 완료!")
                         st.rerun()
 
-    # 서브 4: To-Do & 위치
     with sub_d4:
         with st.expander("📍 날씨 지역 변경 / GPS 위치 설정"):
             preset_names = list(LOCATION_PRESETS.keys())
@@ -940,7 +930,7 @@ def render_stock_hub():
     st.subheader("💼 주식 & 금융 인텔리전스 허브")
     
     sub_s1, sub_s2, sub_s3, sub_s4, sub_s5 = st.tabs([
-        "💼 내 포트폴리오", "📊 실시간 시황", "📰 맞춤 뉴스", "💡 AI 모닝 브리핑", "🤖 1:1 투자 비서"
+        "💼 내 포트폴리오", "📊 실시간 시황", "📰 맞춤 뉴스 & 검색", "💡 AI 모닝 브리핑", "🤖 1:1 투자 비서"
     ])
 
     with sub_s1:
@@ -1015,18 +1005,39 @@ def render_stock_hub():
     with sub_s3:
         user_portfolio = load_portfolio()
         my_stock_names = [item["종목명"] for item in user_portfolio]
-        category_options = ["📌 [전체] 내 보유 종목 뉴스"] + [f"🎯 {name}" for name in my_stock_names] + ["🇰🇷 국내 증시", "🇺🇸 미국 증시", "🤖 AI·반도체"]
+        
+        category_options = (
+            ["📌 [전체] 내 보유 종목 뉴스"] +
+            [f"🎯 {name}" for name in my_stock_names] +
+            ["🇰🇷 국내 증시", "🇺🇸 미국 증시", "🤖 AI·반도체", "🔍 직접 검색"]
+        )
         selected_cat = st.selectbox("뉴스 카테고리 선택", category_options, index=0)
-        query = "코스피 OR 반도체"
-        if selected_cat.startswith("🎯 "): query = selected_cat.replace("🎯 ", "")
-        news_list = fetch_news_feed(query, max_results=8)
-        for item in news_list:
-            st.markdown(f"""
-            <div class="news-card">
-                <a class="news-title" href="{item['link']}" target="_blank">🔗 {item['title']}</a>
-                <div class="news-meta">📰 {item['source']} &nbsp;|&nbsp; 🕒 {item['date']}</div>
-            </div>
-            """, unsafe_allow_html=True)
+        
+        if selected_cat == "🔍 직접 검색":
+            query = st.text_input("검색할 뉴스 키워드 입력", value="삼성전자")
+        elif selected_cat == "📌 [전체] 내 보유 종목 뉴스":
+            query = " OR ".join([f'"{name}"' for name in my_stock_names]) + " OR AI반도체 OR 커버드콜"
+        elif selected_cat.startswith("🎯 "):
+            s_name = selected_cat.replace("🎯 ", "")
+            query = f'"{s_name}"' if "반도체" not in s_name else f'"{s_name}" OR AI반도체'
+        elif selected_cat == "🇰🇷 국내 증시":
+            query = "코스피 OR 코스닥 OR 환율"
+        elif selected_cat == "🇺🇸 미국 증시":
+            query = "뉴욕증시 OR S&P500 OR 나스닥 OR 엔비디아"
+        elif selected_cat == "🤖 AI·반도체":
+            query = "엔비디아 OR 반도체 HBM OR 인공지능 AI"
+        else:
+            query = "코스피"
+
+        if query:
+            news_list = fetch_news_feed(query, max_results=8)
+            for item in news_list:
+                st.markdown(f"""
+                <div class="news-card">
+                    <a class="news-title" href="{item['link']}" target="_blank">🔗 {item['title']}</a>
+                    <div class="news-meta">📰 {item['source']} &nbsp;|&nbsp; 🕒 {item['date']}</div>
+                </div>
+                """, unsafe_allow_html=True)
 
     with sub_s4:
         user_portfolio = load_portfolio()
@@ -1143,34 +1154,77 @@ def render_sports_hub():
                     save_sports_teams(my_teams); st.rerun()
 
 # -------------------------------------------------------------
-# 4. ✍️ [블로그 관리 모듈 ('칼퇴연구소' & 네이버 API 연동)]
+# 4. ✍️ [블로그 관리 모듈 ('칼퇴연구소' 브랜드 & 수기 관리)]
 # -------------------------------------------------------------
 def render_blog_hub():
     st.subheader("✍️ 네이버 블로그 관리자 (칼퇴연구소)")
-    st.caption("네이버 애드포스트 부업 수익화 & 스마트워크 포스팅 AI 매니저")
+    
+    # 🌟 내 블로그 브랜드 카드 & 바로가기 링크 버튼
+    st.markdown("""
+    <div class="blog-card">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+            <div>
+                <div style="font-size: 22px; font-weight: 900; color: #6ee7b7;">칼퇴연구소 | 칼퇴연구원의 테크 랩</div>
+                <div style="font-size: 15px; color: #a7f3d0; margin-top: 4px;">반복되는 야근을 줄이고 일상을 되찾는 생산성 치트키</div>
+                <div style="font-size: 13px; color: #d1fae5; margin-top: 4px;">블로그 ID: <b>@early_leave_lab</b></div>
+            </div>
+        </div>
+        <div style="margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.15); padding-top: 10px;">
+            <a class="blog-btn" href="https://m.blog.naver.com/early_leave_lab" target="_blank">
+                🌐 칼퇴연구소 네이버 블로그 바로가기 ↗️
+            </a>
+        </div>
+        <div style="font-size: 13px; color: #cbd5e1; margin-top: 10px;">
+            🤖 AI 실무 프롬프트 (Gemini · ChatGPT) | 📝 스마트 노트 (Goodnotes · Notion) | ⚡ 모바일/PC 세팅 팁
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
     blog_stats = load_blog_stats()
     blog_posts = load_blog_posts()
 
     target_inc = blog_stats.get("target_monthly_income", 300000)
-    curr_inc = blog_stats.get("current_monthly_income", 142500)
+    curr_inc = blog_stats.get("current_monthly_income", 0)
+    daily_vis = blog_stats.get("daily_avg_visitors", 0)
     achieve_rate = (curr_inc / target_inc * 100) if target_inc > 0 else 0
 
-    st.markdown(f"""
-    <div class="blog-card">
-        <div style="font-size: 15px; color: #a7f3d0; font-weight: 700;">💰 네이버 애드포스트 이번 달 예상 수익</div>
-        <div style="font-size: 32px; font-weight: 900; margin-top: 4px;">{curr_inc:,.0f}원 <span style="font-size: 18px; font-weight: 600; color: #6ee7b7;">(목표 {target_inc:,.0f}원 대비 {achieve_rate:.1f}%)</span></div>
-        <div style="font-size: 14px; color: #d1fae5; margin-top: 4px;">일평균 방문자 {blog_stats.get('daily_avg_visitors', 1850):,}명 | 총 발행 글 {len(blog_posts)}편</div>
-    </div>
-    """, unsafe_allow_html=True)
+    c_b_st1, c_b_st2 = st.columns(2)
+    with c_b_st1:
+        st.metric("이번 달 애드포스트 수익", f"{curr_inc:,.0f}원", f"목표 {target_inc:,.0f}원 대비 {achieve_rate:.1f}%")
+    with c_b_st2:
+        st.metric("일평균 방문자 수", f"{daily_vis:,}명", f"총 {len(blog_posts)}편 관리 중")
 
-    sub_b1, sub_b2, sub_b3, sub_b4, sub_b5 = st.tabs([
-        "📝 AI 원고 자동 작성", "🔍 네이버 검색 API 분석", "🎯 황금 키워드 발굴", "🎨 1:1 대표 썸네일", "📋 포스팅 관리"
+    with st.expander("⚙️ 내 블로그 통계 & 목표 수익 수정하기"):
+        with st.form("edit_blog_stats_form"):
+            new_target = st.number_input("목표 월 부업 수익(원)", value=int(target_inc), step=50000)
+            new_curr = st.number_input("이번 달 현재 애드포스트 수익(원)", value=int(curr_inc), step=10000)
+            new_vis = st.number_input("최근 일평균 방문자 수(명)", value=int(daily_vis), step=50)
+            if st.form_submit_button("통계 저장하기"):
+                blog_stats["target_monthly_income"] = int(new_target)
+                blog_stats["current_monthly_income"] = int(new_curr)
+                blog_stats["daily_avg_visitors"] = int(new_vis)
+                save_blog_stats(blog_stats)
+                st.success("블로그 통계가 업데이트되었습니다!")
+                st.rerun()
+
+    sub_b1, sub_b2, sub_b3, sub_b4 = st.tabs([
+        "📝 AI 원고 자동 작성", "🎯 황금 키워드 발굴", "🎨 1:1 대표 썸네일", "📋 포스팅 관리"
     ])
 
     with sub_b1:
         st.markdown("##### ✨ 네이버 스마트에디터 ONE 맞춤 원고 생성기")
-        b_cat = st.selectbox("포스팅 주제 분야", ["🤖 AI 생산성 (Gemini/ChatGPT)", "📝 스마트워크 (굿노트/노션/엑셀)", "📱 IT 기기 (갤럭시폴드/태블릿/맥북)", "💼 직장인 칼퇴 꿀팁/루틴"])
+        b_cat = st.selectbox("포스팅 카테고리", [
+            "🤖 AI 실무 프롬프트 (Gemini · ChatGPT · Claude)",
+            "📝 스마트 디지털 노트 (Goodnotes · Notion)",
+            "⚡ 업무 효율 200% PC & 모바일 설정 팁 (Galaxy Z Fold / iPad)",
+            "💼 직장인 칼퇴 루틴 & 생산성 툴",
+            "🔍 직접 카테고리 입력"
+        ])
+        
+        final_cat = b_cat
+        if b_cat == "🔍 직접 카테고리 입력":
+            final_cat = st.text_input("직접 입력할 카테고리", value="🤖 AI 실무 생산성")
+
         b_topic = st.text_input("포스팅 제목 또는 핵심 키워드", value="직장인을 위한 제미나이 1.5 프로 업무 자동화 꿀팁 3가지")
 
         k_input_blog = st.text_input("Gemini API Key (원고용)", value=st.session_state.saved_gemini_key, type="password", key="blog_k_gem")
@@ -1181,7 +1235,7 @@ def render_blog_hub():
                 st.warning("Gemini API Key를 입력해 주세요.")
             else:
                 with st.spinner("스마트에디터 ONE 전용 원고 작성 중..."):
-                    draft_text, status = generate_blog_draft(b_topic, b_cat, st.session_state.saved_gemini_key)
+                    draft_text, status = generate_blog_draft(b_topic, final_cat, st.session_state.saved_gemini_key)
                     if status == "SUCCESS" and draft_text:
                         st.session_state["latest_blog_draft"] = draft_text
                         st.success("🎉 원고 작성 완료! 아래에서 복사해 네이버 블로그에 붙여넣으세요.")
@@ -1193,45 +1247,25 @@ def render_blog_hub():
                 st.markdown(st.session_state["latest_blog_draft"])
 
     with sub_b2:
-        st.markdown("##### 🔍 네이버 검색 API 실시간 상위노출 블로그 분석")
-        st.caption("네이버 공식 검색 API를 통해 현재 1페이지에 노출 중인 경쟁 블로그 글들의 제목과 구성을 실시간으로 확인합니다.")
-        
-        c_n1, c_n2 = st.columns(2)
-        with c_n1: n_client_id = st.text_input("NAVER Client ID", value=st.secrets.get("NAVER_CLIENT_ID", st.session_state.get("naver_id", "")), type="password")
-        with c_n2: n_client_secret = st.text_input("NAVER Client Secret", value=st.secrets.get("NAVER_CLIENT_SECRET", st.session_state.get("naver_secret", "")), type="password")
-        
-        if n_client_id: st.session_state["naver_id"] = n_client_id
-        if n_client_secret: st.session_state["naver_secret"] = n_client_secret
-
-        search_kw = st.text_input("분석할 네이버 검색 키워드", value="굿노트 서식")
-        if st.button("네이버 실시간 상위 블로그 글 조회", key="btn_naver_api_search"):
-            if not st.session_state.get("naver_id") or not st.session_state.get("naver_secret"):
-                st.info("💡 네이버 개발자센터(developers.naver.com)에서 발급받은 검색 API Client ID/Secret을 입력하시면 실시간 네이버 데이터가 연동됩니다.")
-            else:
-                with st.spinner("네이버 검색 API 조회 중..."):
-                    items, status = search_naver_blog_api(search_kw, st.session_state["naver_id"], st.session_state["naver_secret"])
-                    if status == "SUCCESS" and items:
-                        st.success(f"'{search_kw}' 키워드의 네이버 실시간 상위 블로그 검색 결과:")
-                        for it in items:
-                            st.markdown(f"""
-                            <div class="news-card">
-                                <a class="news-title" href="{it['link']}" target="_blank">🔗 {it['title']}</a>
-                                <div style="font-size: 14px; color: #cbd5e1; margin-top: 4px;">{it['desc']}</div>
-                                <div class="news-meta">✍️ {it['blogger']} | 🕒 {it['date']}</div>
-                            </div>
-                            """, unsafe_allow_html=True)
-                    else:
-                        st.error(f"조회 실패: {status}")
-
-    with sub_b3:
         st.markdown("##### 🎯 애드포스트 고단가 황금 롱테일 키워드 발굴기")
-        kw_cat = st.selectbox("분석할 카테고리", ["AI 툴 & 직장인 업무 자동화", "굿노트 & 노션 디지털 서식", "갤럭시 Z폴드 & 모바일 스마트워크", "IT 디바이스 & 모니터"])
+        kw_cat = st.selectbox("분석할 카테고리", [
+            "AI 툴 & 직장인 업무 자동화 (ChatGPT/Gemini/Claude)",
+            "굿노트 & 노션 디지털 서식 템플릿",
+            "갤럭시 Z폴드 & 모바일 스마트워크 생산성",
+            "직장인 IT 디바이스 & 모니터 추천",
+            "🔍 직접 분야 입력"
+        ])
+        
+        final_kw_cat = kw_cat
+        if kw_cat == "🔍 직접 분야 입력":
+            final_kw_cat = st.text_input("분석할 맞춤 분야 입력", value="직장인 부업 및 재테크")
+
         if st.button("🎯 검색량 많고 경쟁도 낮은 롱테일 키워드 5선 분석", key="btn_kw_rec_m"):
             if not st.session_state.saved_gemini_key:
                 st.warning("Gemini API Key가 필요합니다.")
             else:
                 with st.spinner("애드포스트 고단가 키워드 분석 중..."):
-                    kw_res, status = recommend_blog_keywords(kw_cat, st.session_state.saved_gemini_key)
+                    kw_res, status = recommend_blog_keywords(final_kw_cat, st.session_state.saved_gemini_key)
                     if status == "SUCCESS" and kw_res:
                         st.session_state["latest_keywords_res"] = kw_res
                         st.success("키워드 분석 완료!")
@@ -1239,7 +1273,7 @@ def render_blog_hub():
             with st.container(border=True):
                 st.markdown(st.session_state["latest_keywords_res"])
 
-    with sub_b4:
+    with sub_b3:
         st.markdown("##### 🎨 네이버 블로그 1:1 대표 썸네일(1000x1000) 생성기")
         thumb_title = st.text_input("썸네일 메인 텍스트", value="직장인 칼퇴 부르는\nAI 업무 자동화 꿀팁", key="thumb_t_in")
         thumb_badge = st.text_input("상단 카테고리 태그", value="칼퇴연구소 | IT·생산성", key="thumb_b_in")
@@ -1254,14 +1288,14 @@ def render_blog_hub():
             use_container_width=True
         )
 
-    with sub_b5:
+    with sub_b4:
         st.markdown("##### 📋 내 블로그 포스팅 관리 대장")
         st.dataframe(pd.DataFrame(blog_posts), use_container_width=True)
         with st.expander("➕ 새 포스팅 일정 / 아이디어 등록"):
             with st.form("add_blog_p_f"):
                 p_title = st.text_input("포스팅 제목", value="노션 AI로 회의록 3초 만에 요약하는 법")
                 p_kw = st.text_input("핵심 키워드", value="노션 AI 회의록 요약")
-                p_cat = st.selectbox("카테고리", ["🤖 AI 생산성", "📝 스마트워크", "📱 IT 기기", "💼 직장생활/재테크"])
+                p_cat = st.selectbox("카테고리", ["🤖 AI 실무 프롬프트", "📝 스마트 디지털 노트", "⚡ 업무 효율 팁", "💼 직장인 칼퇴 루틴"])
                 p_status = st.selectbox("상태", ["아이디어 기획", "원고 작성중", "발행 완료"])
                 p_date = st.text_input("발행일 (YYYY-MM-DD)", value=datetime.now(KST).strftime('%Y-%m-%d'))
                 if st.form_submit_button("포스팅 등록"):
@@ -1289,74 +1323,36 @@ if "lat" in st.query_params and "lon" in st.query_params:
 if "saved_gemini_key" not in st.session_state:
     st.session_state.saved_gemini_key = st.secrets.get("GEMINI_API_KEY", "")
 
-if "view_mode_choice" not in st.session_state:
-    st.session_state["view_mode_choice"] = "📱 4대 대분류 탭"
+
+# =============================================================
+# [메인 헤더]
+# =============================================================
+
+st.markdown("""
+<div class="mori-header">
+    <div class="mori-title">MORI</div>
+    <div class="mori-subtitle">Everything about you, in one place.</div>
+    <div class="mori-time">대한민국 표준시(KST) : """ + datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S') + """</div>
+</div>
+""", unsafe_allow_html=True)
 
 
 # =============================================================
-# [메인 헤더 & 확실한 라디오 화면 모드 전환기]
+# [4대 핵심 대분류 탭 모드 (데일리 / 주식 / 스포츠 / 블로그)]
 # =============================================================
 
-col_h1, col_h2 = st.columns([0.55, 0.45])
-with col_h1:
-    st.markdown("""
-    <div class="mori-header">
-        <div class="mori-title">MORI</div>
-        <div class="mori-subtitle">Everything about you, in one place.</div>
-        <div class="mori-time">대한민국 표준시(KST) : """ + datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S') + """</div>
-    </div>
-    """, unsafe_allow_html=True)
-with col_h2:
-    st.write("")
-    selected_view = st.radio(
-        "화면 모드",
-        ["📱 4대 대분류 탭", "📖 듀얼뷰 (대화면)"],
-        horizontal=True,
-        key="view_mode_selector"
-    )
+tab_daily_main, tab_stock_main, tab_sports_main, tab_blog_main = st.tabs([
+    "🏠 데일리", "💼 주식 & 금융", "⚽ 스포츠", "✍️ 블로그"
+])
 
-is_dual_mode = (selected_view == "📖 듀얼뷰 (대화면)")
+with tab_daily_main:
+    render_daily_hub()
 
+with tab_stock_main:
+    render_stock_hub()
 
-# =============================================================
-# [화면 렌더링 분기: 듀얼뷰(2열 대화면) vs 4대 대분류 탭]
-# =============================================================
+with tab_sports_main:
+    render_sports_hub()
 
-if is_dual_mode:
-    # ---------------------------------------------------------
-    # 📖 폴드 펼침 대화면 2열 듀얼 뷰 모드
-    # ---------------------------------------------------------
-    st.info("💡 **갤럭시 Z 폴드 대화면 듀얼 뷰** : 좌측(데일리·주식) / 우측(블로그·스포츠)")
-    
-    col_left, col_right = st.columns([0.5, 0.5])
-    with col_left:
-        with st.container(border=True):
-            render_daily_hub()
-        with st.container(border=True):
-            render_stock_hub()
-
-    with col_right:
-        with st.container(border=True):
-            render_blog_hub()
-        with st.container(border=True):
-            render_sports_hub()
-
-else:
-    # ---------------------------------------------------------
-    # 📱 4대 핵심 대분류 탭 모드 (데일리 / 주식 / 스포츠 / 블로그)
-    # ---------------------------------------------------------
-    tab_daily_main, tab_stock_main, tab_sports_main, tab_blog_main = st.tabs([
-        "🏠 데일리", "💼 주식 & 금융", "⚽ 스포츠", "✍️ 블로그"
-    ])
-
-    with tab_daily_main:
-        render_daily_hub()
-
-    with tab_stock_main:
-        render_stock_hub()
-
-    with tab_sports_main:
-        render_sports_hub()
-
-    with tab_blog_main:
-        render_blog_hub()
+with tab_blog_main:
+    render_blog_hub()
