@@ -55,7 +55,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 5. [연보라 테마 & 모던 핀테크 CSS - 원래의 깔끔한 단일 라인 탭 복원]
+# 5. [연보라 테마 & 모던 핀테크 CSS]
 st.markdown("""
 <style>
 @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
@@ -363,45 +363,51 @@ html, body, p, div:not([data-testid*="Icon"]), span:not([data-testid*="Icon"]), 
     margin-top: 6px;
 }
 
-/* 🌟 [대메뉴: 원래의 깔끔하고 세련된 단일 라인 연보라 캡슐 탭 복원] */
-div[data-testid="stTabs"]:first-of-type > [data-baseweb="tab-list"] {
-    display: flex !important;
-    flex-wrap: nowrap !important;
+/* 🌟 [새로고침 시에도 100% 유지되는 4단 단일 라인 연보라 캡슐 탭 네비게이션] */
+div[data-testid="stHorizontalBlock"]:has(.mori-nav-anchor) {
     gap: 8px !important;
     background: rgba(147, 51, 234, 0.08) !important;
     padding: 6px !important;
     border-radius: 14px !important;
     border: 1px solid rgba(192, 132, 252, 0.2) !important;
     margin-bottom: 20px !important;
-    overflow-x: auto !important;
-    scrollbar-width: none !important;
 }
-div[data-testid="stTabs"]:first-of-type > [data-baseweb="tab-list"]::-webkit-scrollbar {
-    display: none !important;
+div[data-testid="stHorizontalBlock"]:has(.mori-nav-anchor) div[data-testid="column"] {
+    padding: 0 !important;
 }
-div[data-testid="stTabs"]:first-of-type > [data-baseweb="tab-list"] [data-baseweb="tab"] {
-    flex: 1 !important;
-    white-space: nowrap !important;
+div[data-testid="stHorizontalBlock"]:has(.mori-nav-anchor) button {
     height: 42px !important;
     border-radius: 10px !important;
-    padding: 6px 16px !important;
     font-size: 15px !important;
     font-weight: 700 !important;
-    color: #cbd5e1 !important;
-    background: transparent !important;
+    white-space: nowrap !important;
+    letter-spacing: -0.015em !important;
     border: none !important;
-    text-align: center !important;
-    justify-content: center !important;
+    box-shadow: none !important;
+    padding: 4px 12px !important;
+    transition: all 0.2s ease !important;
 }
-div[data-testid="stTabs"]:first-of-type > [data-baseweb="tab-list"] [aria-selected="true"] {
+div[data-testid="stHorizontalBlock"]:has(.mori-nav-anchor) button[kind="primary"],
+div[data-testid="stHorizontalBlock"]:has(.mori-nav-anchor) button[data-testid="stBaseButton-primary"] {
     background: linear-gradient(135deg, #a855f7 0%, #9333ea 100%) !important;
     color: #ffffff !important;
     font-weight: 800 !important;
     box-shadow: 0 4px 14px rgba(168, 85, 247, 0.35) !important;
 }
+div[data-testid="stHorizontalBlock"]:has(.mori-nav-anchor) button[kind="secondary"],
+div[data-testid="stHorizontalBlock"]:has(.mori-nav-anchor) button[data-testid="stBaseButton-secondary"] {
+    background: transparent !important;
+    color: #cbd5e1 !important;
+    font-weight: 700 !important;
+}
+div[data-testid="stHorizontalBlock"]:has(.mori-nav-anchor) button[kind="secondary"]:hover,
+div[data-testid="stHorizontalBlock"]:has(.mori-nav-anchor) button[data-testid="stBaseButton-secondary"]:hover {
+    background: rgba(192, 132, 252, 0.15) !important;
+    color: #e9d5ff !important;
+}
 
 /* 소메뉴 스타일 */
-div[data-testid="stTabs"] div[data-testid="stTabs"] [data-baseweb="tab-list"] {
+div[data-testid="stTabs"] [data-baseweb="tab-list"] {
     gap: 6px !important;
     background: transparent !important;
     padding: 2px 0 !important;
@@ -410,7 +416,7 @@ div[data-testid="stTabs"] div[data-testid="stTabs"] [data-baseweb="tab-list"] {
     border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
     margin-bottom: 14px !important;
 }
-div[data-testid="stTabs"] div[data-testid="stTabs"] [data-baseweb="tab"] {
+div[data-testid="stTabs"] [data-baseweb="tab"] {
     height: 36px !important;
     border-radius: 8px !important;
     padding: 4px 14px !important;
@@ -420,7 +426,7 @@ div[data-testid="stTabs"] div[data-testid="stTabs"] [data-baseweb="tab"] {
     background: transparent !important;
     border: none !important;
 }
-div[data-testid="stTabs"] div[data-testid="stTabs"] [aria-selected="true"] {
+div[data-testid="stTabs"] [aria-selected="true"] {
     background: rgba(192, 132, 252, 0.15) !important;
     color: #e9d5ff !important;
     font-weight: 700 !important;
@@ -653,7 +659,6 @@ def sync_and_load_calendar_events(current_portfolio):
     deleted_ids = load_deleted_event_ids()
     custom_events = []
 
-    # 사용자가 직접 등록한 커스텀 일정 로드
     if os.path.exists(CALENDAR_FILE):
         try:
             with open(CALENDAR_FILE, "r", encoding="utf-8") as f:
@@ -664,23 +669,19 @@ def sync_and_load_calendar_events(current_portfolio):
         except Exception:
             pass
 
-    # 현재 포트폴리오의 6자리 종목 코드 추출
     active_tickers = {str(item.get("티커", "")).replace(".KS", "").replace(".KQ", "").strip() for item in current_portfolio}
 
     final_events = []
-    # 1. 고정 거시경제/시험 일정 추가
     for fe in FIXED_GENERAL_EVENTS:
         if fe["id"] not in deleted_ids:
             final_events.append(fe)
 
-    # 2. 보유 종목에 맞는 일정만 자동 동기화 (종목이 바뀌면 즉시 캘린더도 자동 변경)
     for ticker, catalysts in STOCK_CATALYST_CATALOG.items():
         if ticker in active_tickers:
             for cat in catalysts:
                 if cat["id"] not in deleted_ids:
                     final_events.append(cat)
 
-    # 3. 구독 결제일 자동 연동 (구독 목록에 있는 서비스만 결제일 표시)
     subs = load_subscriptions()
     today_dt = datetime.now(KST)
     cur_year, cur_month = today_dt.year, today_dt.month
@@ -698,13 +699,9 @@ def sync_and_load_calendar_events(current_portfolio):
                 "auto_stock": "-"
             })
 
-    # 4. 사용자 커스텀 일정 추가
     final_events.extend(custom_events)
-
-    # 날짜순 정렬
     final_events.sort(key=lambda x: x.get("date", "9999-12-31"))
 
-    # 디스크에 저장
     try:
         with open(CALENDAR_FILE, "w", encoding="utf-8") as f:
             json.dump(final_events, f, ensure_ascii=False, indent=2)
@@ -1350,7 +1347,6 @@ def render_daily_hub():
         cash_balance=user_settings.get("cash_balance", 810924.0)
     )
 
-    # 🌟 보유 종목 연동 캘린더 동기화 로드
     all_calendar_events = sync_and_load_calendar_events(user_portfolio)
 
     # 1-1. 오늘 요약 (일주일 간의 일정만 엄격 필터링)
@@ -2052,21 +2048,66 @@ st.markdown(f"""
 
 
 # =============================================================
-# 🌟 [원래의 세련된 단일 라인 연보라 캡슐 탭 복원]
+# ⭐ [새로고침 / 당겨서 새로고침 시에도 100% 유지되는 4단 단일 라인 탭 네비게이션]
 # =============================================================
 
-tab_daily, tab_stock, tab_sports, tab_blog = st.tabs([
-    "데일리", "주식·금융", "스포츠", "블로그"
-])
+# 모바일 당겨서 새로고침 시 브라우저 세션스토리지와 URL 파라미터 동기화 스크립트
+components.html("""
+<script>
+(function() {
+    const params = new URLSearchParams(window.parent.location.search);
+    const tabParam = params.get('tab');
+    if (tabParam) {
+        window.sessionStorage.setItem('mori_tab', tabParam);
+    } else {
+        const savedTab = window.sessionStorage.getItem('mori_tab');
+        if (savedTab && savedTab !== 'daily') {
+            params.set('tab', savedTab);
+            window.parent.history.replaceState({}, '', '?' + params.toString());
+        }
+    }
+})();
+</script>
+""", height=0)
 
-with tab_daily:
+# 현재 활성 탭 식별
+active_tab_key = st.query_params.get("tab", "daily")
+if active_tab_key not in ["daily", "stock", "sports", "blog"]:
+    active_tab_key = "daily"
+
+st.markdown('<div class="mori-nav-anchor" style="display:none;"></div>', unsafe_allow_html=True)
+col_nav1, col_nav2, col_nav3, col_nav4 = st.columns(4)
+
+with col_nav1:
+    type_1 = "primary" if active_tab_key == "daily" else "secondary"
+    if st.button("데일리", key="nav_btn_daily", use_container_width=True, type=type_1):
+        st.query_params["tab"] = "daily"
+        st.rerun()
+
+with col_nav2:
+    type_2 = "primary" if active_tab_key == "stock" else "secondary"
+    if st.button("주식·금융", key="nav_btn_stock", use_container_width=True, type=type_2):
+        st.query_params["tab"] = "stock"
+        st.rerun()
+
+with col_nav3:
+    type_3 = "primary" if active_tab_key == "sports" else "secondary"
+    if st.button("스포츠", key="nav_btn_sports", use_container_width=True, type=type_3):
+        st.query_params["tab"] = "sports"
+        st.rerun()
+
+with col_nav4:
+    type_4 = "primary" if active_tab_key == "blog" else "secondary"
+    if st.button("블로그", key="nav_btn_blog", use_container_width=True, type=type_4):
+        st.query_params["tab"] = "blog"
+        st.rerun()
+
+# 선택된 탭 컨텐츠 렌더링
+if active_tab_key == "daily":
     render_daily_hub()
-
-with tab_stock:
+elif active_tab_key == "stock":
     render_stock_hub()
-
-with tab_sports:
+elif active_tab_key == "sports":
     render_sports_hub()
-
-with tab_blog:
+elif active_tab_key == "blog":
     render_blog_hub()
