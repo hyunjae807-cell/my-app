@@ -1151,7 +1151,6 @@ def render_blog_hub():
     history_vis = live_data.get("visitor_history", [])
     total_posts_rss = live_data.get("rss_post_count", 0)
 
-    # 수동 설정값과 라이브값 중 큰 값 또는 수기값 적용
     display_today_vis = max(today_visitors_live, blog_stats.get("manual_today_visitors", 0))
     display_total_posts = len(blog_posts) if len(blog_posts) > 0 else total_posts_rss
 
@@ -1209,7 +1208,6 @@ def render_blog_hub():
         )
         st.plotly_chart(fig_vis, use_container_width=True)
 
-    # 서브 탭 2개: [📋 포스팅 관리 대장] & [⚙️ 블로그 정보 및 수익 설정]
     sub_tab_p, sub_tab_s = st.tabs(["📋 포스팅 관리 대장", "⚙️ 블로그 정보 & 통계 설정"])
 
     # ---------------------------------------------------------
@@ -1340,8 +1338,3 @@ with tab_sports_main:
 
 with tab_blog_main:
     render_blog_hub()
-EOF
-
-python3 -m py_compile /tmp/full_mori_app_v26.py
-echo "PYTHON COMPILE RESULT: $?"
-}}
