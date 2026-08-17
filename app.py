@@ -363,7 +363,7 @@ html, body, p, div:not([data-testid*="Icon"]), span:not([data-testid*="Icon"]), 
     margin-top: 6px;
 }
 
-/* 🌟 [새로고침 시에도 100% 유지되는 4단 단일 라인 연보라 캡슐 탭 네비게이션] */
+/* 4단 연보라 캡슐 탭 네비게이션 */
 div[data-testid="stHorizontalBlock"]:has(.mori-nav-anchor) {
     gap: 8px !important;
     background: rgba(147, 51, 234, 0.08) !important;
@@ -1182,7 +1182,29 @@ def fetch_news_feed(query, max_results=8):
     except Exception:
         return []
 
-# 12. 🌟 [최신 Gemini 2.5 호환 & 다중 모델 자동 폴백 AI 호출 엔진]
+# 🌟 [동적 사용 가능 모델 탐색 캐시]
+@st.cache_data(ttl=1800)
+def get_available_gemini_models(clean_key):
+    try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models?key={clean_key}"
+        resp = requests.get(url, timeout=4)
+        if resp.status_code == 200:
+            data = resp.json()
+            valid_models = []
+            for m in data.get("models", []):
+                methods = m.get("supportedGenerationMethods", [])
+                if "generateContent" in methods:
+                    m_name = m.get("name", "").replace("models/", "")
+                    if not any(old in m_name for old in ["1.5-", "2.0-", "gemini-pro"]):
+                        valid_models.append(m_name)
+            if valid_models:
+                valid_models.sort(key=lambda x: (0 if "flash" in x.lower() else 1, x))
+                return valid_models
+    except Exception:
+        pass
+    return ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro", "gemini-3.5-flash"]
+
+# 12. 🌟 [최신 Gemini 2.5 호환 AI 호출 엔진]
 def call_gemini_api(prompt_text, api_key, system_instruction=None, image_bytes=None, chat_contents=None):
     if not api_key or not str(api_key).strip():
         return None, "Gemini API Key를 입력해 주세요."
@@ -1190,14 +1212,9 @@ def call_gemini_api(prompt_text, api_key, system_instruction=None, image_bytes=N
     clean_key = str(api_key).strip().replace('"', '').replace("'", "")
     headers = {"Content-Type": "application/json"}
     
-    # 최신 지원 모델 우선순위 목록
-    candidate_models = [
-        "gemini-2.5-flash",
-        "gemini-2.5-flash-lite",
-        "gemini-2.5-pro",
-        "gemini-2.0-flash",
-        "gemini-2.0-flash-lite"
-    ]
+    # 🌟 구버전 모델 제거 및 최신 활성 모델 목록 구성
+    discovered = get_available_gemini_models(clean_key)
+    candidate_models = discovered if discovered else ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro", "gemini-3.5-flash"]
     
     sanitized_contents = []
     if chat_contents:
@@ -1256,7 +1273,7 @@ def call_gemini_api(prompt_text, api_key, system_instruction=None, image_bytes=N
                     if text:
                         return text, "SUCCESS"
             else:
-                last_err = f"[{res.status_code}] {res.text[:140]}"
+                last_err = f"[{model_name}] [{res.status_code}] {res.text[:140]}"
         except Exception as e:
             last_err = str(e)
             
@@ -1277,7 +1294,7 @@ def call_gemini_api(prompt_text, api_key, system_instruction=None, image_bytes=N
         if inline_contents[0]["parts"] and "text" in inline_contents[0]["parts"][0]:
             inline_contents[0]["parts"][0]["text"] = f"[{system_instruction.strip()}]\n\n" + inline_contents[0]["parts"][0]["text"]
         
-    for model_name in ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro"]:
+    for model_name in ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro", "gemini-3.5-flash"]:
         for api_ver in ["v1beta", "v1"]:
             url = f"https://generativelanguage.googleapis.com/{api_ver}/models/{model_name}:generateContent?key={clean_key}"
             payload = {"contents": inline_contents}
@@ -2212,4 +2229,3 @@ elif active_tab_key == "sports":
     render_sports_hub()
 elif active_tab_key == "blog":
     render_blog_hub()
-
