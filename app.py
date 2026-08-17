@@ -204,11 +204,10 @@ html, body, p, span, div, label, li {
     color: white !important;
     text-decoration: none;
     font-weight: 800;
-    padding: 8px 16px;
+    padding: 8px 14px;
     border-radius: 10px;
     font-size: 14px;
-    margin-top: 8px;
-    margin-right: 8px;
+    margin-top: 6px;
     box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
 }
 .blog-btn:hover {
@@ -221,10 +220,10 @@ html, body, p, span, div, label, li {
     color: white !important;
     text-decoration: none;
     font-weight: 700;
-    padding: 8px 16px;
+    padding: 8px 14px;
     border-radius: 10px;
     font-size: 14px;
-    margin-top: 8px;
+    margin-top: 6px;
     border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
@@ -310,7 +309,6 @@ DEFAULT_BLOG_STATS = {
     "visitor_history": []
 }
 
-# 예시 데이터 완전 삭제 (빈 목록)
 DEFAULT_BLOG_POSTS = []
 
 DEFAULT_LOCATION = {
@@ -1177,22 +1175,28 @@ def render_blog_hub():
     else:
         final_history = []
 
-    # 🌟 내 블로그 브랜드 카드 & 바로가기 링크
+    # 🌟 내 블로그 브랜드 카드 & 정확한 네이버 통계 바로가기 링크 버튼들
     st.markdown(f"""
     <div class="blog-card">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
             <div>
                 <div style="font-size: 22px; font-weight: 900; color: #6ee7b7;">칼퇴연구소 | 칼퇴연구원의 테크 랩</div>
                 <div style="font-size: 15px; color: #a7f3d0; margin-top: 4px;">반복되는 야근을 줄이고 일상을 되찾는 생산성 치트키</div>
-                <div style="font-size: 13px; color: #d1fae5; margin-top: 4px;">블로그 주소: <b>https://m.blog.naver.com/{blog_id}</b></div>
+                <div style="font-size: 13px; color: #d1fae5; margin-top: 4px;">블로그 ID: <b>@{blog_id}</b></div>
             </div>
         </div>
-        <div style="margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.15); padding-top: 10px;">
+        <div style="margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.15); padding-top: 10px; display: flex; gap: 8px; flex-wrap: wrap;">
             <a class="blog-btn" href="https://m.blog.naver.com/{blog_id}" target="_blank">
-                🌐 내 네이버 블로그 바로가기 ↗️
+                🌐 내 블로그 바로가기 ↗️
             </a>
-            <a class="blog-btn-secondary" href="https://stat.blog.naver.com" target="_blank">
-                📊 네이버 실시간 통계센터 바로가기 ↗️
+            <a class="blog-btn-secondary" href="https://admin.blog.naver.com/{blog_id}/stat/today" target="_blank">
+                📊 네이버 통계센터 (PC/관리자) ↗️
+            </a>
+            <a class="blog-btn-secondary" href="https://blog.stat.naver.com/m/blog/daily/cv" target="_blank">
+                📱 모바일 방문자 통계 ↗️
+            </a>
+            <a class="blog-btn-secondary" href="https://adpost.naver.com" target="_blank">
+                💰 애드포스트 수익센터 ↗️
             </a>
         </div>
     </div>
@@ -1205,7 +1209,7 @@ def render_blog_hub():
 
     c_b1, c_b2, c_b3, c_b4 = st.columns(4)
     with c_b1:
-        st.metric("오늘 방문자 수", f"{display_today_vis:,}명", "네이버 실시간 통계")
+        st.metric("오늘 방문자 수", f"{display_today_vis:,}명", "네이버 통계 연동")
     with c_b2:
         st.metric("총 포스팅 수", f"{display_total_posts:,}편", f"관리 대장: {len(blog_posts)}편")
     with c_b3:
@@ -1215,7 +1219,7 @@ def render_blog_hub():
 
     # ⚡ 오늘자 방문자 수 & 애드포스트 1초 간편 업데이트
     with st.expander("⚡ 오늘 방문자 수 & 애드포스트 수익 1초 간편 갱신", expanded=False):
-        st.caption("💡 네이버 블로그는 PC 관리 화면에서 [방문자수 위젯]이 켜져 있어야 외부 조회가 가능하며, 해외 클라우드 서버 특성상 조회가 지연될 경우 아래에 직접 입력하시면 즉시 차트와 대시보드에 반영됩니다.")
+        st.caption("💡 위 바로가기 버튼을 통해 확인하신 실제 방문자 수와 수익을 입력하시면 아래 일별 차트와 대시보드에 즉시 날짜별로 누적 기록됩니다.")
         with st.form("quick_blog_sync_form"):
             col_q1, col_q2 = st.columns(2)
             with col_q1:
