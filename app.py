@@ -1,5 +1,3 @@
-오류 없이 바로 복사해서 사용할 수 있도록 완전히 검증 및 수정된 전체 코드입니다.
-💻 app.py 전체 소스 코드
 import streamlit as st
 import streamlit.components.v1 as components
 import yfinance as yf
