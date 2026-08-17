@@ -473,7 +473,6 @@ BLOG_POSTS_FILE = "blog_posts.json"
 BLOG_STATS_FILE = "blog_stats.json"
 SETTINGS_FILE = "user_settings.json"
 
-# 키움증권 실제 잔고 100% 일치 포트폴리오
 EXACT_KIWOOM_PORTFOLIO = [
     {"종목명": "SK하이닉스", "티커": "000660", "매입단가": 821714.0, "보유수량": 5, "현재가": 1667000.0},
     {"종목명": "현대차", "티커": "005380", "매입단가": 610000.0, "보유수량": 6, "현재가": 459500.0},
@@ -488,10 +487,10 @@ EXACT_KIWOOM_PORTFOLIO = [
 
 EXACT_SETTINGS = {
     "cash_balance": 810924.0,
-    "usd_krw_rate": 1380.0
+    "usd_krw_rate": 1380.0,
+    "gemini_api_key": ""
 }
 
-# 🌟 보유 종목별 동적 핵심 이벤트 카탈로그 (내 포트폴리오 보유 종목에 따라 자동 반영)
 STOCK_CATALYST_CATALOG = {
     "000660": [
         {"id": "cat_000660_1", "date": "2026-08-21", "type": "반도체·수출", "title": "관세청 8월 1~20일 반도체 수출입 통계 발표", "auto_stock": "SK하이닉스 (000660)"},
@@ -523,7 +522,6 @@ STOCK_CATALYST_CATALOG = {
     ]
 }
 
-# 기본 공통 일정 (거시경제 및 개인 중요 일정)
 FIXED_GENERAL_EVENTS = [
     {"id": "fixed_opic", "date": "2026-08-23", "type": "어학 시험", "title": "오픽(OPIc) 성적 발표 13:00", "auto_stock": "-"},
     {"id": "fixed_macro_jackson", "date": "2026-08-28", "type": "거시 경제", "title": "미국 잭슨홀 심포지엄 (파월 연준 의장 연설)", "auto_stock": "글로벌 증시 전반"},
@@ -585,7 +583,7 @@ def load_settings():
                         data["cash_balance"] = 810924.0
                     return data
         except Exception: pass
-    return EXACT_SETTINGS
+    return EXACT_SETTINGS.copy()
 
 def save_settings(s_data):
     try:
@@ -638,7 +636,6 @@ def save_portfolio(data):
             json.dump(data, f, ensure_ascii=False, indent=2)
     except Exception as e: st.error(f"저장 오류: {e}")
 
-# 🌟 [영구 삭제 기록 관리 & 보유 종목 실시간 자동 동기화 캘린더 엔진]
 def load_deleted_event_ids():
     if os.path.exists(DELETED_EVENTS_FILE):
         try:
@@ -747,7 +744,6 @@ def delete_calendar_event_permanently(event_id):
         except Exception:
             pass
 
-# 🌟 오늘로부터 7일(일주일) 이내 일정 필터링
 def get_weekly_filtered_events(events, current_dt):
     today_date = current_dt.date()
     weekly = []
@@ -774,6 +770,36 @@ def get_weekly_filtered_events(events, current_dt):
             
     weekly.sort(key=lambda x: x["raw_date"])
     return weekly
+
+# 🌟 [상단 4단 위젯용 실시간 D-Day 동적 계산 엔진]
+def get_top_widget_dday_info():
+    today_dt = datetime.now(KST).date()
+    
+    # 1순위: 오픽 시험(2026-08-23) D-Day 실시간 자동 연산
+    opic_target = datetime(2026, 8, 23).date()
+    diff_opic = (opic_target - today_dt).days
+    
+    if diff_opic > 0:
+        return "주요 D-Day", "어학", f"오픽 D-{diff_opic}", "8.23 13:00 발표"
+    elif diff_opic == 0:
+        return "주요 D-Day", "어학", "오픽 D-Day", "오늘 13:00 발표"
+        
+    # 2순위: 오픽 이후 캘린더에서 가장 임박한 미래 일정 자동 추출
+    try:
+        user_p = load_portfolio()
+        all_evs = sync_and_load_calendar_events(user_p)
+        for ev in all_evs:
+            ev_d = datetime.strptime(ev["date"], "%Y-%m-%d").date()
+            diff = (ev_d - today_dt).days
+            if diff >= 0:
+                d_tag = "D-Day" if diff == 0 else f"D-{diff}"
+                t_str = ev.get("title", "")
+                short_title = t_str.split()[0] if len(t_str) > 8 else t_str
+                return "주요 D-Day", ev.get("type", "일정"), f"{short_title} {d_tag}", f"{ev_d.month}.{ev_d.day} 예정"
+    except Exception:
+        pass
+        
+    return "주요 D-Day", "일정", "일정 없음", "-"
 
 def load_briefing():
     if os.path.exists(BRIEFING_FILE):
@@ -879,12 +905,10 @@ def save_blog_posts(posts):
             json.dump(posts, f, ensure_ascii=False, indent=2)
     except Exception as e: pass
 
-# 7. [한국거래소 & 네이버 금융 & 글로벌 실시간 시세 엔진]
 @st.cache_data(ttl=1)
 def get_live_market_data(ticker_symbol, fallback_price=None):
     clean_code = str(ticker_symbol).replace(".KS", "").replace(".KQ", "").strip()
 
-    # 1. 환율 (USD/KRW) 특수 처리 (네이버 환율 API 1순위)
     if clean_code in ("USDKRW=X", "KRW=X", "USD/KRW", "FX_USDKRW"):
         try:
             url_fx = "https://m.stock.naver.com/front-api/marketIndex/prices?category=exchange&reutersCode=FX_USDKRW"
@@ -899,7 +923,6 @@ def get_live_market_data(ticker_symbol, fallback_price=None):
         except Exception:
             pass
 
-    # 2. 국내 주식 및 ETF (6자리 숫자) : 네이버 증권 모바일 공식 실시간 API
     if clean_code.isdigit() and len(clean_code) == 6:
         try:
             url = f"https://m.stock.naver.com/api/stock/{clean_code}/basic"
@@ -918,7 +941,6 @@ def get_live_market_data(ticker_symbol, fallback_price=None):
         except Exception:
             pass
 
-        # 2순위: 네이버 PC 실시간 Polling
         try:
             url_pc = f"https://polling.finance.naver.com/api/realtime/hasItem?itemCodes={clean_code}"
             req_pc = urllib.request.Request(url_pc, headers={'User-Agent': 'Mozilla/5.0'})
@@ -933,7 +955,6 @@ def get_live_market_data(ticker_symbol, fallback_price=None):
         except Exception:
             pass
 
-    # 3. 미국 주식 및 글로벌 지수 (yfinance: ^SOX, ^GSPC, ^KS11 등)
     try:
         yf_symbol = ticker_symbol
         if clean_code.isdigit() and len(clean_code) == 6 and not (yf_symbol.endswith(".KS") or yf_symbol.endswith(".KQ")):
@@ -950,7 +971,6 @@ def get_live_market_data(ticker_symbol, fallback_price=None):
     except Exception:
         pass
 
-    # 4. 휴장일/오프라인 시 기준 종가
     if fallback_price is not None:
         return float(fallback_price), 0.0
 
@@ -971,7 +991,6 @@ def get_batch_market_data(portfolio_items):
                 results[t] = (None, None)
     return results
 
-# 8. [단일 통일 포트폴리오 & 순자산 정밀 연산 엔진 - 키움증권 1원 단위 일치]
 def compute_portfolio_summary(portfolio, live_prices_map, usd_krw=1380.0, cash_balance=810924.0):
     total_eval_krw = 0.0
     total_buy_krw = 0.0
@@ -1027,47 +1046,46 @@ def compute_portfolio_summary(portfolio, live_prices_map, usd_krw=1380.0, cash_b
         "calculated_rows": calculated_rows
     }
 
-# 9. [미국장 요일별 순환 주목 종목 풀]
 def get_daily_us_spotlight_stocks():
     today_weekday = datetime.now(KST).weekday()
     spotlight_pools = {
-        0: [ # 월요일: 글로벌 AI & 빅테크 코어
+        0: [
             {"ticker": "NVDA", "name": "엔비디아", "tag": "AI 가속기 대장", "reason": "차세대 블랙웰 GPU 공급 및 데이터센터 AI 수요 지속"},
             {"ticker": "MSFT", "name": "마이크로소프트", "tag": "클라우드 AI", "reason": "애저(Azure) AI 클라우드 인프라 매출 가속화"},
             {"ticker": "AAPL", "name": "애플", "tag": "온디바이스 AI", "reason": "애플 인텔리전스 탑재 신제품 교체 사이클 도래"},
             {"ticker": "TSM", "name": "TSMC", "tag": "파운드리 1위", "reason": "3나노/2나노 첨단 반도체 공정 가동률 풀가동"}
         ],
-        1: [ # 화요일: 차세대 반도체 & 커스텀 실리콘
+        1: [
             {"ticker": "AVGO", "name": "브로드컴", "tag": "AI ASIC 커스텀", "reason": "빅테크 맞춤형 가속기 및 네트워킹 스위치 수주 급증"},
             {"ticker": "AMD", "name": "AMD", "tag": "MI300 시리즈", "reason": "데이터센터용 GPU 및 AI PC 라이젠 라인업 확대"},
             {"ticker": "ARM", "name": "ARM 홀딩스", "tag": "칩 아키텍처", "reason": "스마트폰 및 PC 전력 효율 AI 아키텍처 로열티 증가"},
             {"ticker": "QCOM", "name": "퀄컴", "tag": "AI PC & 모바일", "reason": "스냅드래곤 X 엘리트 탑재 코파일럿+ PC 시장 진입"}
         ],
-        2: [ # 수요일: 클라우드 & 소프트웨어 플랫폼
+        2: [
             {"ticker": "AMZN", "name": "아마존", "tag": "AWS & 물류", "reason": "AWS 클라우드 마진 개선 및 전자상거래 물류 효율화"},
             {"ticker": "GOOGL", "name": "알파벳 (구글)", "tag": "제미나이 AI", "reason": "검색 광고 견조 및 기업용 제미나이 AI 생태계 확장"},
             {"ticker": "META", "name": "메타", "tag": "오픈소스 AI", "reason": "라마(Llama) 생태계 확장 및 AI 기반 광고 타겟팅 고도화"},
             {"ticker": "PLTR", "name": "팔란티어", "tag": "기업용 AI 플랫폼", "reason": "AIP 플랫폼 민간 엔터프라이즈 고객 수 급증"}
         ],
-        3: [ # 목요일: 고성능 하드웨어 & 모빌리티
+        3: [
             {"ticker": "TSLA", "name": "테슬라", "tag": "자율주행 FSD", "reason": "자율주행 FSD 고도화 및 로보택시 비전 구체화"},
             {"ticker": "MU", "name": "마이크론", "tag": "HBM 메모리", "reason": "차세대 HBM3E 공급 확대 및 메모리 업황 회복"},
             {"ticker": "SMCI", "name": "슈퍼마이크로", "tag": "액체냉각 서버", "reason": "AI 데이터센터 수랭식 랙 인프라 수요 견조"},
             {"ticker": "ASML", "name": "ASML", "tag": "EUV 노광장비", "reason": "High-NA EUV 노광장비 독점 및 수주 모멘텀"}
         ],
-        4: [ # 금요일: 헬스케어 & 고배당 성장
+        4: [
             {"ticker": "LLY", "name": "일라이 릴리", "tag": "비만치료제", "reason": "마운자로/젭바운드 글로벌 수요 폭증 및 신약 승인"},
             {"ticker": "SCHD", "name": "슈왑 US 디비던드", "tag": "고배당 대표 ETF", "reason": "우량 배당성장주 포트폴리오로 하방 방어력 우수"},
             {"ticker": "COST", "name": "코스트코", "tag": "필수소비재", "reason": "압도적인 멤버십 갱신율 및 안정적 현금흐름 창출"},
             {"ticker": "ISRG", "name": "인튜이티브 서지컬", "tag": "의료 로봇", "reason": "다빈치 5 차세대 수술 로봇 글로벌 도입 확대"}
         ],
-        5: [ # 토요일: 주간 모멘텀 톱픽
+        5: [
             {"ticker": "NVDA", "name": "엔비디아", "tag": "주간 톱 모멘텀", "reason": "글로벌 AI 인프라 투자 지속 및 기관 매수세"},
             {"ticker": "LLY", "name": "일라이 릴리", "tag": "헬스케어 대장", "reason": "바이오 헬스케어 섹터 주도주 모멘텀"},
             {"ticker": "PLTR", "name": "팔란티어", "tag": "AI 소프트웨어", "reason": "상업 부문 매출 고성장 및 탄탄한 재무구조"},
             {"ticker": "AVGO", "name": "브로드컴", "tag": "AI 통신·ASIC", "reason": "엔터프라이즈 네트워킹 및 커스텀 가속기 성장"}
         ],
-        6: [ # 일요일: 차주 개장 준비 종목
+        6: [
             {"ticker": "AAPL", "name": "애플", "tag": "글로벌 시총 1위", "reason": "하반기 신제품 라인업 및 서비스 마진 확대"},
             {"ticker": "MSFT", "name": "마이크로소프트", "tag": "AI 엔터프라이즈", "reason": "B2B 코파일럿 구독 도입률 지속 증가"},
             {"ticker": "TSM", "name": "TSMC", "tag": "글로벌 파운드리", "reason": "글로벌 빅테크 첨단 패키징 주문 집중"},
@@ -1076,7 +1094,6 @@ def get_daily_us_spotlight_stocks():
     }
     return spotlight_pools.get(today_weekday, spotlight_pools[0])
 
-# 10. 네이버 블로그 방문자 수 및 RSS 조회
 @st.cache_data(ttl=300)
 def fetch_naver_blog_live_data(blog_id="early_leave_lab"):
     visitor_records = []
@@ -1124,15 +1141,14 @@ def fetch_naver_blog_live_data(blog_id="early_leave_lab"):
         "rss_post_count": total_posts_rss
     }
 
-# 11. 실시간 위치 기반 날씨 데이터 조회
 @st.cache_data(ttl=1800)
 def get_current_weather(lat=37.2410, lon=127.1775, default_name="용인시"):
     try:
         url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto"
         res = requests.get(url, timeout=3).json()
         current = res.get("current", {})
-        temp = current.get("temperature_2m", 26.2)
-        humidity = current.get("relative_humidity_2m", 82)
+        temp = current.get("temperature_2m", 22.7)
+        humidity = current.get("relative_humidity_2m", 90)
         code = current.get("weather_code", 0)
         
         weather_desc = "맑음"
@@ -1143,7 +1159,7 @@ def get_current_weather(lat=37.2410, lon=127.1775, default_name="용인시"):
         
         return f"{temp:.1f}°C", weather_desc, f"{humidity}%", default_name
     except Exception:
-        return "26.2°C", "구름 조금", "82%", default_name
+        return "22.7°C", "흐림", "90%", default_name
 
 @st.cache_data(ttl=300)
 def fetch_news_feed(query, max_results=8):
@@ -1166,7 +1182,7 @@ def fetch_news_feed(query, max_results=8):
     except Exception:
         return []
 
-# 12. 🌟 [다중 모델 & 엔드포인트 자동 호환 Gemini AI 호출 엔진]
+# 12. 🌟 [최신 Gemini 2.5 호환 & 다중 모델 자동 폴백 AI 호출 엔진]
 def call_gemini_api(prompt_text, api_key, system_instruction=None, image_bytes=None, chat_contents=None):
     if not api_key or not str(api_key).strip():
         return None, "Gemini API Key를 입력해 주세요."
@@ -1174,16 +1190,15 @@ def call_gemini_api(prompt_text, api_key, system_instruction=None, image_bytes=N
     clean_key = str(api_key).strip().replace('"', '').replace("'", "")
     headers = {"Content-Type": "application/json"}
     
-    # 지원되는 최신 모델 목록 (gemini-pro 제외)
+    # 🌟 최신 지원 모델 우선순위 목록
     candidate_models = [
-        "gemini-1.5-flash",
-        "gemini-1.5-flash-8b",
-        "gemini-1.5-pro",
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-2.5-pro",
         "gemini-2.0-flash",
         "gemini-2.0-flash-lite"
     ]
     
-    # 대화 기록 정제 (반드시 user로 시작, 연속된 동일 role 병합, 이전 오류 메시지 배제)
     sanitized_contents = []
     if chat_contents:
         last_role = None
@@ -1211,9 +1226,10 @@ def call_gemini_api(prompt_text, api_key, system_instruction=None, image_bytes=N
         if image_bytes:
             base64_img = base64.b64encode(image_bytes).decode('utf-8')
             sanitized_contents = [{
+                "role": "user",
                 "parts": [
                     {"text": prompt_text if prompt_text else "이 이미지를 분석해주세요."},
-                    {"inline_data": {"mime_type": "image/jpeg", "data": base64_img}}
+                    {"inlineData": {"mimeType": "image/jpeg", "data": base64_img}}
                 ]
             }]
         else:
@@ -1221,7 +1237,7 @@ def call_gemini_api(prompt_text, api_key, system_instruction=None, image_bytes=N
             sanitized_contents = [{"role": "user", "parts": [{"text": final_p}]}]
 
     last_err = ""
-    # 1차 시도: v1beta + systemInstruction 정석 호출
+    # 1차 시도: v1beta + 최신 모델 + systemInstruction
     for model_name in candidate_models:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={clean_key}"
         payload = {"contents": sanitized_contents}
@@ -1232,24 +1248,36 @@ def call_gemini_api(prompt_text, api_key, system_instruction=None, image_bytes=N
             res = requests.post(url, json=payload, headers=headers, timeout=25)
             if res.status_code == 200:
                 resp_json = res.json()
-                cand = resp_json.get('candidates', [{}])[0]
-                text = cand.get('content', {}).get('parts', [{}])[0].get('text', '')
-                if text:
-                    return text, "SUCCESS"
+                candidates = resp_json.get('candidates', [])
+                if candidates:
+                    parts = candidates[0].get('content', {}).get('parts', [])
+                    text_parts = [p.get('text', '') for p in parts if 'text' in p]
+                    text = "".join(text_parts).strip()
+                    if text:
+                        return text, "SUCCESS"
             else:
-                last_err = f"[{res.status_code}] {res.text[:120]}"
+                last_err = f"[{res.status_code}] {res.text[:140]}"
         except Exception as e:
             last_err = str(e)
             
-    # 2차 시도: 프롬프트에 시스템 지침을 직접 인라인 결합하여 호출 (구버전 호환)
+    # 2차 시도: 프롬프트에 시스템 지침 인라인 결합 폴백
     inline_contents = []
     for c in sanitized_contents:
-        inline_contents.append({"role": c["role"], "parts": [{"text": c["parts"][0]["text"]}]})
+        inline_parts = []
+        for p in c.get("parts", []):
+            if "text" in p:
+                inline_parts.append({"text": p["text"]})
+            elif "inlineData" in p:
+                inline_parts.append({"inlineData": p["inlineData"]})
+            elif "inline_data" in p:
+                inline_parts.append({"inlineData": p["inline_data"]})
+        inline_contents.append({"role": c["role"], "parts": inline_parts})
         
     if system_instruction and inline_contents:
-        inline_contents[0]["parts"][0]["text"] = f"[{system_instruction.strip()}]\n\n" + inline_contents[0]["parts"][0]["text"]
+        if inline_contents[0]["parts"] and "text" in inline_contents[0]["parts"][0]:
+            inline_contents[0]["parts"][0]["text"] = f"[{system_instruction.strip()}]\n\n" + inline_contents[0]["parts"][0]["text"]
         
-    for model_name in ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash"]:
+    for model_name in ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro"]:
         for api_ver in ["v1beta", "v1"]:
             url = f"https://generativelanguage.googleapis.com/{api_ver}/models/{model_name}:generateContent?key={clean_key}"
             payload = {"contents": inline_contents}
@@ -1257,10 +1285,13 @@ def call_gemini_api(prompt_text, api_key, system_instruction=None, image_bytes=N
                 res = requests.post(url, json=payload, headers=headers, timeout=25)
                 if res.status_code == 200:
                     resp_json = res.json()
-                    cand = resp_json.get('candidates', [{}])[0]
-                    text = cand.get('content', {}).get('parts', [{}])[0].get('text', '')
-                    if text:
-                        return text, "SUCCESS"
+                    candidates = resp_json.get('candidates', [])
+                    if candidates:
+                        parts = candidates[0].get('content', {}).get('parts', [])
+                        text_parts = [p.get('text', '') for p in parts if 'text' in p]
+                        text = "".join(text_parts).strip()
+                        if text:
+                            return text, "SUCCESS"
             except Exception:
                 pass
                 
@@ -1358,7 +1389,6 @@ def render_live_portfolio_content():
         cash_balance=user_settings.get("cash_balance", 810924.0)
     )
 
-    # 4대 핵심 지표 (실시간 연동)
     c1, c2, c3, c4 = st.columns(4)
     with c1:
         st.metric("총 평가금액", f"{summary['total_eval_krw']:,.0f}원", f"{summary['total_profit_rate']:+.2f}%")
@@ -1389,10 +1419,8 @@ def render_daily_hub():
         cash_balance=user_settings.get("cash_balance", 810924.0)
     )
 
-    # 🌟 보유 종목 연동 캘린더 동기화 로드
     all_calendar_events = sync_and_load_calendar_events(user_portfolio)
 
-    # 1-1. 오늘 요약 (일주일 간의 일정만 엄격 필터링)
     with sub_d1:
         temp_val, weather_val, humid_val, loc_tag = get_current_weather(
             current_loc_data.get("lat", 37.2410),
@@ -1429,7 +1457,6 @@ def render_daily_hub():
             with ch2:
                 st.metric("총 평가손익", f"{summary['total_profit_krw']:+,.0f}원", f"추정자산: {summary['total_net_assets_krw']:,.0f}원")
 
-    # 1-2. 통합 캘린더 (전체 일정 조회, 추가, 영구 삭제 지원)
     with sub_d2:
         monthly_div = summary['total_monthly_div_krw']
 
@@ -1501,7 +1528,6 @@ def render_daily_hub():
                             st.success("새 일정이 등록되었습니다.")
                             st.rerun()
 
-    # 1-3. 고정 구독료 (개별 삭제 기능 완비)
     with sub_d3:
         subs_list = load_subscriptions()
         total_sub_monthly = sum(s["월요금"] for s in subs_list)
@@ -1542,7 +1568,6 @@ def render_daily_hub():
                         st.success("등록 완료되었습니다.")
                         st.rerun()
 
-    # 1-4. 할 일 관리
     with sub_d4:
         with st.expander("날씨 지역 설정"):
             preset_names = list(LOCATION_PRESETS.keys())
@@ -1576,11 +1601,9 @@ def render_daily_hub():
 
 
 # -------------------------------------------------------------
-# 2. [주식 & 금융 허브 모듈 - 필라델피아 반도체/환율 & 미국장 데일리 주목 종목]
+# 2. [주식 & 금융 허브 모듈]
 # -------------------------------------------------------------
 def render_live_market_overview_content():
-    # 1. 글로벌 4대 핵심 지표 (코스피, S&P 500, 필라델피아 반도체, 원/달러 환율)
-    market_tickers = ["^KS11", "^GSPC", "^SOX", "USDKRW=X"]
     m_items = [
         {"티커": "^KS11", "현재가": 6977.94},
         {"티커": "^GSPC", "현재가": 5554.20},
@@ -1604,7 +1627,6 @@ def render_live_market_overview_content():
 
     st.markdown("---")
 
-    # 2. 미국장 오늘의 주목 종목 (요일별 자동 순환 & 실시간 시세 연동)
     today_us_stocks = get_daily_us_spotlight_stocks()
     us_tickers_for_batch = [{"티커": s["ticker"], "현재가": 0.0} for s in today_us_stocks]
     us_prices_map = get_batch_market_data(us_tickers_for_batch)
@@ -1680,15 +1702,17 @@ def render_stock_hub():
             with st.expander("📸 잔고 캡처로 포트폴리오 자동 갱신"):
                 uploaded_file = st.file_uploader("증권사 잔고 캡처 업로드", type=["png", "jpg", "jpeg"])
                 if uploaded_file and st.button("AI 분석 및 저장"):
-                    active_key = st.session_state.saved_gemini_key or st.secrets.get("GEMINI_API_KEY", "")
+                    active_key = st.session_state.saved_gemini_key
                     if not active_key:
-                        st.warning("Gemini API Key가 필요합니다.")
+                        st.warning("Gemini API Key가 필요합니다. [AI 투자 비서] 탭에서 키를 등록해주세요.")
                     else:
                         parsed, status = analyze_portfolio_image(uploaded_file.getvalue(), active_key)
                         if status == "SUCCESS" and parsed:
                             save_portfolio(parsed)
                             st.success("포트폴리오가 업데이트되었습니다.")
                             st.rerun()
+                        else:
+                            st.error(f"분석 실패: {status}")
 
     with sub_s2:
         st.markdown("""
@@ -1737,21 +1761,21 @@ def render_stock_hub():
 
     with sub_s4:
         recent_news = fetch_news_feed("코스피 OR 반도체 OR 연준 금리 OR 엔비디아 OR SK하이닉스", max_results=12)
-        k_input_b = st.text_input("Gemini API Key", value=st.session_state.saved_gemini_key, type="password", key="brief_k_in")
-        if k_input_b: st.session_state.saved_gemini_key = k_input_b
         
         c_b1, c_b2 = st.columns(2)
         with c_b1:
-            if st.button("오늘자 AI 브리핑 생성", key="btn_b_re"):
-                active_key = st.session_state.saved_gemini_key or st.secrets.get("GEMINI_API_KEY", "")
+            if st.button("오늘자 AI 브리핑 생성", key="btn_b_re", use_container_width=True):
+                active_key = st.session_state.saved_gemini_key
                 if not active_key:
-                    st.warning("API Key를 입력해주세요.")
+                    st.warning("API Key를 입력해주세요. [AI 투자 비서] 탭에서 등록할 수 있습니다.")
                 else:
                     with st.spinner("증시 브리핑 작성 중..."):
                         b_res, status = generate_ai_briefing(recent_news, user_portfolio, active_key)
                         if status == "SUCCESS" and b_res:
                             save_briefing(b_res, datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S'))
                             st.rerun()
+                        else:
+                            st.error(f"브리핑 생성 오류: {status}")
         saved_b, saved_t = load_briefing()
         with c_b2:
             if saved_b:
@@ -1771,8 +1795,11 @@ def render_stock_hub():
             api_k_val = st.text_input("API Key", value=st.session_state.saved_gemini_key, type="password", key="chat_key_input")
             if st.button("API Key 저장", key="save_chat_key_btn"):
                 if api_k_val.strip():
-                    st.session_state.saved_gemini_key = api_k_val.strip()
-                    st.success("API Key가 저장되었습니다.")
+                    clean_k = api_k_val.strip()
+                    st.session_state.saved_gemini_key = clean_k
+                    user_settings["gemini_api_key"] = clean_k
+                    save_settings(user_settings)
+                    st.success("API Key가 안전하게 저장되었습니다.")
                     st.rerun()
 
         col_ch_top1, col_ch_top2 = st.columns([0.8, 0.2])
@@ -1801,14 +1828,14 @@ def render_stock_hub():
             u_text = user_input.strip()
             st.session_state.chat_messages.append({"role": "user", "content": u_text})
             
-            active_key = st.session_state.saved_gemini_key or st.secrets.get("GEMINI_API_KEY", "")
+            active_key = st.session_state.saved_gemini_key
             if active_key:
                 with st.spinner("분석 중..."):
                     reply = ask_gemini_chat(st.session_state.chat_messages, u_text, load_portfolio(), active_key)
                     st.session_state.chat_messages.append({"role": "assistant", "content": reply})
                     st.rerun()
             else:
-                st.warning("상단 [Gemini API Key 설정]에서 키를 입력해주세요.")
+                st.warning("상단 [Gemini API Key 설정 / 확인]에서 키를 입력해주세요.")
 
 
 # -------------------------------------------------------------
@@ -1831,9 +1858,9 @@ def render_sports_hub():
     with c_s1: st.markdown(f"#### {current_team['팀명']} ({current_team['리그']})")
     with c_s2:
         if st.button("구단 브리핑 생성", key=f"btn_sb_m_{team_key}"):
-            active_key = st.session_state.saved_gemini_key or st.secrets.get("GEMINI_API_KEY", "")
+            active_key = st.session_state.saved_gemini_key
             if not active_key:
-                st.warning("Gemini API Key가 필요합니다.")
+                st.warning("Gemini API Key가 필요합니다. [주식·금융 -> AI 투자 비서]에서 키를 등록해주세요.")
             else:
                 with st.spinner(f"{team_key} 분석 중..."):
                     b_txt = generate_team_briefing(current_team['팀명'], current_team['종목'], current_team['리그'], team_news, active_key)
@@ -1890,7 +1917,6 @@ def render_blog_hub():
     stored_hist = blog_stats.get("visitor_history", [])
     final_history = history_vis if history_vis else stored_hist
 
-    # 메인 채널 벤토 카드
     st.markdown(f"""
     <div class="bento-card">
         <div class="bento-title">
@@ -1917,7 +1943,6 @@ def render_blog_hub():
     </div>
     """, unsafe_allow_html=True)
 
-    # 4대 핵심 지표
     target_inc = blog_stats.get("target_monthly_income", 300000)
     curr_inc = blog_stats.get("current_monthly_income", 0)
     achieve_rate = (curr_inc / target_inc * 100) if target_inc > 0 else 0
@@ -1928,7 +1953,6 @@ def render_blog_hub():
     with c_b3: st.metric("애드포스트 수익", f"{curr_inc:,.0f}원")
     with c_b4: st.metric("목표 달성률", f"{achieve_rate:.1f}%", f"목표 {target_inc:,.0f}원")
 
-    # 오늘 방문자/수익 빠른 갱신
     with st.expander("방문자 수 및 수익 갱신"):
         with st.form("quick_blog_sync_form"):
             col_q1, col_q2 = st.columns(2)
@@ -1952,7 +1976,6 @@ def render_blog_hub():
                 st.success("반영되었습니다.")
                 st.rerun()
 
-    # 최근 방문자 추이 차트 (연보라 톤 바 차트)
     if final_history:
         df_vis = pd.DataFrame(final_history)
         fig_vis = go.Figure()
@@ -2058,8 +2081,14 @@ if "lat" in st.query_params and "lon" in st.query_params:
         save_location(current_loc_data)
     except Exception: pass
 
+user_settings_init = load_settings()
+try:
+    default_secrets_key = st.secrets.get("GEMINI_API_KEY", "")
+except Exception:
+    default_secrets_key = ""
+
 if "saved_gemini_key" not in st.session_state:
-    st.session_state.saved_gemini_key = st.secrets.get("GEMINI_API_KEY", "")
+    st.session_state.saved_gemini_key = user_settings_init.get("gemini_api_key") or default_secrets_key
 
 
 # =============================================================
@@ -2077,21 +2106,25 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# 2) 네이버/토스 스타일 상단 4단 위젯 스트립
+# 2) 네이버/토스 스타일 상단 4단 위젯 스트립 (D-Day 실시간 자동 연산 적용)
 w_temp, w_desc, w_hum, w_loc = get_current_weather(
     current_loc_data.get("lat", 37.2410),
     current_loc_data.get("lon", 127.1775),
     current_loc_data.get("name", "용인시")
 )
-m_items_top = [{"티커": "^KS11", "현재가": 6977.94}, {"티커": "^IXIC", "현재가": 26729.2}, {"티커": "000660", "현재가": 1667000.0}]
+m_items_top = [{"티커": "^KS11", "현재가": 6977.94}, {"티커": "^IXIC", "현재가": 26644.9}, {"티커": "000660", "현재가": 1667000.0}]
 m_prices_top = get_batch_market_data(m_items_top)
 kospi_val, kospi_del = m_prices_top.get("^KS11", (None, None))
 nasdaq_val, nasdaq_del = m_prices_top.get("^IXIC", (None, None))
 
 kospi_txt = f"{kospi_val:,.1f}" if kospi_val else "6,977.9"
 kospi_d_txt = f"{kospi_del:+.2f}%" if kospi_del else "+2.42%"
-nasdaq_txt = f"{nasdaq_val:,.1f}" if nasdaq_val else "26,729.2"
-nasdaq_d_txt = f"{nasdaq_del:+.2f}%" if nasdaq_del else "-0.28%"
+nasdaq_txt = f"{nasdaq_val:,.1f}" if nasdaq_val else "26,644.9"
+nasdaq_d_txt = f"{nasdaq_del:+.2f}%" if nasdaq_del else "-0.32%"
+
+# 실시간 D-Day 정보 취득
+w_d_title, w_d_sub, w_d_main, w_d_footer 취득
+w_d_title, w_d_sub, w_d_main, w_d_footer = get_top_widget_dday_info()
 
 st.markdown(f"""
 <div class="widget-grid">
@@ -2111,9 +2144,9 @@ st.markdown(f"""
         <div class="widget-footer"><span class="{'pill-up' if '+' in nasdaq_d_txt else 'pill-down'}">{nasdaq_d_txt}</span></div>
     </div>
     <div class="widget-card">
-        <div class="widget-header"><span>주요 D-Day</span><span>어학</span></div>
-        <div class="widget-main">오픽 D-7</div>
-        <div class="widget-footer" style="color: #94a3b8;">8.23 13:00 발표</div>
+        <div class="widget-header"><span>{w_d_title}</span><span>{w_d_sub}</span></div>
+        <div class="widget-main">{w_d_main}</div>
+        <div class="widget-footer" style="color: #94a3b8;">{w_d_footer}</div>
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -2123,7 +2156,6 @@ st.markdown(f"""
 # ⭐ [새로고침 / 당겨서 새로고침 시에도 100% 유지되는 4단 단일 라인 탭 네비게이션]
 # =============================================================
 
-# 모바일 당겨서 새로고침 시 브라우저 세션스토리지와 URL 파라미터 동기화 스크립트
 components.html("""
 <script>
 (function() {
@@ -2142,7 +2174,6 @@ components.html("""
 </script>
 """, height=0)
 
-# 현재 활성 탭 식별
 active_tab_key = st.query_params.get("tab", "daily")
 if active_tab_key not in ["daily", "stock", "sports", "blog"]:
     active_tab_key = "daily"
@@ -2174,12 +2205,9 @@ with col_nav4:
         st.query_params["tab"] = "blog"
         st.rerun()
 
-# 선택된 탭 컨텐츠 렌더링
 if active_tab_key == "daily":
     render_daily_hub()
 elif active_tab_key == "stock":
     render_stock_hub()
 elif active_tab_key == "sports":
-    render_sports_hub()
-elif active_tab_key == "blog":
-    render_blog_hub()
+    render_sports
