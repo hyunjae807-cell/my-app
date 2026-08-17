@@ -213,6 +213,17 @@ html, body, p, span, div, label, li {
     background: linear-gradient(135deg, #059669 0%, #047857 100%);
 }
 
+.step-badge {
+    display: inline-block;
+    background: #3b82f6;
+    color: white;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 800;
+    margin-bottom: 6px;
+}
+
 [data-testid="stMetricValue"] {
     font-size: 28px !important;
     font-weight: 900 !important;
@@ -752,7 +763,7 @@ def generate_blog_thumbnail_image(title_text, category_badge="칼퇴연구소 | 
     draw.text((80, 75), category_badge, fill=(255, 255, 255, 255))
 
     draw.text((70, 420), title_text, fill=(255, 255, 255, 255))
-    draw.text((70, 880), "NAVER BLOG @칼퇴연구소", fill=(148, 163, 184, 255))
+    draw.text((70, 880), "NAVER BLOG @early_leave_lab", fill=(148, 163, 184, 255))
 
     buffered = io.BytesIO()
     img.save(buffered, format="PNG")
@@ -1154,7 +1165,7 @@ def render_sports_hub():
                     save_sports_teams(my_teams); st.rerun()
 
 # -------------------------------------------------------------
-# 4. ✍️ [블로그 관리 모듈 ('칼퇴연구소' 브랜드 & 수기 관리)]
+# 4. ✍️ [블로그 관리 모듈 - 원스톱 키워드/원고/썸네일 연동 파이프라인]
 # -------------------------------------------------------------
 def render_blog_hub():
     st.subheader("✍️ 네이버 블로그 관리자 (칼퇴연구소)")
@@ -1194,8 +1205,159 @@ def render_blog_hub():
     with c_b_st2:
         st.metric("일평균 방문자 수", f"{daily_vis:,}명", f"총 {len(blog_posts)}편 관리 중")
 
-    with st.expander("⚙️ 내 블로그 통계 & 목표 수익 수정하기"):
-        with st.form("edit_blog_stats_form"):
+    # 3대 통합 탭
+    sub_b1, sub_b2, sub_b3 = st.tabs([
+        "🚀 원스톱 AI 포스팅 제작 (키워드 ➡️ 원고 ➡️ 썸네일)",
+        "📋 포스팅 관리 대장",
+        "⚙️ 블로그 통계 & 수익 설정"
+    ])
+
+    # =========================================================
+    # 🚀 [서브탭 1: 원스톱 통합 파이프라인]
+    # =========================================================
+    with sub_b1:
+        st.markdown("#### 🚀 원스톱 AI 블로그 포스팅 제작 파이프라인")
+        st.caption("황금 키워드 발굴 ➡️ 스마트에디터 ONE 전용 원고 작성 ➡️ 1:1 대표 썸네일 생성을 한번에 연동합니다.")
+
+        # Step 1: 황금 키워드 발굴기
+        with st.container(border=True):
+            st.markdown('<span class="step-badge">STEP 1</span> **애드포스트 고단가 황금 롱테일 키워드 발굴**', unsafe_allow_html=True)
+            kw_cat = st.selectbox("분석할 카테고리 선택", [
+                "AI 툴 & 직장인 업무 자동화 (ChatGPT/Gemini/Claude)",
+                "굿노트 & 노션 디지털 서식 템플릿",
+                "갤럭시 Z폴드 & 모바일 스마트워크 생산성",
+                "직장인 IT 디바이스 & 모니터 추천",
+                "🔍 직접 분야 입력"
+            ], key="pipe_kw_cat")
+            
+            final_kw_cat = kw_cat
+            if kw_cat == "🔍 직접 분야 입력":
+                final_kw_cat = st.text_input("분석할 맞춤 분야 입력", value="직장인 부업 및 재테크", key="pipe_kw_custom")
+
+            k_input_blog = st.text_input("Gemini API Key", value=st.session_state.saved_gemini_key, type="password", key="pipe_gemini_key")
+            if k_input_blog: st.session_state.saved_gemini_key = k_input_blog
+
+            if st.button("🎯 검색량 많고 경쟁도 낮은 황금 키워드 5선 발굴", key="btn_pipe_kw"):
+                if not st.session_state.saved_gemini_key:
+                    st.warning("Gemini API Key가 필요합니다.")
+                else:
+                    with st.spinner("애드포스트 고단가 황금 키워드 분석 중..."):
+                        kw_res, status = recommend_blog_keywords(final_kw_cat, st.session_state.saved_gemini_key)
+                        if status == "SUCCESS" and kw_res:
+                            st.session_state["pipeline_keywords"] = kw_res
+                            st.success("키워드 분석 완료! 아래에서 마음에 드는 키워드/제목을 복사해 Step 2에 입력하세요.")
+
+            if "pipeline_keywords" in st.session_state:
+                with st.expander("💡 추천된 황금 롱테일 키워드 5선 보기", expanded=True):
+                    st.markdown(st.session_state["pipeline_keywords"])
+
+        # Step 2: 포스팅 설정 & 썸네일 태그
+        with st.container(border=True):
+            st.markdown('<span class="step-badge">STEP 2</span> **포스팅 주제 및 썸네일 설정**', unsafe_allow_html=True)
+            
+            p_cat = st.selectbox("포스팅 카테고리", [
+                "🤖 AI 실무 프롬프트 (Gemini · ChatGPT · Claude)",
+                "📝 스마트 디지털 노트 (Goodnotes · Notion)",
+                "⚡ 업무 효율 200% PC & 모바일 설정 팁 (Galaxy Z Fold / iPad)",
+                "💼 직장인 칼퇴 루틴 & 생산성 툴",
+                "🔍 직접 카테고리 입력"
+            ], key="pipe_p_cat")
+            
+            final_p_cat = p_cat
+            if p_cat == "🔍 직접 카테고리 입력":
+                final_p_cat = st.text_input("직접 입력할 카테고리", value="🤖 AI 실무 생산성", key="pipe_p_custom_cat")
+
+            col_pt1, col_pt2 = st.columns([0.7, 0.3])
+            with col_pt1:
+                p_topic = st.text_input("포스팅 제목 (핵심 키워드 포함)", value="직장인을 위한 제미나이 1.5 프로 업무 자동화 꿀팁 3가지", key="pipe_p_title")
+            with col_pt2:
+                thumb_badge = st.text_input("썸네일 상단 태그", value="칼퇴연구소 | IT·생산성", key="pipe_thumb_badge")
+
+            # Step 3: 원스톱 동시 생성 버튼
+            st.markdown('<span class="step-badge">STEP 3</span> **원스톱 원고 작성 & 1:1 대표 썸네일 동시 생성**', unsafe_allow_html=True)
+            
+            if st.button("✨ 원스톱 원고 + 1:1 대표 썸네일 동시 생성 🚀", key="btn_pipe_generate_all"):
+                if not st.session_state.saved_gemini_key:
+                    st.warning("Gemini API Key를 입력해 주세요.")
+                else:
+                    with st.spinner("AI 원고 작성 및 1:1 대표 썸네일 디자인 동시 생성 중..."):
+                        draft_text, status = generate_blog_draft(p_topic, final_p_cat, st.session_state.saved_gemini_key)
+                        if status == "SUCCESS" and draft_text:
+                            st.session_state["pipeline_draft"] = draft_text
+                            st.session_state["pipeline_title"] = p_topic
+                            st.session_state["pipeline_cat"] = final_p_cat
+                            
+                            thumb_bytes = generate_blog_thumbnail_image(p_topic, thumb_badge)
+                            st.session_state["pipeline_thumb_bytes"] = thumb_bytes
+                            st.success("🎉 원고와 1:1 대표 썸네일이 성공적으로 함께 생성되었습니다!")
+                        else:
+                            st.error(f"원고 생성 오류: {status}")
+
+        # 결과 뷰어 (원고 + 썸네일 + 원클릭 관리대장 등록)
+        if "pipeline_draft" in st.session_state and "pipeline_thumb_bytes" in st.session_state:
+            st.markdown("---")
+            st.markdown("#### 🎨 생성된 1:1 대표 썸네일 & 📝 완성 원고")
+            
+            col_res_thumb, col_res_draft = st.columns([0.35, 0.65])
+            
+            with col_res_thumb:
+                st.markdown("**🎨 네이버 블로그 1:1 대표 썸네일**")
+                st.image(st.session_state["pipeline_thumb_bytes"], caption="1000x1000px 네이버 블로그 최적화 썸네일", use_container_width=True)
+                st.download_button(
+                    label="💾 썸네일 이미지 다운로드 (PNG)",
+                    data=st.session_state["pipeline_thumb_bytes"],
+                    file_name="naver_blog_thumbnail.png",
+                    mime="image/png",
+                    use_container_width=True
+                )
+                
+                st.markdown("---")
+                st.markdown("**📥 포스팅 관리 대장 등록**")
+                p_status_choice = st.selectbox("등록할 상태", ["원고 작성중", "발행 완료", "아이디어 기획"], key="pipe_save_status")
+                if st.button("📌 내 관리 대장에 저장하기", key="btn_save_to_blog_posts"):
+                    blog_posts.append({
+                        "제목": st.session_state.get("pipeline_title", p_topic),
+                        "키워드": p_topic,
+                        "카테고리": st.session_state.get("pipeline_cat", final_p_cat),
+                        "상태": p_status_choice,
+                        "날짜": datetime.now(KST).strftime('%Y-%m-%d')
+                    })
+                    save_blog_posts(blog_posts)
+                    st.success("포스팅 관리 대장에 성공적으로 등록되었습니다!")
+                    st.rerun()
+
+            with col_res_draft:
+                st.markdown("**📝 네이버 스마트에디터 ONE 전용 원고**")
+                with st.container(border=True):
+                    st.markdown(st.session_state["pipeline_draft"])
+
+    # =========================================================
+    # 📋 [서브탭 2: 포스팅 관리 대장]
+    # =========================================================
+    with sub_b2:
+        st.markdown("##### 📋 내 블로그 포스팅 관리 대장")
+        st.dataframe(pd.DataFrame(blog_posts), use_container_width=True)
+        
+        with st.expander("➕ 수동으로 새 포스팅 일정 / 아이디어 등록"):
+            with st.form("add_blog_p_f"):
+                p_title_m = st.text_input("포스팅 제목", value="노션 AI로 회의록 3초 만에 요약하는 법")
+                p_kw_m = st.text_input("핵심 키워드", value="노션 AI 회의록 요약")
+                p_cat_m = st.selectbox("카테고리", ["🤖 AI 실무 프롬프트", "📝 스마트 디지털 노트", "⚡ 업무 효율 팁", "💼 직장인 칼퇴 루틴"])
+                p_status_m = st.selectbox("상태", ["아이디어 기획", "원고 작성중", "발행 완료"])
+                p_date_m = st.text_input("발행일 (YYYY-MM-DD)", value=datetime.now(KST).strftime('%Y-%m-%d'))
+                if st.form_submit_button("포스팅 등록"):
+                    if p_title_m.strip():
+                        blog_posts.append({"제목": p_title_m.strip(), "키워드": p_kw_m.strip(), "카테고리": p_cat_m, "상태": p_status_m, "날짜": p_date_m})
+                        save_blog_posts(blog_posts)
+                        st.success(f"'{p_title_m}' 등록 완료!")
+                        st.rerun()
+
+    # =========================================================
+    # ⚙️ [서브탭 3: 통계 & 수익 설정]
+    # =========================================================
+    with sub_b3:
+        st.markdown("##### ⚙️ 내 블로그 통계 & 목표 수익 수정")
+        with st.form("edit_blog_stats_form_tab"):
             new_target = st.number_input("목표 월 부업 수익(원)", value=int(target_inc), step=50000)
             new_curr = st.number_input("이번 달 현재 애드포스트 수익(원)", value=int(curr_inc), step=10000)
             new_vis = st.number_input("최근 일평균 방문자 수(명)", value=int(daily_vis), step=50)
@@ -1206,104 +1368,6 @@ def render_blog_hub():
                 save_blog_stats(blog_stats)
                 st.success("블로그 통계가 업데이트되었습니다!")
                 st.rerun()
-
-    sub_b1, sub_b2, sub_b3, sub_b4 = st.tabs([
-        "📝 AI 원고 자동 작성", "🎯 황금 키워드 발굴", "🎨 1:1 대표 썸네일", "📋 포스팅 관리"
-    ])
-
-    with sub_b1:
-        st.markdown("##### ✨ 네이버 스마트에디터 ONE 맞춤 원고 생성기")
-        b_cat = st.selectbox("포스팅 카테고리", [
-            "🤖 AI 실무 프롬프트 (Gemini · ChatGPT · Claude)",
-            "📝 스마트 디지털 노트 (Goodnotes · Notion)",
-            "⚡ 업무 효율 200% PC & 모바일 설정 팁 (Galaxy Z Fold / iPad)",
-            "💼 직장인 칼퇴 루틴 & 생산성 툴",
-            "🔍 직접 카테고리 입력"
-        ])
-        
-        final_cat = b_cat
-        if b_cat == "🔍 직접 카테고리 입력":
-            final_cat = st.text_input("직접 입력할 카테고리", value="🤖 AI 실무 생산성")
-
-        b_topic = st.text_input("포스팅 제목 또는 핵심 키워드", value="직장인을 위한 제미나이 1.5 프로 업무 자동화 꿀팁 3가지")
-
-        k_input_blog = st.text_input("Gemini API Key (원고용)", value=st.session_state.saved_gemini_key, type="password", key="blog_k_gem")
-        if k_input_blog: st.session_state.saved_gemini_key = k_input_blog
-
-        if st.button("✨ C-Rank 최적화 블로그 원고 작성", key="btn_gen_b_draft"):
-            if not st.session_state.saved_gemini_key:
-                st.warning("Gemini API Key를 입력해 주세요.")
-            else:
-                with st.spinner("스마트에디터 ONE 전용 원고 작성 중..."):
-                    draft_text, status = generate_blog_draft(b_topic, final_cat, st.session_state.saved_gemini_key)
-                    if status == "SUCCESS" and draft_text:
-                        st.session_state["latest_blog_draft"] = draft_text
-                        st.success("🎉 원고 작성 완료! 아래에서 복사해 네이버 블로그에 붙여넣으세요.")
-                    else:
-                        st.error(f"오류: {status}")
-
-        if "latest_blog_draft" in st.session_state:
-            with st.container(border=True):
-                st.markdown(st.session_state["latest_blog_draft"])
-
-    with sub_b2:
-        st.markdown("##### 🎯 애드포스트 고단가 황금 롱테일 키워드 발굴기")
-        kw_cat = st.selectbox("분석할 카테고리", [
-            "AI 툴 & 직장인 업무 자동화 (ChatGPT/Gemini/Claude)",
-            "굿노트 & 노션 디지털 서식 템플릿",
-            "갤럭시 Z폴드 & 모바일 스마트워크 생산성",
-            "직장인 IT 디바이스 & 모니터 추천",
-            "🔍 직접 분야 입력"
-        ])
-        
-        final_kw_cat = kw_cat
-        if kw_cat == "🔍 직접 분야 입력":
-            final_kw_cat = st.text_input("분석할 맞춤 분야 입력", value="직장인 부업 및 재테크")
-
-        if st.button("🎯 검색량 많고 경쟁도 낮은 롱테일 키워드 5선 분석", key="btn_kw_rec_m"):
-            if not st.session_state.saved_gemini_key:
-                st.warning("Gemini API Key가 필요합니다.")
-            else:
-                with st.spinner("애드포스트 고단가 키워드 분석 중..."):
-                    kw_res, status = recommend_blog_keywords(final_kw_cat, st.session_state.saved_gemini_key)
-                    if status == "SUCCESS" and kw_res:
-                        st.session_state["latest_keywords_res"] = kw_res
-                        st.success("키워드 분석 완료!")
-        if "latest_keywords_res" in st.session_state:
-            with st.container(border=True):
-                st.markdown(st.session_state["latest_keywords_res"])
-
-    with sub_b3:
-        st.markdown("##### 🎨 네이버 블로그 1:1 대표 썸네일(1000x1000) 생성기")
-        thumb_title = st.text_input("썸네일 메인 텍스트", value="직장인 칼퇴 부르는\nAI 업무 자동화 꿀팁", key="thumb_t_in")
-        thumb_badge = st.text_input("상단 카테고리 태그", value="칼퇴연구소 | IT·생산성", key="thumb_b_in")
-        
-        thumb_bytes = generate_blog_thumbnail_image(thumb_title, thumb_badge)
-        st.image(thumb_bytes, width=300, caption="네이버 블로그 1:1 정방형 대표 썸네일")
-        st.download_button(
-            label="💾 썸네일 이미지 다운로드 (PNG)",
-            data=thumb_bytes,
-            file_name="naver_blog_thumbnail.png",
-            mime="image/png",
-            use_container_width=True
-        )
-
-    with sub_b4:
-        st.markdown("##### 📋 내 블로그 포스팅 관리 대장")
-        st.dataframe(pd.DataFrame(blog_posts), use_container_width=True)
-        with st.expander("➕ 새 포스팅 일정 / 아이디어 등록"):
-            with st.form("add_blog_p_f"):
-                p_title = st.text_input("포스팅 제목", value="노션 AI로 회의록 3초 만에 요약하는 법")
-                p_kw = st.text_input("핵심 키워드", value="노션 AI 회의록 요약")
-                p_cat = st.selectbox("카테고리", ["🤖 AI 실무 프롬프트", "📝 스마트 디지털 노트", "⚡ 업무 효율 팁", "💼 직장인 칼퇴 루틴"])
-                p_status = st.selectbox("상태", ["아이디어 기획", "원고 작성중", "발행 완료"])
-                p_date = st.text_input("발행일 (YYYY-MM-DD)", value=datetime.now(KST).strftime('%Y-%m-%d'))
-                if st.form_submit_button("포스팅 등록"):
-                    if p_title.strip():
-                        blog_posts.append({"제목": p_title.strip(), "키워드": p_kw.strip(), "카테고리": p_cat, "상태": p_status, "날짜": p_date})
-                        save_blog_posts(blog_posts)
-                        st.success(f"'{p_title}' 등록 완료!")
-                        st.rerun()
 
 
 # =============================================================
