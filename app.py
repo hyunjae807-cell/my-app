@@ -117,7 +117,6 @@ html, body, p, div:not([data-testid*="Icon"]), span:not([data-testid*="Icon"]), 
     align-items: baseline;
     gap: 8px;
 }
-/* 연보라 계열 MORI 간판 */
 .mori-logo {
     font-size: 28px !important;
     font-weight: 900 !important;
@@ -364,34 +363,45 @@ html, body, p, div:not([data-testid*="Icon"]), span:not([data-testid*="Icon"]), 
     margin-top: 6px;
 }
 
-/* 대메뉴 : 선명한 연보라 솔리드 캡슐 */
-div[data-testid="stTabs"]:first-of-type > [data-baseweb="tab-list"] {
-    gap: 8px;
-    background: rgba(147, 51, 234, 0.08);
-    padding: 6px;
-    border-radius: 14px;
-    border: 1px solid rgba(192, 132, 252, 0.2);
-    margin-bottom: 20px;
+/* 상태 유지형 대메뉴 네비게이션 (새로고침 시에도 탭 보존) */
+div[data-testid="stRadio"] > div {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 8px !important;
+    background: rgba(147, 51, 234, 0.08) !important;
+    padding: 6px !important;
+    border-radius: 14px !important;
+    border: 1px solid rgba(192, 132, 252, 0.2) !important;
+    margin-bottom: 20px !important;
 }
-div[data-testid="stTabs"]:first-of-type > [data-baseweb="tab-list"] [data-baseweb="tab"] {
-    height: 42px !important;
-    border-radius: 10px;
-    padding: 6px 20px !important;
+div[data-testid="stRadio"] > div > label {
+    flex: 1 !important;
+    text-align: center !important;
+    background: transparent !important;
+    padding: 8px 16px !important;
+    border-radius: 10px !important;
     font-size: 15px !important;
     font-weight: 700 !important;
-    color: #cbd5e1;
-    background: transparent;
-    border: none;
+    color: #cbd5e1 !important;
+    cursor: pointer !important;
+    border: none !important;
+    transition: all 0.2s ease !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
 }
-div[data-testid="stTabs"]:first-of-type > [data-baseweb="tab-list"] [aria-selected="true"] {
+div[data-testid="stRadio"] > div > label:has(input:checked) {
     background: linear-gradient(135deg, #a855f7 0%, #9333ea 100%) !important;
     color: #ffffff !important;
     font-weight: 800 !important;
     box-shadow: 0 4px 14px rgba(168, 85, 247, 0.35) !important;
 }
+div[data-testid="stRadio"] > div > label > div:first-child {
+    display: none !important;
+}
 
-/* 소메뉴 : 은은한 파스텔 연보라 틴트 & 언더라인 */
-div[data-testid="stTabs"] div[data-testid="stTabs"] [data-baseweb="tab-list"] {
+/* 소메뉴 스타일 */
+div[data-testid="stTabs"] [data-baseweb="tab-list"] {
     gap: 6px;
     background: transparent !important;
     padding: 2px 0 !important;
@@ -400,7 +410,7 @@ div[data-testid="stTabs"] div[data-testid="stTabs"] [data-baseweb="tab-list"] {
     border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
     margin-bottom: 14px !important;
 }
-div[data-testid="stTabs"] div[data-testid="stTabs"] [data-baseweb="tab"] {
+div[data-testid="stTabs"] [data-baseweb="tab"] {
     height: 36px !important;
     border-radius: 8px;
     padding: 4px 14px !important;
@@ -410,7 +420,7 @@ div[data-testid="stTabs"] div[data-testid="stTabs"] [data-baseweb="tab"] {
     background: transparent;
     border: none;
 }
-div[data-testid="stTabs"] div[data-testid="stTabs"] [aria-selected="true"] {
+div[data-testid="stTabs"] [aria-selected="true"] {
     background: rgba(192, 132, 252, 0.15) !important;
     color: #e9d5ff !important;
     font-weight: 700 !important;
@@ -451,6 +461,7 @@ SPORTS_FILE = "sports_teams.json"
 SPORTS_BRIEFINGS_FILE = "sports_briefings.json"
 LOCATION_FILE = "location.json"
 SUBS_FILE = "subscriptions.json"
+CALENDAR_FILE = "calendar_events.json"
 BLOG_POSTS_FILE = "blog_posts.json"
 BLOG_STATS_FILE = "blog_stats.json"
 SETTINGS_FILE = "user_settings.json"
@@ -472,6 +483,24 @@ EXACT_SETTINGS = {
     "cash_balance": 810924.0,
     "usd_krw_rate": 1380.0
 }
+
+# 기본 포트폴리오 연동 주식 핵심 일정 풀 (자동 동기화)
+DEFAULT_STOCK_ISSUES = [
+    {"id": "stock_hyundai_1", "date": "2026-08-18", "type": "자동차·수출", "title": "현대차·완성차 북미 수출 및 친환경차 판매 통계", "auto_stock": "현대차 (005380)"},
+    {"id": "stock_hanwha_1", "date": "2026-08-20", "type": "방산·모멘텀", "title": "한화에어로스페이스 K-방산 수출 수주 모멘텀 점검", "auto_stock": "한화에어로스페이스 (012450)"},
+    {"id": "stock_hynix_1", "date": "2026-08-21", "type": "반도체·수출", "title": "관세청 8월 1~20일 반도체 수출입 통계 발표", "auto_stock": "SK하이닉스, KODEX AI반도체"},
+    {"id": "stock_sub_netflix", "date": "2026-08-22", "type": "고정 결제", "title": "넷플릭스 (17,000원) 정기 결제일", "auto_stock": ""},
+    {"id": "stock_opic", "date": "2026-08-23", "type": "어학 시험", "title": "오픽(OPIc) 성적 발표 13:00", "auto_stock": ""},
+    {"id": "stock_isu_1", "date": "2026-08-24", "type": "AI·기판", "title": "이수페타시스 AI 가속기용 MLB 기판 공급망 점검", "auto_stock": "이수페타시스 (007660)"},
+    {"id": "stock_nvda_1", "date": "2026-08-26", "type": "글로벌 실적", "title": "엔비디아(NVDA) 2분기 실적 발표 (SK하이닉스 HBM 영향)", "auto_stock": "SK하이닉스, KODEX AI반도체"},
+    {"id": "stock_macro_1", "date": "2026-08-28", "type": "거시 경제", "title": "미국 잭슨홀 심포지엄 (파월 연준 의장 연설)", "auto_stock": "글로벌 증시 전반"},
+    {"id": "stock_div_1", "date": "2026-09-01", "type": "배당 입금", "title": "KODEX 커버드콜 월 분배금 입금 예정일", "auto_stock": "KODEX 200타겟위클리커버드콜 (498400)"},
+    {"id": "stock_sub_spotify", "date": "2026-09-01", "type": "고정 결제", "title": "Spotify (11,990원) 정기 결제일", "auto_stock": ""},
+    {"id": "stock_sub_coupang", "date": "2026-09-08", "type": "고정 결제", "title": "쿠팡 와우멤버십 (7,890원) 정기 결제일", "auto_stock": ""},
+    {"id": "stock_deriv_1", "date": "2026-09-10", "type": "파생 만기", "title": "국내 선물·옵션 동시 만기일", "auto_stock": "KOSPI 200 전반"},
+    {"id": "stock_sub_spotv", "date": "2026-09-15", "type": "고정 결제", "title": "SPOTV NOW (19,900원) 정기 결제일", "auto_stock": ""},
+    {"id": "stock_fomc_1", "date": "2026-09-16", "type": "거시 경제", "title": "미국 9월 FOMC 기준금리 결정 회의", "auto_stock": "글로벌 증시 전반"}
+]
 
 DEFAULT_SPORTS_TEAMS = [
     {"종목": "축구", "팀명": "맨체스터 유나이티드", "리그": "프리미어리그 (EPL)", "키워드": "맨체스터 유나이티드 OR 맨유"},
@@ -579,6 +608,70 @@ def save_portfolio(data):
         with open(PORTFOLIO_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
     except Exception as e: st.error(f"저장 오류: {e}")
+
+# 캘린더 일정 관리 및 주식 이슈 자동 연동
+def load_calendar_events():
+    events = []
+    if os.path.exists(CALENDAR_FILE):
+        try:
+            with open(CALENDAR_FILE, "r", encoding="utf-8") as f:
+                events = json.load(f)
+        except Exception:
+            events = []
+            
+    existing_ids = {e.get("id") for e in events}
+    
+    # 보유 종목 관련 주요 이슈 자동 동기화
+    changed = False
+    for issue in DEFAULT_STOCK_ISSUES:
+        if issue["id"] not in existing_ids:
+            events.append(issue)
+            changed = True
+            
+    if changed or not os.path.exists(CALENDAR_FILE):
+        try:
+            with open(CALENDAR_FILE, "w", encoding="utf-8") as f:
+                json.dump(events, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+            
+    events.sort(key=lambda x: x.get("date", "9999-12-31"))
+    return events
+
+def save_calendar_events(events):
+    try:
+        with open(CALENDAR_FILE, "w", encoding="utf-8") as f:
+            json.dump(events, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        st.error(f"캘린더 저장 오류: {e}")
+
+# 오늘로부터 7일 이내 일정 필터링
+def get_weekly_filtered_events(events, current_dt):
+    today_date = current_dt.date()
+    weekly = []
+    weekdays_kr = ["월", "화", "수", "목", "금", "토", "일"]
+    
+    for ev in events:
+        try:
+            ev_date = datetime.strptime(ev["date"], "%Y-%m-%d").date()
+            diff_days = (ev_date - today_date).days
+            if 0 <= diff_days <= 7:
+                dday_str = "오늘 (D-Day)" if diff_days == 0 else f"D-{diff_days}"
+                date_label = f"{ev_date.month}월 {ev_date.day}일({weekdays_kr[ev_date.weekday()]})"
+                weekly.append({
+                    "id": ev.get("id"),
+                    "날짜": date_label,
+                    "구분": ev.get("type", "일정"),
+                    "내용": ev.get("title", ""),
+                    "연관종목": ev.get("auto_stock", "-"),
+                    "D-Day": dday_str,
+                    "raw_date": ev["date"]
+                })
+        except Exception:
+            continue
+            
+    weekly.sort(key=lambda x: x["raw_date"])
+    return weekly
 
 def load_briefing():
     if os.path.exists(BRIEFING_FILE):
@@ -1152,6 +1245,9 @@ def render_daily_hub():
         cash_balance=user_settings.get("cash_balance", 810924.0)
     )
 
+    all_calendar_events = load_calendar_events()
+
+    # 1-1. 오늘 요약 (일주일 간의 일정만 엄격 필터링)
     with sub_d1:
         temp_val, weather_val, humid_val, loc_tag = get_current_weather(
             current_loc_data.get("lat", 37.2410),
@@ -1163,15 +1259,13 @@ def render_daily_hub():
             st.markdown(f"**{loc_tag} 실시간 날씨** : {weather_val} **{temp_val}** (습도 {humid_val})")
 
         with st.container(border=True):
-            st.markdown("**8월 주요 일정 및 D-Day**")
-            cal_summary_events = [
-                {"날짜": "8월 22일(토)", "구분": "OTT", "내용": "넷플릭스 결제일 (17,000원)", "D-Day": "D-6"},
-                {"날짜": "8월 23일(일)", "구분": "어학", "내용": "오픽(OPIc) 성적 발표 13:00", "D-Day": "D-7"},
-                {"날짜": "8월 26일(수)", "구분": "반도체", "내용": "엔비디아(NVDA) 실적 발표", "D-Day": "D-10"},
-                {"날짜": "8월 28일(금)", "구분": "경제", "내용": "미국 잭슨홀 심포지엄 (파월 연설)", "D-Day": "D-12"},
-                {"날짜": "9월 01일(화)", "구분": "배당", "내용": "KODEX 커버드콜 월 분배금 입금", "D-Day": "D-16"}
-            ]
-            st.dataframe(pd.DataFrame(cal_summary_events), use_container_width=True)
+            st.markdown("**📅 향후 7일간의 주요 일정 & 보유 종목 이슈**")
+            weekly_events = get_weekly_filtered_events(all_calendar_events, datetime.now(KST))
+            if weekly_events:
+                df_weekly = pd.DataFrame(weekly_events)[["날짜", "구분", "내용", "연관종목", "D-Day"]]
+                st.dataframe(df_weekly, use_container_width=True, hide_index=True)
+            else:
+                st.info("향후 7일 이내 예정된 일정이 없습니다.")
 
         home_todos = load_todos()
         with st.container(border=True):
@@ -1190,26 +1284,82 @@ def render_daily_hub():
             with ch2:
                 st.metric("총 평가손익", f"{summary['total_profit_krw']:+,.0f}원", f"추정자산: {summary['total_net_assets_krw']:,.0f}원")
 
+    # 1-2. 통합 캘린더 (전체 일정 조회, 추가, 삭제 지원)
     with sub_d2:
         monthly_div = summary['total_monthly_div_krw']
 
         with st.container(border=True):
             st.markdown(f"**월 배당(분배금) 예상 수령액** : **{monthly_div:,.0f}원** (KODEX 200타겟위클리커버드콜 863주 기준)")
 
-        timeline_events = [
-            {"날짜": "8월 22일(토)", "구분": "구독 결제", "내용": "넷플릭스 (17,000원) 결제일 (D-6)"},
-            {"날짜": "8월 23일(일)", "구분": "어학 시험", "내용": "오픽(OPIc) 성적 발표 13:00 (D-7)"},
-            {"날짜": "8월 26일(수)", "구분": "실적 발표", "내용": "엔비디아(NVDA) 2분기 실적 발표 (D-10)"},
-            {"날짜": "8월 28일(금)", "구분": "거시경제", "내용": "미국 잭슨홀 심포지엄 (파월 연설)"},
-            {"날짜": "9월 01일(화)", "구분": "배당 입금", "내용": "KODEX 커버드콜 월 분배금 입금 예정일"},
-            {"날짜": "9월 01일(화)", "구분": "구독 결제", "내용": "Spotify (11,990원) 결제일"},
-            {"날짜": "9월 08일(화)", "구분": "구독 결제", "내용": "쿠팡 와우멤버십 (7,890원) 결제일"},
-            {"날짜": "9월 10일(목)", "구분": "파생만기", "내용": "국내 선물·옵션 동시 만기일"},
-            {"날짜": "9월 15일(화)", "구분": "구독 결제", "내용": "SPOTV NOW (19,900원) 결제일"},
-            {"날짜": "9월 16일(수)", "구분": "거시경제", "내용": "미국 9월 FOMC 기준금리 결정 회의"}
-        ]
-        st.dataframe(pd.DataFrame(timeline_events), use_container_width=True)
+        st.markdown("##### 🗓️ 전체 통합 일정 목록")
+        formatted_all_events = []
+        today_d = datetime.now(KST).date()
+        weekdays_kr = ["월", "화", "수", "목", "금", "토", "일"]
+        for ev in all_calendar_events:
+            try:
+                ev_d = datetime.strptime(ev["date"], "%Y-%m-%d").date()
+                diff_d = (ev_d - today_d).days
+                if diff_d < 0:
+                    d_tag = f"지남({abs(diff_d)}일 전)"
+                elif diff_d == 0:
+                    d_tag = "오늘 (D-Day)"
+                else:
+                    d_tag = f"D-{diff_d}"
+                d_label = f"{ev_d.month}월 {ev_d.day}일({weekdays_kr[ev_d.weekday()]})"
+            except Exception:
+                d_tag = "-"
+                d_label = ev.get("date", "")
 
+            formatted_all_events.append({
+                "id": ev.get("id"),
+                "날짜": d_label,
+                "구분": ev.get("type", "일정"),
+                "내용": ev.get("title", ""),
+                "연관종목": ev.get("auto_stock", "-"),
+                "D-Day": d_tag
+            })
+
+        df_all_events = pd.DataFrame(formatted_all_events)[["날짜", "구분", "내용", "연관종목", "D-Day"]]
+        st.dataframe(df_all_events, use_container_width=True, hide_index=True)
+
+        col_cal1, col_cal2 = st.columns(2)
+        with col_cal1:
+            with st.expander("🗑️ 등록된 일정 삭제"):
+                if all_calendar_events:
+                    del_event_idx = st.selectbox(
+                        "삭제할 일정 선택",
+                        range(len(all_calendar_events)),
+                        format_func=lambda x: f"[{all_calendar_events[x].get('date')}] {all_calendar_events[x].get('title')}"
+                    )
+                    if st.button("선택 일정 삭제", key="btn_del_cal_event"):
+                        removed = all_calendar_events.pop(del_event_idx)
+                        save_calendar_events(all_calendar_events)
+                        st.success(f"'{removed.get('title')}' 일정이 삭제되었습니다.")
+                        st.rerun()
+                else:
+                    st.caption("삭제할 일정이 없습니다.")
+
+        with col_cal2:
+            with st.expander("➕ 새 일정 추가"):
+                with st.form("add_cal_event_form", clear_on_submit=True):
+                    new_ev_title = st.text_input("일정 내용", placeholder="예: 주요 주주총회 참석")
+                    new_ev_date = st.text_input("날짜 (YYYY-MM-DD)", value=datetime.now(KST).strftime('%Y-%m-%d'))
+                    new_ev_type = st.selectbox("구분", ["증시·이슈", "실적 발표", "배당 입금", "고정 결제", "어학 시험", "개인 일정"])
+                    new_ev_stock = st.text_input("연관 종목", placeholder="예: SK하이닉스 (000660)")
+                    if st.form_submit_button("일정 등록"):
+                        if new_ev_title.strip() and new_ev_date.strip():
+                            all_calendar_events.append({
+                                "id": f"custom_{int(datetime.now().timestamp())}",
+                                "date": new_ev_date.strip(),
+                                "type": new_ev_type,
+                                "title": new_ev_title.strip(),
+                                "auto_stock": new_ev_stock.strip()
+                            })
+                            save_calendar_events(all_calendar_events)
+                            st.success("새 일정이 등록되었습니다.")
+                            st.rerun()
+
+    # 1-3. 고정 구독료 (개별 삭제 기능 완비)
     with sub_d3:
         subs_list = load_subscriptions()
         total_sub_monthly = sum(s["월요금"] for s in subs_list)
@@ -1220,13 +1370,24 @@ def render_daily_hub():
         with c_s1: st.metric("월 고정 구독료", f"{total_sub_monthly:,.0f}원", f"총 {len(subs_list)}개 서비스")
         with c_s2: st.metric("배당금 방어율", f"{coverage_rate:.1f}%", f"월 배당 {monthly_div:,.0f}원")
 
-        for s in subs_list:
-            col_name, col_cost, col_dday = st.columns([0.5, 0.25, 0.25])
+        st.markdown("##### 💳 구독 서비스 목록 및 삭제")
+        sub_to_delete = None
+        for idx, s in enumerate(subs_list):
+            col_name, col_cost, col_dday, col_del = st.columns([0.45, 0.25, 0.18, 0.12])
             with col_name: st.markdown(f"**{s['서비스']}** ({s['카테고리']})")
             with col_cost: st.markdown(f"{s['월요금']:,}원 / 월")
             with col_dday: st.markdown(f"매월 **{s['결제일']}일**")
+            with col_del:
+                if st.button("삭제", key=f"btn_del_sub_{idx}"):
+                    sub_to_delete = idx
 
-        with st.expander("구독 서비스 추가"):
+        if sub_to_delete is not None:
+            removed_sub = subs_list.pop(sub_to_delete)
+            save_subscriptions(subs_list)
+            st.success(f"'{removed_sub.get('서비스')}' 구독이 삭제되었습니다.")
+            st.rerun()
+
+        with st.expander("➕ 새 구독 서비스 추가"):
             with st.form("add_sub_form"):
                 new_s_name = st.text_input("서비스명", value="유튜브 프리미엄")
                 new_s_cost = st.number_input("월 구독료(원)", value=14900, step=1000)
@@ -1239,6 +1400,7 @@ def render_daily_hub():
                         st.success("등록 완료되었습니다.")
                         st.rerun()
 
+    # 1-4. 할 일 관리
     with sub_d4:
         with st.expander("날씨 지역 설정"):
             preset_names = list(LOCATION_PRESETS.keys())
@@ -1787,21 +1949,39 @@ st.markdown(f"""
 
 
 # =============================================================
-# [4대 핵심 대분류 탭]
+# ⭐ [새로고침/당겨서 새로고침 시에도 화면 유지되는 4대 메인 탭]
 # =============================================================
 
-tab_daily, tab_stock, tab_sports, tab_blog = st.tabs([
-    "데일리", "주식·금융", "스포츠", "블로그"
-])
+MAIN_TABS = ["데일리", "주식·금융", "스포츠", "블로그"]
+TAB_QUERY_MAP = {"데일리": "daily", "주식·금융": "stock", "스포츠": "sports", "블로그": "blog"}
+REV_TAB_QUERY_MAP = {v: k for k, v in TAB_QUERY_MAP.items()}
 
-with tab_daily:
+# URL 쿼리 파라미터에서 현재 탭 복원
+current_tab_param = st.query_params.get("tab", "daily")
+default_tab_name = REV_TAB_QUERY_MAP.get(current_tab_param, "데일리")
+default_tab_idx = MAIN_TABS.index(default_tab_name) if default_tab_name in MAIN_TABS else 0
+
+# 캡슐형 라디오 네) if default_tab_name in MAIN_TABS else 0
+
+# 캡슐형 라디오 네비게이션으로 탭 렌더링
+selected_tab = st.radio(
+    "메인 메뉴 선택",
+    MAIN_TABS,
+    index=default_tab_idx,
+    horizontal=True,
+    label_visibility="collapsed",
+    key="mori_main_nav_radio"
+)
+
+# 탭 변경 시 URL 쿼리 파라미터 즉시 동기화
+target_param = TAB_QUERY_MAP.get(selected_tab, "daily")
+if st.query_params.get("tab") != target_param:
+    st.query_params["tab"] = target_param
+
+# 선택된 탭 렌더링
+if selected_tab == "데일리":
     render_daily_hub()
-
-with tab_stock:
+elif selected_tab == "주식·금융":
     render_stock_hub()
-
-with tab_sports:
-    render_sports_hub()
-
-with tab_blog:
-    render_blog_hub()
+elif selected_tab == "스포츠":
+    render_sports_
