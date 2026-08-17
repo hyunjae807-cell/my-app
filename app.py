@@ -141,7 +141,7 @@ html, body, p, div:not([data-testid*="Icon"]), span:not([data-testid*="Icon"]), 
     color: #d8b4fe;
 }
 
-/* 상단 4단 위젯 스트립 (네이버/토스 스타일) */
+/* 상단 4단 위젯 스트립 */
 .widget-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -221,7 +221,7 @@ html, body, p, div:not([data-testid*="Icon"]), span:not([data-testid*="Icon"]), 
     align-items: center;
 }
 
-/* 버튼 스타일 (연보라 포인트) */
+/* 버튼 스타일 */
 .btn-action-primary {
     display: inline-block;
     background: linear-gradient(135deg, #a855f7 0%, #9333ea 100%);
@@ -286,8 +286,6 @@ html, body, p, div:not([data-testid*="Icon"]), span:not([data-testid*="Icon"]), 
     color: var(--text-muted);
     margin-top: 6px;
 }
-
-/* ⭐ [대메뉴 vs 소메뉴 채도 및 스타일 차별화] ⭐ */
 
 /* 1) 대메뉴 (최상단 메인 탭) : 선명하고 진한 연보라/퍼플 솔리드 캡슐 */
 div[data-testid="stTabs"]:first-of-type > [data-baseweb="tab-list"] {
@@ -1425,7 +1423,7 @@ st.markdown(f"""
 <div class="widget-grid">
     <div class="widget-card">
         <div class="widget-header"><span>날씨</span><span>{w_loc}</span></div>
-        <div class="widget-main">{weather_val} {temp_val}</div>
+        <div class="widget-main">{w_desc} {w_temp}</div>
         <div class="widget-footer" style="color: #94a3b8;">습도 {w_hum}</div>
     </div>
     <div class="widget-card">
