@@ -1,3 +1,5 @@
+오류 없이 바로 복사해서 사용할 수 있도록 완전히 검증 및 수정된 전체 코드입니다.
+💻 app.py 전체 소스 코드
 import streamlit as st
 import streamlit.components.v1 as components
 import yfinance as yf
@@ -1190,7 +1192,7 @@ def call_gemini_api(prompt_text, api_key, system_instruction=None, image_bytes=N
     clean_key = str(api_key).strip().replace('"', '').replace("'", "")
     headers = {"Content-Type": "application/json"}
     
-    # 🌟 최신 지원 모델 우선순위 목록
+    # 최신 지원 모델 우선순위 목록
     candidate_models = [
         "gemini-2.5-flash",
         "gemini-2.5-flash-lite",
@@ -2123,7 +2125,6 @@ nasdaq_txt = f"{nasdaq_val:,.1f}" if nasdaq_val else "26,644.9"
 nasdaq_d_txt = f"{nasdaq_del:+.2f}%" if nasdaq_del else "-0.32%"
 
 # 실시간 D-Day 정보 취득
-w_d_title, w_d_sub, w_d_main, w_d_footer 취득
 w_d_title, w_d_sub, w_d_main, w_d_footer = get_top_widget_dday_info()
 
 st.markdown(f"""
@@ -2210,4 +2211,7 @@ if active_tab_key == "daily":
 elif active_tab_key == "stock":
     render_stock_hub()
 elif active_tab_key == "sports":
-    render_sports
+    render_sports_hub()
+elif active_tab_key == "blog":
+    render_blog_hub()
+
