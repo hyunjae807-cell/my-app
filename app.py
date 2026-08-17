@@ -1166,43 +1166,104 @@ def fetch_news_feed(query, max_results=8):
     except Exception:
         return []
 
-# 12. AI 호출 엔진
+# 12. 🌟 [다중 모델 & 엔드포인트 자동 호환 Gemini AI 호출 엔진]
 def call_gemini_api(prompt_text, api_key, system_instruction=None, image_bytes=None, chat_contents=None):
-    if not api_key or not api_key.strip():
+    if not api_key or not str(api_key).strip():
         return None, "Gemini API Key를 입력해 주세요."
-    
-    clean_key = api_key.strip()
+        
+    clean_key = str(api_key).strip().replace('"', '').replace("'", "")
     headers = {"Content-Type": "application/json"}
     
-    candidate_models = ["gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-2.0-flash", "gemini-pro"]
-
+    # 지원되는 최신 모델 목록 (gemini-pro 제외)
+    candidate_models = [
+        "gemini-1.5-flash",
+        "gemini-1.5-flash-8b",
+        "gemini-1.5-pro",
+        "gemini-2.0-flash",
+        "gemini-2.0-flash-lite"
+    ]
+    
+    # 대화 기록 정제 (반드시 user로 시작, 연속된 동일 role 병합, 이전 오류 메시지 배제)
+    sanitized_contents = []
     if chat_contents:
-        contents = chat_contents
-    elif image_bytes:
-        base64_img = base64.b64encode(image_bytes).decode('utf-8')
-        contents = [{"parts": [{"text": prompt_text}, {"inline_data": {"mime_type": "image/jpeg", "data": base64_img}}]}]
-    else:
-        contents = [{"parts": [{"text": prompt_text}]}]
-
-    payload = {"contents": contents}
-    if system_instruction:
-        payload["systemInstruction"] = {"parts": [{"text": system_instruction}]}
+        last_role = None
+        for item in chat_contents:
+            r = "user" if item.get("role") in ("user", "human") else "model"
+            txt = ""
+            if "parts" in item and item["parts"]:
+                txt = item["parts"][0].get("text", "")
+            elif "content" in item:
+                txt = str(item.get("content", ""))
+                
+            if not txt or "AI 응답 오류" in txt or "AI 생성 오류" in txt or "error" in txt.lower():
+                continue
+                
+            if not sanitized_contents and r != "user":
+                continue
+                
+            if r == last_role:
+                sanitized_contents[-1]["parts"][0]["text"] += "\n\n" + txt
+            else:
+                sanitized_contents.append({"role": r, "parts": [{"text": txt}]})
+                last_role = r
+                
+    if not sanitized_contents:
+        if image_bytes:
+            base64_img = base64.b64encode(image_bytes).decode('utf-8')
+            sanitized_contents = [{
+                "parts": [
+                    {"text": prompt_text if prompt_text else "이 이미지를 분석해주세요."},
+                    {"inline_data": {"mime_type": "image/jpeg", "data": base64_img}}
+                ]
+            }]
+        else:
+            final_p = prompt_text.strip() if prompt_text else "안녕하세요"
+            sanitized_contents = [{"role": "user", "parts": [{"text": final_p}]}]
 
     last_err = ""
+    # 1차 시도: v1beta + systemInstruction 정석 호출
     for model_name in candidate_models:
-        clean_name = model_name.replace("models/", "").strip()
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{clean_name}:generateContent?key={clean_key}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={clean_key}"
+        payload = {"contents": sanitized_contents}
+        if system_instruction and system_instruction.strip():
+            payload["systemInstruction"] = {"parts": [{"text": system_instruction.strip()}]}
+            
         try:
             res = requests.post(url, json=payload, headers=headers, timeout=25)
             if res.status_code == 200:
                 resp_json = res.json()
-                text = resp_json['candidates'][0]['content']['parts'][0]['text']
-                return text, "SUCCESS"
+                cand = resp_json.get('candidates', [{}])[0]
+                text = cand.get('content', {}).get('parts', [{}])[0].get('text', '')
+                if text:
+                    return text, "SUCCESS"
             else:
                 last_err = f"[{res.status_code}] {res.text[:120]}"
         except Exception as e:
             last_err = str(e)
             
+    # 2차 시도: 프롬프트에 시스템 지침을 직접 인라인 결합하여 호출 (구버전 호환)
+    inline_contents = []
+    for c in sanitized_contents:
+        inline_contents.append({"role": c["role"], "parts": [{"text": c["parts"][0]["text"]}]})
+        
+    if system_instruction and inline_contents:
+        inline_contents[0]["parts"][0]["text"] = f"[{system_instruction.strip()}]\n\n" + inline_contents[0]["parts"][0]["text"]
+        
+    for model_name in ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash"]:
+        for api_ver in ["v1beta", "v1"]:
+            url = f"https://generativelanguage.googleapis.com/{api_ver}/models/{model_name}:generateContent?key={clean_key}"
+            payload = {"contents": inline_contents}
+            try:
+                res = requests.post(url, json=payload, headers=headers, timeout=25)
+                if res.status_code == 200:
+                    resp_json = res.json()
+                    cand = resp_json.get('candidates', [{}])[0]
+                    text = cand.get('content', {}).get('parts', [{}])[0].get('text', '')
+                    if text:
+                        return text, "SUCCESS"
+            except Exception:
+                pass
+                
     return None, f"AI 생성 오류: {last_err}"
 
 def analyze_portfolio_image(image_bytes, api_key):
@@ -1275,28 +1336,9 @@ def ask_gemini_chat(chat_history, user_msg, portfolio_items, api_key):
     stock_list_str = ", ".join([f"{item['종목명']} ({item['티커']})" for item in portfolio_items]) if portfolio_items else "SK하이닉스, 현대차, KODEX AI반도체, KODEX 커버드콜"
     system_inst = f"당신은 투자자의 1:1 금융/자산 분석 비서 AI 'MORI'입니다. 투자자가 보유한 포트폴리오는 [{stock_list_str}] 입니다. 이모지를 최소화하고 전문적이며 명확하게 답변하세요."
 
-    contents = []
-    last_role = None
-    for msg in chat_history:
-        role = "user" if msg["role"] == "user" else "model"
-        if not contents and role != "user":
-            continue
-        if role == last_role:
-            continue
-        contents.append({"role": role, "parts": [{"text": msg["content"]}]})
-        last_role = role
-        
-    if not contents:
-        contents = [{"role": "user", "parts": [{"text": user_msg}]}]
-
-    text, status = call_gemini_api("", api_key, system_instruction=system_inst, chat_contents=contents)
+    text, status = call_gemini_api(user_msg, api_key, system_instruction=system_inst, chat_contents=chat_history)
     if status == "SUCCESS" and text:
         return text
-    
-    fallback_prompt = f"[{system_inst}]\n\n질문: {user_msg}"
-    fb_text, fb_status = call_gemini_api(fallback_prompt, api_key)
-    if fb_status == "SUCCESS" and fb_text:
-        return fb_text
     return f"AI 응답 오류: {text if text else status}"
 
 
@@ -1347,6 +1389,7 @@ def render_daily_hub():
         cash_balance=user_settings.get("cash_balance", 810924.0)
     )
 
+    # 🌟 보유 종목 연동 캘린더 동기화 로드
     all_calendar_events = sync_and_load_calendar_events(user_portfolio)
 
     # 1-1. 오늘 요약 (일주일 간의 일정만 엄격 필터링)
@@ -1637,10 +1680,11 @@ def render_stock_hub():
             with st.expander("📸 잔고 캡처로 포트폴리오 자동 갱신"):
                 uploaded_file = st.file_uploader("증권사 잔고 캡처 업로드", type=["png", "jpg", "jpeg"])
                 if uploaded_file and st.button("AI 분석 및 저장"):
-                    if not st.session_state.saved_gemini_key:
+                    active_key = st.session_state.saved_gemini_key or st.secrets.get("GEMINI_API_KEY", "")
+                    if not active_key:
                         st.warning("Gemini API Key가 필요합니다.")
                     else:
-                        parsed, status = analyze_portfolio_image(uploaded_file.getvalue(), st.session_state.saved_gemini_key)
+                        parsed, status = analyze_portfolio_image(uploaded_file.getvalue(), active_key)
                         if status == "SUCCESS" and parsed:
                             save_portfolio(parsed)
                             st.success("포트폴리오가 업데이트되었습니다.")
@@ -1699,11 +1743,12 @@ def render_stock_hub():
         c_b1, c_b2 = st.columns(2)
         with c_b1:
             if st.button("오늘자 AI 브리핑 생성", key="btn_b_re"):
-                if not st.session_state.saved_gemini_key:
+                active_key = st.session_state.saved_gemini_key or st.secrets.get("GEMINI_API_KEY", "")
+                if not active_key:
                     st.warning("API Key를 입력해주세요.")
                 else:
                     with st.spinner("증시 브리핑 작성 중..."):
-                        b_res, status = generate_ai_briefing(recent_news, user_portfolio, st.session_state.saved_gemini_key)
+                        b_res, status = generate_ai_briefing(recent_news, user_portfolio, active_key)
                         if status == "SUCCESS" and b_res:
                             save_briefing(b_res, datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S'))
                             st.rerun()
@@ -1722,22 +1767,48 @@ def render_stock_hub():
             st.markdown(saved_b)
 
     with sub_s5:
+        with st.expander("🔑 Gemini API Key 설정 / 확인"):
+            api_k_val = st.text_input("API Key", value=st.session_state.saved_gemini_key, type="password", key="chat_key_input")
+            if st.button("API Key 저장", key="save_chat_key_btn"):
+                if api_k_val.strip():
+                    st.session_state.saved_gemini_key = api_k_val.strip()
+                    st.success("API Key가 저장되었습니다.")
+                    st.rerun()
+
+        col_ch_top1, col_ch_top2 = st.columns([0.8, 0.2])
+        with col_ch_top1:
+            st.caption("💡 보유 종목과 시장 상황에 대해 자유롭게 질문해보세요.")
+        with col_ch_top2:
+            if st.button("대화 초기화", key="clear_chat_btn"):
+                st.session_state.chat_messages = [{"role": "assistant", "content": "보유 포트폴리오를 기반으로 전문적인 금융·투자 분석을 제공해 드립니다."}]
+                st.rerun()
+
         if "chat_messages" not in st.session_state:
             st.session_state.chat_messages = [{"role": "assistant", "content": "보유 포트폴리오를 기반으로 전문적인 금융·투자 분석을 제공해 드립니다."}]
+            
         for msg in st.session_state.chat_messages:
-            with st.chat_message(msg["role"]): st.markdown(msg["content"])
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+                
         with st.form("chat_form_s", clear_on_submit=True):
             col_ci1, col_ci2 = st.columns([0.82, 0.18])
-            with col_ci1: user_input = st.text_input("질문", placeholder="질문을 입력하세요...", label_visibility="collapsed")
-            with col_ci2: send_btn = st.form_submit_button("전송", use_container_width=True)
+            with col_ci1:
+                user_input = st.text_input("질문", placeholder="질문을 입력하세요...", label_visibility="collapsed")
+            with col_ci2:
+                send_btn = st.form_submit_button("전송", use_container_width=True)
+                
         if send_btn and user_input.strip():
             u_text = user_input.strip()
             st.session_state.chat_messages.append({"role": "user", "content": u_text})
-            if st.session_state.saved_gemini_key:
+            
+            active_key = st.session_state.saved_gemini_key or st.secrets.get("GEMINI_API_KEY", "")
+            if active_key:
                 with st.spinner("분석 중..."):
-                    reply = ask_gemini_chat(st.session_state.chat_messages, u_text, load_portfolio(), st.session_state.saved_gemini_key)
+                    reply = ask_gemini_chat(st.session_state.chat_messages, u_text, load_portfolio(), active_key)
                     st.session_state.chat_messages.append({"role": "assistant", "content": reply})
                     st.rerun()
+            else:
+                st.warning("상단 [Gemini API Key 설정]에서 키를 입력해주세요.")
 
 
 # -------------------------------------------------------------
@@ -1760,11 +1831,12 @@ def render_sports_hub():
     with c_s1: st.markdown(f"#### {current_team['팀명']} ({current_team['리그']})")
     with c_s2:
         if st.button("구단 브리핑 생성", key=f"btn_sb_m_{team_key}"):
-            if not st.session_state.saved_gemini_key:
+            active_key = st.session_state.saved_gemini_key or st.secrets.get("GEMINI_API_KEY", "")
+            if not active_key:
                 st.warning("Gemini API Key가 필요합니다.")
             else:
                 with st.spinner(f"{team_key} 분석 중..."):
-                    b_txt = generate_team_briefing(current_team['팀명'], current_team['종목'], current_team['리그'], team_news, st.session_state.saved_gemini_key)
+                    b_txt = generate_team_briefing(current_team['팀명'], current_team['종목'], current_team['리그'], team_news, active_key)
                     if b_txt:
                         sports_briefings[team_key] = {"text": b_txt, "updated_at": datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S')}
                         save_sports_briefings(sports_briefings)
