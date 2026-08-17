@@ -1272,7 +1272,7 @@ def render_daily_hub():
 
 
 # -------------------------------------------------------------
-# 2. [주식 & 금융 허브 모듈 - 실시간 시황 & 미국장 주목 종목 초단위 자동 연동]
+# 2. [주식 & 금융 허브 모듈 - 필라델피아 반도체/환율 & 미국장 데일리 주목 종목]
 # -------------------------------------------------------------
 def render_live_market_overview_content():
     # 1. 글로벌 4대 핵심 지표 (코스피, S&P 500, 필라델피아 반도체, 원/달러 환율)
@@ -1805,9 +1805,3 @@ with tab_sports:
 
 with tab_blog:
     render_blog_hub()
-EOF
-
-python3 -m py_compile /tmp/full_mori_app_v39.py
-echo "PYTHON COMPILE: $?"
-python3 /tmp/test_full_runtime.py
-}
