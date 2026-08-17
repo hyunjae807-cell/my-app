@@ -149,17 +149,17 @@ html, body, p, div:not([data-testid*="Icon"]), span:not([data-testid*="Icon"]), 
     background: rgba(16, 185, 129, 0.15);
     border: 1px solid rgba(16, 185, 129, 0.3);
     color: #34d399;
-    padding: 3px 10px;
-    border-radius: 12px;
+    padding: 4px 12px;
+    border-radius: 14px;
     font-size: 12px;
     font-weight: 800;
 }
 .live-dot {
-    width: 7px;
-    height: 7px;
+    width: 8px;
+    height: 8px;
     background: #10b981;
     border-radius: 50%;
-    box-shadow: 0 0 8px #10b981;
+    box-shadow: 0 0 10px #10b981;
 }
 
 /* 상단 4단 위젯 스트립 */
@@ -685,7 +685,7 @@ def save_blog_posts(posts):
     except Exception as e: pass
 
 # 7. [한국거래소 & 네이버 금융 & 글로벌 실시간 시세 엔진]
-@st.cache_data(ttl=2)
+@st.cache_data(ttl=1)
 def get_live_market_data(ticker_symbol, fallback_price=None):
     clean_code = str(ticker_symbol).replace(".KS", "").replace(".KQ", "").strip()
 
@@ -694,7 +694,7 @@ def get_live_market_data(ticker_symbol, fallback_price=None):
         try:
             url_fx = "https://m.stock.naver.com/front-api/marketIndex/prices?category=exchange&reutersCode=FX_USDKRW"
             req_fx = urllib.request.Request(url_fx, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req_fx, timeout=2.5) as resp:
+            with urllib.request.urlopen(req_fx, timeout=2.0) as resp:
                 fx_json = json.loads(resp.read().decode('utf-8'))
                 fx_result = fx_json.get("result", [])
                 if fx_result:
@@ -712,7 +712,7 @@ def get_live_market_data(ticker_symbol, fallback_price=None):
                 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
                 'Referer': f'https://m.stock.naver.com/domestic/stock/{clean_code}/total'
             })
-            with urllib.request.urlopen(req, timeout=2.5) as resp:
+            with urllib.request.urlopen(req, timeout=2.0) as resp:
                 data = json.loads(resp.read().decode('utf-8'))
                 raw_price = data.get("nowPrice") or data.get("closePrice")
                 if raw_price:
@@ -720,6 +720,21 @@ def get_live_market_data(ticker_symbol, fallback_price=None):
                     raw_pct = data.get("fluctuationsRatio")
                     delta_pct = float(raw_pct) if raw_pct is not None else 0.0
                     return cur_p, delta_pct
+        except Exception:
+            pass
+
+        # 2순위: 네이버 PC 실시간 Polling
+        try:
+            url_pc = f"https://polling.finance.naver.com/api/realtime/hasItem?itemCodes={clean_code}"
+            req_pc = urllib.request.Request(url_pc, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req_pc, timeout=2.0) as resp:
+                p_data = json.loads(resp.read().decode('utf-8'))
+                datas = p_data.get("result", {}).get("areas", [{}])[0].get("datas", [])
+                if datas:
+                    cur_p = float(datas[0].get("nv", 0))
+                    delta_pct = float(datas[0].get("cr", 0.0))
+                    if cur_p > 0:
+                        return cur_p, delta_pct
         except Exception:
             pass
 
@@ -1257,8 +1272,75 @@ def render_daily_hub():
 
 
 # -------------------------------------------------------------
-# 2. [주식 & 금융 허브 모듈 - 필라델피아 반도체/환율 & 미국장 데일리 주목 종목]
+# 2. [주식 & 금융 허브 모듈 - 실시간 시황 & 미국장 주목 종목 초단위 자동 연동]
 # -------------------------------------------------------------
+def render_live_market_overview_content():
+    # 1. 글로벌 4대 핵심 지표 (코스피, S&P 500, 필라델피아 반도체, 원/달러 환율)
+    market_tickers = ["^KS11", "^GSPC", "^SOX", "USDKRW=X"]
+    m_items = [
+        {"티커": "^KS11", "현재가": 6977.94},
+        {"티커": "^GSPC", "현재가": 5554.20},
+        {"티커": "^SOX", "현재가": 5234.50},
+        {"티커": "USDKRW=X", "현재가": 1380.0}
+    ]
+    m_prices = get_batch_market_data(m_items)
+    kospi_p, kospi_d = m_prices.get("^KS11", (None, None))
+    sp500_p, sp500_d = m_prices.get("^GSPC", (None, None))
+    sox_p, sox_d = m_prices.get("^SOX", (None, None))
+    fx_p, fx_d = m_prices.get("USDKRW=X", (None, None))
+
+    st.markdown("##### 🌐 글로벌 주요 지수 및 환율")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.metric("코스피 (KOSPI)", f"{kospi_p:,.2f}" if kospi_p else "6,977.94", f"{kospi_d:+.2f}%" if kospi_d else "+2.42%")
+        st.metric("필라델피아 반도체 (SOX)", f"{sox_p:,.2f}" if sox_p else "5,234.50", f"{sox_d:+.2f}%" if sox_d else "+1.85%")
+    with c2:
+        st.metric("S&P 500", f"{sp500_p:,.2f}" if sp500_p else "5,554.20", f"{sp500_d:+.2f}%" if sp500_d else "-0.20%")
+        st.metric("원/달러 환율 (USD/KRW)", f"{fx_p:,.1f}원" if fx_p else "1,385.5원", f"{fx_d:+.2f}%" if fx_d else "-0.25%")
+
+    st.markdown("---")
+
+    # 2. 미국장 오늘의 주목 종목 (요일별 자동 순환 & 실시간 시세 연동)
+    today_us_stocks = get_daily_us_spotlight_stocks()
+    us_tickers_for_batch = [{"티커": s["ticker"], "현재가": 0.0} for s in today_us_stocks]
+    us_prices_map = get_batch_market_data(us_tickers_for_batch)
+
+    today_name = ["월요일 (글로벌 AI·빅테크 코어)", "화요일 (차세대 반도체 & 커스텀 실리콘)", "수요일 (클라우드 & AI 소프트웨어)", "목요일 (고성능 하드웨어 & 모빌리티)", "금요일 (헬스케어 & 배당 성장)", "토요일 (주간 톱 모멘텀 픽)", "일요일 (차주 개장 준비 픽)"][datetime.now(KST).weekday()]
+
+    st.markdown(f"""
+    <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px;">
+        <span style="font-size: 17px; font-weight: 800; color: #f8fafc;">🇺🇸 오늘 미국장 주목 종목</span>
+        <span style="font-size: 13px; font-weight: 600; color: #c4b5fd;">{today_name}</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    cols_us = st.columns(len(today_us_stocks))
+    for idx, stock_info in enumerate(today_us_stocks):
+        t_symbol = stock_info["ticker"]
+        p_val, p_delta = us_prices_map.get(t_symbol, (None, None))
+        price_str = f"${p_val:.2f}" if p_val else "실시간 조회"
+        delta_str = f"{p_delta:+.2f}%" if p_delta is not None else ""
+        delta_class = "pill-up" if (p_delta and p_delta >= 0) else "pill-down"
+
+        with cols_us[idx]:
+            st.markdown(f"""
+            <div class="us-stock-card">
+                <div>
+                    <div class="us-stock-header">
+                        <div>
+                            <div class="us-stock-name">{stock_info['name']}</div>
+                            <div class="us-stock-ticker">{stock_info['ticker']}</div>
+                        </div>
+                        <span class="us-stock-tag">{stock_info['tag']}</span>
+                    </div>
+                    <div class="us-stock-price">{price_str}</div>
+                    <div style="font-size: 12px; font-weight: 700;"><span class="{delta_class}">{delta_str}</span></div>
+                </div>
+                <div class="us-stock-reason">{stock_info['reason']}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+
 def render_stock_hub():
     sub_s1, sub_s2, sub_s3, sub_s4, sub_s5 = st.tabs([
         "내 포트폴리오", "실시간 시황", "맞춤 뉴스", "모닝 브리핑", "AI 투자 비서"
@@ -1275,7 +1357,6 @@ def render_stock_hub():
         </div>
         """, unsafe_allow_html=True)
 
-        # 실시간 포트폴리오 렌더링
         render_live_portfolio_content()
 
         col_p1, col_p2 = st.columns(2)
@@ -1305,70 +1386,14 @@ def render_stock_hub():
                             st.rerun()
 
     with sub_s2:
-        # 1. 글로벌 4대 핵심 지표 (코스피, S&P 500, 필라델피아 반도체, 원/달러 환율)
-        market_tickers = ["^KS11", "^GSPC", "^SOX", "USDKRW=X"]
-        m_items = [
-            {"티커": "^KS11", "현재가": 6977.94},
-            {"티커": "^GSPC", "현재가": 5554.20},
-            {"티커": "^SOX", "현재가": 5234.50},
-            {"티커": "USDKRW=X", "현재가": 1380.0}
-        ]
-        m_prices = get_batch_market_data(m_items)
-        kospi_p, kospi_d = m_prices.get("^KS11", (None, None))
-        sp500_p, sp500_d = m_prices.get("^GSPC", (None, None))
-        sox_p, sox_d = m_prices.get("^SOX", (None, None))
-        fx_p, fx_d = m_prices.get("USDKRW=X", (None, None))
-
-        st.markdown("##### 🌐 글로벌 주요 지수 및 환율")
-        c1, c2 = st.columns(2)
-        with c1:
-            st.metric("코스피 (KOSPI)", f"{kospi_p:,.2f}" if kospi_p else "6,977.94", f"{kospi_d:+.2f}%" if kospi_d else "+2.42%")
-            st.metric("필라델피아 반도체 (SOX)", f"{sox_p:,.2f}" if sox_p else "5,234.50", f"{sox_d:+.2f}%" if sox_d else "+1.85%")
-        with c2:
-            st.metric("S&P 500", f"{sp500_p:,.2f}" if sp500_p else "5,554.20", f"{sp500_d:+.2f}%" if sp500_d else "-0.20%")
-            st.metric("원/달러 환율 (USD/KRW)", f"{fx_p:,.1f}원" if fx_p else "1,385.5원", f"{fx_d:+.2f}%" if fx_d else "-0.25%")
-
-        st.markdown("---")
-
-        # 2. 미국장 오늘의 주목 종목 (요일별 자동 순환 & 실시간 시세 연동)
-        today_us_stocks = get_daily_us_spotlight_stocks()
-        us_tickers_for_batch = [{"티커": s["ticker"], "현재가": 0.0} for s in today_us_stocks]
-        us_prices_map = get_batch_market_data(us_tickers_for_batch)
-
-        today_name = ["월요일 (글로벌 AI·빅테크 코어)", "화요일 (차세대 반도체 & 커스텀 실리콘)", "수요일 (클라우드 & AI 소프트웨어)", "목요일 (고성능 하드웨어 & 모빌리티)", "금요일 (헬스케어 & 배당 성장)", "토요일 (주간 톱 모멘텀 픽)", "일요일 (차주 개장 준비 픽)"][datetime.now(KST).weekday()]
-
-        st.markdown(f"""
-        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px;">
-            <span style="font-size: 17px; font-weight: 800; color: #f8fafc;">🇺🇸 오늘 미국장 주목 종목</span>
-            <span style="font-size: 13px; font-weight: 600; color: #c4b5fd;">{today_name}</span>
+        st.markdown("""
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <div style="font-size: 16px; font-weight: 800; color: #f8fafc;">글로벌 마켓 실시간 시황</div>
+            <div class="live-indicator"><span class="live-dot"></span>실시간 글로벌 시세 수신중</div>
         </div>
         """, unsafe_allow_html=True)
 
-        cols_us = st.columns(len(today_us_stocks))
-        for idx, stock_info in enumerate(today_us_stocks):
-            t_symbol = stock_info["ticker"]
-            p_val, p_delta = us_prices_map.get(t_symbol, (None, None))
-            price_str = f"${p_val:.2f}" if p_val else "실시간 조회"
-            delta_str = f"{p_delta:+.2f}%" if p_delta is not None else ""
-            delta_class = "pill-up" if (p_delta and p_delta >= 0) else "pill-down"
-
-            with cols_us[idx]:
-                st.markdown(f"""
-                <div class="us-stock-card">
-                    <div>
-                        <div class="us-stock-header">
-                            <div>
-                                <div class="us-stock-name">{stock_info['name']}</div>
-                                <div class="us-stock-ticker">{stock_info['ticker']}</div>
-                            </div>
-                            <span class="us-stock-tag">{stock_info['tag']}</span>
-                        </div>
-                        <div class="us-stock-price">{price_str}</div>
-                        <div style="font-size: 12px; font-weight: 700;"><span class="{delta_class}">{delta_str}</span></div>
-                    </div>
-                    <div class="us-stock-reason">{stock_info['reason']}</div>
-                </div>
-                """, unsafe_allow_html=True)
+        render_live_market_overview_content()
 
     with sub_s3:
         my_stock_names = [item["종목명"] for item in user_portfolio]
@@ -1780,3 +1805,9 @@ with tab_sports:
 
 with tab_blog:
     render_blog_hub()
+EOF
+
+python3 -m py_compile /tmp/full_mori_app_v39.py
+echo "PYTHON COMPILE: $?"
+python3 /tmp/test_full_runtime.py
+}
