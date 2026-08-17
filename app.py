@@ -26,22 +26,20 @@ except Exception:
 # 2. 한국 표준시(KST) 정의
 KST = timezone(timedelta(hours=9))
 
-# 3. 미니멀 프리미엄 MORI 앱 아이콘 생성
+# 3. 프리미엄 미니멀 MORI 앱 아이콘 생성
 def get_mori_app_icon():
     size = 256
     img = Image.new("RGBA", (size, size), (255, 255, 255, 0))
-    draw = ImageDraw.Draw(img)
-
     mask = Image.new("L", (size, size), 0)
     mask_draw = ImageDraw.Draw(mask)
     mask_draw.rounded_rectangle([(0, 0), (size, size)], radius=56, fill=255)
 
-    base = Image.new("RGBA", (size, size), (15, 23, 42, 255))
+    base = Image.new("RGBA", (size, size), (11, 15, 25, 255))
     base_draw = ImageDraw.Draw(base)
     
-    points = [(70, 175), (70, 95), (128, 145), (186, 95), (186, 175)]
+    points = [(65, 180), (65, 90), (128, 145), (191, 90), (191, 180)]
     for i in range(len(points)-1):
-        base_draw.line([points[i], points[i+1]], fill=(248, 250, 252, 255), width=14)
+        base_draw.line([points[i], points[i+1]], fill=(255, 255, 255, 255), width=16)
 
     icon_img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     icon_img.paste(base, (0, 0), mask=mask)
@@ -57,206 +55,266 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 5. [네이버 & 토스 스타일 모던 미니멀리즘 CSS]
+# 5. [최고급 모던 핀테크 & 네이버 감성 프리미엄 CSS] - 상단 짤림 완벽 해결 및 정교한 벤토 그리드
 st.markdown("""
 <style>
-@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
+
+:root {
+    --bg-dark: #0b0f19;
+    --card-bg: #131b2e;
+    --card-border: rgba(255, 255, 255, 0.08);
+    --card-hover: rgba(255, 255, 255, 0.12);
+    --accent-blue: #3b82f6;
+    --accent-green: #10b981;
+    --accent-red: #ef4444;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+}
+
 * {
-    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
-    letter-spacing: -0.015em;
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif !important;
+    letter-spacing: -0.02em !important;
 }
 
+/* 상단 짤림 방지 및 모바일 여백 정밀 조정 */
 .block-container {
-    padding-top: 1.8rem !important;
-    padding-bottom: 3rem !important;
-    padding-left: 0.8rem !important;
-    padding-right: 0.8rem !important;
-    max-width: 100% !important;
+    padding-top: 4.2rem !important;
+    padding-bottom: 3.5rem !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+    max-width: 1200px !important;
+    margin: 0 auto !important;
 }
 
-/* 상단 미니멀 헤더 */
-.mori-header-wrap {
+/* 상단 네비게이션 헤더 바 */
+.mori-navbar {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding-bottom: 12px;
-    margin-bottom: 16px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 6px 0 16px 0;
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--card-border);
 }
-.mori-brand {
-    font-size: 26px !important;
+.mori-brand-box {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+.mori-logo {
+    font-size: 28px !important;
     font-weight: 900 !important;
-    color: #f8fafc;
-    letter-spacing: -0.03em;
+    color: var(--text-primary);
+    letter-spacing: -0.04em !important;
 }
-.mori-brand-sub {
+.mori-desc {
     font-size: 13px !important;
-    color: #94a3b8;
-    font-weight: 500;
-    margin-left: 6px;
+    color: var(--text-muted);
+    font-weight: 600;
 }
-.mori-clock {
-    font-size: 13px !important;
-    color: #64748b;
-    font-weight: 500;
+.mori-badge-time {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--card-border);
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 12px !important;
+    font-weight: 700;
+    color: var(--text-secondary);
 }
 
-/* 네이버 스타일 상단 미니멀 위젯 스트립 */
-.widget-strip {
+/* 상단 4단 위젯 스트립 (네이버/토스 스타일) */
+.widget-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-    gap: 8px;
-    margin-bottom: 18px;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 20px;
 }
-.widget-box {
-    background: rgba(30, 41, 59, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 14px;
-    padding: 12px 14px;
+@media (max-width: 768px) {
+    .widget-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+.widget-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 16px;
+    padding: 14px 16px;
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    justify-content: space-between;
+    min-height: 84px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    transition: transform 0.2s ease, border-color 0.2s ease;
 }
-.widget-label {
+.widget-card:hover {
+    border-color: rgba(96, 165, 250, 0.3);
+    transform: translateY(-2px);
+}
+.widget-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     font-size: 12px;
-    color: #94a3b8;
     font-weight: 600;
-    margin-bottom: 3px;
+    color: var(--text-muted);
 }
-.widget-value {
-    font-size: 16px;
-    font-weight: 800;
-    color: #f8fafc;
+.widget-main {
+    font-size: 19px;
+    font-weight: 900;
+    color: var(--text-primary);
+    margin: 4px 0 2px 0;
     line-height: 1.2;
 }
-.widget-sub {
-    font-size: 11px;
-    color: #64748b;
-    margin-top: 3px;
+.widget-footer {
+    font-size: 12px;
+    font-weight: 700;
+}
+.pill-up {
+    color: #f87171;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+}
+.pill-down {
+    color: #60a5fa;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
 }
 
-/* 미니멀 카드 스타일 */
-.flat-card {
-    background: rgba(30, 41, 59, 0.55);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 16px;
-    padding: 18px;
-    margin-bottom: 14px;
-    color: #f8fafc;
+/* 메인 카드 스타일 */
+.bento-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 20px;
+    padding: 22px;
+    margin-bottom: 16px;
+    color: var(--text-primary);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
 }
-.flat-card-title {
-    font-size: 16px;
+.bento-title {
+    font-size: 18px;
     font-weight: 800;
-    color: #f1f5f9;
-    margin-bottom: 12px;
+    color: var(--text-primary);
+    margin-bottom: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
 
-/* 뉴스 카드 */
-.news-item {
-    background: rgba(15, 23, 42, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+/* 버튼 스타일 */
+.btn-action-primary {
+    display: inline-block;
+    background: #2563eb;
+    color: #ffffff !important;
+    text-decoration: none;
+    font-weight: 700;
+    padding: 9px 18px;
     border-radius: 12px;
-    padding: 14px 16px;
+    font-size: 14px;
+    border: none;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+    transition: all 0.2s ease;
+}
+.btn-action-primary:hover {
+    background: #1d4ed8;
+    transform: translateY(-1px);
+}
+.btn-action-secondary {
+    display: inline-block;
+    background: rgba(255, 255, 255, 0.06);
+    color: #e2e8f0 !important;
+    text-decoration: none;
+    font-weight: 600;
+    padding: 9px 16px;
+    border-radius: 12px;
+    font-size: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: all 0.2s ease;
+}
+.btn-action-secondary:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* 뉴스 피드 아이템 */
+.news-row {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    padding: 14px 18px;
     margin-bottom: 10px;
     transition: all 0.2s ease;
 }
-.news-item:hover {
-    border-color: rgba(96, 165, 250, 0.4);
-    background: rgba(30, 41, 59, 0.7);
+.news-row:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(96, 165, 250, 0.3);
 }
-.news-link {
+.news-heading {
     font-size: 16px !important;
     font-weight: 700 !important;
-    color: #f1f5f9;
+    color: var(--text-primary);
     text-decoration: none;
     line-height: 1.45;
     display: block;
 }
-.news-link:hover {
+.news-heading:hover {
     color: #60a5fa;
 }
-.news-source {
+.news-info {
     font-size: 12px !important;
-    color: #94a3b8;
+    color: var(--text-muted);
     margin-top: 6px;
 }
 
-/* 깔끔한 메트릭 */
+/* 세그먼트 탭 스타일 */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    padding: 4px;
+    border-radius: 14px;
+    border: 1px solid var(--card-border);
+    margin-bottom: 16px;
+}
+.stTabs [data-baseweb="tab"] {
+    height: 40px !important;
+    border-radius: 10px;
+    padding: 6px 18px !important;
+    font-size: 15px !important;
+    font-weight: 700 !important;
+    color: var(--text-secondary);
+    background: transparent;
+    border: none;
+    transition: all 0.2s ease;
+}
+.stTabs [aria-selected="true"] {
+    background: #2563eb !important;
+    color: #ffffff !important;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+
+/* 메트릭 스타일 */
 [data-testid="stMetricValue"] {
     font-size: 26px !important;
     font-weight: 900 !important;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.03em !important;
+    color: #f8fafc !important;
 }
 [data-testid="stMetricLabel"] {
     font-size: 13px !important;
     font-weight: 600 !important;
     color: #94a3b8 !important;
 }
-[data-testid="stMetricDelta"] {
-    font-size: 13px !important;
-    font-weight: 700 !important;
-}
-
-/* 탭 바 미니멀 스타일 */
-.stTabs [data-baseweb="tab-list"] {
-    gap: 6px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    padding-bottom: 4px;
-}
-.stTabs [data-baseweb="tab"] {
-    height: 42px !important;
-    border-radius: 10px;
-    padding: 6px 16px !important;
-    font-size: 15px !important;
-    font-weight: 700 !important;
-    color: #94a3b8;
-    background: transparent;
-    border: none;
-}
-.stTabs [aria-selected="true"] {
-    background-color: rgba(59, 130, 246, 0.15) !important;
-    color: #60a5fa !important;
-    font-weight: 800 !important;
-}
-
-/* 미니멀 버튼 */
-.btn-clean-primary {
-    display: inline-block;
-    background: #2563eb;
-    color: #ffffff !important;
-    text-decoration: none;
-    font-weight: 700;
-    padding: 8px 16px;
-    border-radius: 10px;
-    font-size: 14px;
-    border: none;
-    transition: background 0.2s ease;
-}
-.btn-clean-primary:hover {
-    background: #1d4ed8;
-}
-.btn-clean-secondary {
-    display: inline-block;
-    background: rgba(255, 255, 255, 0.08);
-    color: #e2e8f0 !important;
-    text-decoration: none;
-    font-weight: 600;
-    padding: 8px 14px;
-    border-radius: 10px;
-    font-size: 14px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-}
-.btn-clean-secondary:hover {
-    background: rgba(255, 255, 255, 0.14);
-}
 
 button {
     font-size: 15px !important;
     font-weight: 700 !important;
-    border-radius: 10px !important;
+    border-radius: 12px !important;
 }
 input, select, textarea {
     font-size: 15px !important;
+    border-radius: 10px !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -510,8 +568,8 @@ def get_current_weather(lat=37.2410, lon=127.1775, default_name="용인시"):
         url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto"
         res = requests.get(url, timeout=3).json()
         current = res.get("current", {})
-        temp = current.get("temperature_2m", 28.0)
-        humidity = current.get("relative_humidity_2m", 65)
+        temp = current.get("temperature_2m", 26.2)
+        humidity = current.get("relative_humidity_2m", 82)
         code = current.get("weather_code", 0)
         
         weather_desc = "맑음"
@@ -522,7 +580,7 @@ def get_current_weather(lat=37.2410, lon=127.1775, default_name="용인시"):
         
         return f"{temp:.1f}°C", weather_desc, f"{humidity}%", default_name
     except Exception:
-        return "28.0°C", "맑음", "60%", default_name
+        return "26.2°C", "구름 조금", "82%", default_name
 
 # 9. 초고속 pykrx + yfinance 하이브리드 엔진
 @st.cache_data(ttl=120)
@@ -731,7 +789,7 @@ def ask_gemini_chat(chat_history, user_msg, portfolio_items, api_key):
 
 
 # =============================================================
-# ⭐ [4대 핵심 대분류 렌더링 모듈 - 미니멀 클린 UI]
+# ⭐ [4대 핵심 대분류 렌더링 모듈 - 벤토 그리드 모던 UI]
 # =============================================================
 
 # -------------------------------------------------------------
@@ -748,7 +806,7 @@ def render_daily_hub():
         )
 
         with st.container(border=True):
-            st.markdown(f"**{loc_tag} 날씨** : {weather_val} **{temp_val}** (습도 {humid_val})")
+            st.markdown(f"**{loc_tag} 실시간 날씨** : {weather_val} **{temp_val}** (습도 {humid_val})")
 
         with st.container(border=True):
             st.markdown("**8월 주요 일정 및 D-Day**")
@@ -980,9 +1038,9 @@ def render_stock_hub():
             news_list = fetch_news_feed(query, max_results=8)
             for item in news_list:
                 st.markdown(f"""
-                <div class="news-item">
-                    <a class="news-link" href="{item['link']}" target="_blank">{item['title']}</a>
-                    <div class="news-source">{item['source']} | {item['date']}</div>
+                <div class="news-row">
+                    <a class="news-heading" href="{item['link']}" target="_blank">{item['title']}</a>
+                    <div class="news-info">{item['source']} | {item['date']}</div>
                 </div>
                 """, unsafe_allow_html=True)
 
@@ -1008,7 +1066,7 @@ def render_stock_hub():
             if saved_b:
                 clean_speech = saved_b.replace("#", "").replace("*", "").replace("\n", " ").replace('"', '')[:300]
                 tts_html = f"""
-                <button onclick="window.speechSynthesis.speak(new SpeechSynthesisUtterance('{clean_speech}'))" style="background-color: #475569; color: white; border: none; padding: 9px 16px; border-radius: 8px; font-weight: 700; cursor: pointer; width: 100%;">
+                <button onclick="window.speechSynthesis.speak(new SpeechSynthesisUtterance('{clean_speech}'))" style="background-color: #334155; color: white; border: none; padding: 9px 16px; border-radius: 10px; font-weight: 700; cursor: pointer; width: 100%;">
                     음성 듣기 (TTS)
                 </button>
                 """
@@ -1074,9 +1132,9 @@ def render_sports_hub():
     st.markdown(f"**{current_team['팀명']} 실시간 뉴스**")
     for n in team_news:
         st.markdown(f"""
-        <div class="news-item">
-            <a class="news-link" href="{n['link']}" target="_blank">{n['title']}</a>
-            <div class="news-source">{n['source']} | {n['date']}</div>
+        <div class="news-row">
+            <a class="news-heading" href="{n['link']}" target="_blank">{n['title']}</a>
+            <div class="news-info">{n['source']} | {n['date']}</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -1094,7 +1152,7 @@ def render_sports_hub():
                     save_sports_teams(my_teams); st.rerun()
 
 # -------------------------------------------------------------
-# 4. [블로그 관리 모듈]
+# 4. [블로그 관리 모듈 - 정교한 벤토 그리드]
 # -------------------------------------------------------------
 def render_blog_hub():
     blog_stats = load_blog_stats()
@@ -1112,22 +1170,27 @@ def render_blog_hub():
     stored_hist = blog_stats.get("visitor_history", [])
     final_history = history_vis if history_vis else stored_hist
 
-    # 상단 블로그 프로필 & 미니멀 버튼
+    # 메인 채널 벤토 카드
     st.markdown(f"""
-    <div class="flat-card">
-        <div style="font-size: 18px; font-weight: 800; color: #f8fafc;">칼퇴연구소 | 테크·생산성 랩</div>
-        <div style="font-size: 13px; color: #94a3b8; margin-top: 3px;">https://m.blog.naver.com/{blog_id}</div>
-        <div style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
-            <a class="btn-clean-primary" href="https://m.blog.naver.com/{blog_id}" target="_blank">
-                블로그 바로가기
+    <div class="bento-card">
+        <div class="bento-title">
+            <span>칼퇴연구소 | 테크·생산성 랩</span>
+            <span style="font-size: 13px; font-weight: 600; color: #94a3b8;">@{blog_id}</span>
+        </div>
+        <div style="font-size: 14px; color: #94a3b8; margin-bottom: 14px;">
+            반복되는 야근을 줄이고 일상을 되찾는 실무 AI & 생산성 치트키
+        </div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <a class="btn-action-primary" href="https://m.blog.naver.com/{blog_id}" target="_blank">
+                블로그 바로가기 ↗
             </a>
-            <a class="btn-clean-secondary" href="https://admin.blog.naver.com/{blog_id}/stat/today" target="_blank">
+            <a class="btn-action-secondary" href="https://admin.blog.naver.com/{blog_id}/stat/today" target="_blank">
                 통계센터 (관리자)
             </a>
-            <a class="btn-clean-secondary" href="https://blog.stat.naver.com/m/blog/daily/cv" target="_blank">
+            <a class="btn-action-secondary" href="https://blog.stat.naver.com/m/blog/daily/cv" target="_blank">
                 모바일 통계
             </a>
-            <a class="btn-clean-secondary" href="https://adpost.naver.com" target="_blank">
+            <a class="btn-action-secondary" href="https://adpost.naver.com" target="_blank">
                 애드포스트 센터
             </a>
         </div>
@@ -1176,7 +1239,10 @@ def render_blog_hub():
         fig_vis.add_trace(go.Bar(
             x=df_vis['날짜'],
             y=df_vis['방문자수'],
-            marker_color='#3b82f6',
+            marker=dict(
+                color='#3b82f6',
+                line=dict(color='#60a5fa', width=1)
+            ),
             text=df_vis['방문자수'],
             textposition='auto'
         ))
@@ -1184,9 +1250,11 @@ def render_blog_hub():
             title="일별 방문자 수 추이",
             paper_bgcolor='rgba(0,0,0,0)',
             plot_bgcolor='rgba(0,0,0,0)',
-            font=dict(color='#94a3b8'),
+            font=dict(color='#94a3b8', family='Pretendard'),
             margin=dict(l=10, r=10, t=35, b=20),
-            height=220
+            height=220,
+            xaxis=dict(gridcolor='rgba(255,255,255,0.05)'),
+            yaxis=dict(gridcolor='rgba(255,255,255,0.05)')
         )
         st.plotly_chart(fig_vis, use_container_width=True)
 
@@ -1275,21 +1343,21 @@ if "saved_gemini_key" not in st.session_state:
 
 
 # =============================================================
-# [미니멀 모던 메인 헤더 & 상단 위젯 스트립]
+# [상단 헤더 네비게이션 & 4단 위젯 스트립]
 # =============================================================
 
-# 1) 헤더 바
+# 1) 헤더 바 (상단 짤림 없는 안전 여백 적용)
 st.markdown("""
-<div class="mori-header-wrap">
-    <div>
-        <span class="mori-brand">MORI</span>
-        <span class="mori-brand-sub">Daily & Asset Intelligence</span>
+<div class="mori-navbar">
+    <div class="mori-brand-box">
+        <span class="mori-logo">MORI</span>
+        <span class="mori-desc">Daily & Asset Intelligence</span>
     </div>
-    <div class="mori-clock">""" + datetime.now(KST).strftime('%m.%d %H:%M') + """ KST</div>
+    <div class="mori-badge-time">""" + datetime.now(KST).strftime('%m.%d %H:%M') + """ KST</div>
 </div>
 """, unsafe_allow_html=True)
 
-# 2) 네이버 메인 스타일 상단 4단 미니멀 위젯 스트립
+# 2) 네이버/토스 스타일 상단 4단 위젯 스트립
 w_temp, w_desc, w_hum, w_loc = get_current_weather(
     current_loc_data.get("lat", 37.2410),
     current_loc_data.get("lon", 127.1775),
@@ -1301,37 +1369,37 @@ nasdaq_val, nasdaq_del = m_prices_top.get("^IXIC", (None, None))
 
 kospi_txt = f"{kospi_val:,.1f}" if kospi_val else "6,977.9"
 kospi_d_txt = f"{kospi_del:+.2f}%" if kospi_del else "+2.42%"
-nasdaq_txt = f"{nasdaq_val:,.1f}" if nasdaq_val else "17,599.4"
-nasdaq_d_txt = f"{nasdaq_del:+.2f}%" if nasdaq_del else "-0.18%"
+nasdaq_txt = f"{nasdaq_val:,.1f}" if nasdaq_val else "26,729.2"
+nasdaq_d_txt = f"{nasdaq_del:+.2f}%" if nasdaq_del else "-0.28%"
 
 st.markdown(f"""
-<div class="widget-strip">
-    <div class="widget-box">
-        <div class="widget-label">날씨 · {w_loc}</div>
-        <div class="widget-value">{w_desc} {w_temp}</div>
-        <div class="widget-sub">습도 {w_hum}</div>
+<div class="widget-grid">
+    <div class="widget-card">
+        <div class="widget-header"><span>날씨</span><span>{w_loc}</span></div>
+        <div class="widget-main">{w_desc} {w_temp}</div>
+        <div class="widget-footer" style="color: #94a3b8;">습도 {w_hum}</div>
     </div>
-    <div class="widget-box">
-        <div class="widget-label">코스피</div>
-        <div class="widget-value">{kospi_txt}</div>
-        <div class="widget-sub" style="color: {'#f87171' if '+' in kospi_d_txt else '#60a5fa'};">{kospi_d_txt}</div>
+    <div class="widget-card">
+        <div class="widget-header"><span>코스피</span><span>KOSPI</span></div>
+        <div class="widget-main">{kospi_txt}</div>
+        <div class="widget-footer"><span class="{'pill-up' if '+' in kospi_d_txt else 'pill-down'}">{kospi_d_txt}</span></div>
     </div>
-    <div class="widget-box">
-        <div class="widget-label">나스닥 종합</div>
-        <div class="widget-value">{nasdaq_txt}</div>
-        <div class="widget-sub" style="color: {'#f87171' if '+' in nasdaq_d_txt else '#60a5fa'};">{nasdaq_d_txt}</div>
+    <div class="widget-card">
+        <div class="widget-header"><span>나스닥 종합</span><span>NASDAQ</span></div>
+        <div class="widget-main">{nasdaq_txt}</div>
+        <div class="widget-footer"><span class="{'pill-up' if '+' in nasdaq_d_txt else 'pill-down'}">{nasdaq_d_txt}</span></div>
     </div>
-    <div class="widget-box">
-        <div class="widget-label">주요 D-Day</div>
-        <div class="widget-value">오픽 D-7</div>
-        <div class="widget-sub">8.23 13:00 발표</div>
+    <div class="widget-card">
+        <div class="widget-header"><span>주요 D-Day</span><span>어학</span></div>
+        <div class="widget-main">오픽 D-7</div>
+        <div class="widget-footer" style="color: #94a3b8;">8.23 13:00 발표</div>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
 
 # =============================================================
-# [4대 핵심 대분류 탭 - 이모지 제거 및 텍스트 탭]
+# [4대 핵심 대분류 탭 - 세그먼트 캡슐형 탭]
 # =============================================================
 
 tab_daily, tab_stock, tab_sports, tab_blog = st.tabs([
