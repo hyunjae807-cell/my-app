@@ -242,6 +242,62 @@ html, body, p, div:not([data-testid*="Icon"]), span:not([data-testid*="Icon"]), 
     align-items: center;
 }
 
+/* 미국장 주목 종목 카드 */
+.us-stock-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--card-border);
+    border-radius: 16px;
+    padding: 16px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: all 0.2s ease;
+}
+.us-stock-card:hover {
+    border-color: rgba(192, 132, 252, 0.4);
+    background: rgba(255, 255, 255, 0.05);
+    transform: translateY(-2px);
+}
+.us-stock-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 8px;
+}
+.us-stock-name {
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--text-primary);
+}
+.us-stock-ticker {
+    font-size: 12px;
+    color: #c4b5fd;
+    font-weight: 700;
+}
+.us-stock-tag {
+    display: inline-block;
+    background: rgba(168, 85, 247, 0.15);
+    border: 1px solid rgba(168, 85, 247, 0.3);
+    color: #d8b4fe;
+    padding: 2px 8px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 700;
+}
+.us-stock-price {
+    font-size: 20px;
+    font-weight: 900;
+    color: var(--text-primary);
+    margin: 4px 0;
+}
+.us-stock-reason {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+    margin-top: 6px;
+}
+
 /* 버튼 스타일 */
 .btn-action-primary {
     display: inline-block;
@@ -495,7 +551,6 @@ def save_location(loc_data):
     except Exception as e: pass
 
 def load_portfolio():
-    # 서버에 저장된 기존 portfolio.json이 키움 실제 단가와 다르면 실시간 자동 보정
     if os.path.exists(PORTFOLIO_FILE):
         try:
             with open(PORTFOLIO_FILE, "r", encoding="utf-8") as f:
@@ -507,7 +562,6 @@ def load_portfolio():
                         if matched:
                             item["매입단가"] = matched["매입단가"]
                             item["보유수량"] = matched["보유수량"]
-                            # 구버전의 오류 단가(17,975원 등) 실시간 자동 정정
                             if t == "161510" or "PLUS" in item.get("종목명", ""):
                                 item["현재가"] = 25575.0
                             elif t == "395160" or "AI반도체" in item.get("종목명", ""):
@@ -630,12 +684,27 @@ def save_blog_posts(posts):
             json.dump(posts, f, ensure_ascii=False, indent=2)
     except Exception as e: pass
 
-# 7. [한국거래소 & 네이버 금융 실시간 정밀 시세 엔진 - 초단위 라이브 폴링]
+# 7. [한국거래소 & 네이버 금융 & 글로벌 실시간 시세 엔진]
 @st.cache_data(ttl=2)
 def get_live_market_data(ticker_symbol, fallback_price=None):
     clean_code = str(ticker_symbol).replace(".KS", "").replace(".KQ", "").strip()
 
-    # 1순위: 네이버 증권 모바일 공식 실시간 API (키움증권과 100% 동일)
+    # 1. 환율 (USD/KRW) 특수 처리 (네이버 환율 API 1순위)
+    if clean_code in ("USDKRW=X", "KRW=X", "USD/KRW", "FX_USDKRW"):
+        try:
+            url_fx = "https://m.stock.naver.com/front-api/marketIndex/prices?category=exchange&reutersCode=FX_USDKRW"
+            req_fx = urllib.request.Request(url_fx, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req_fx, timeout=2.5) as resp:
+                fx_json = json.loads(resp.read().decode('utf-8'))
+                fx_result = fx_json.get("result", [])
+                if fx_result:
+                    cur_fx = float(str(fx_result[0].get("closePrice", "1380")).replace(",", ""))
+                    delta_fx = float(str(fx_result[0].get("fluctuationsRatio", "0.0")).replace(",", ""))
+                    return cur_fx, delta_fx
+        except Exception:
+            pass
+
+    # 2. 국내 주식 및 ETF (6자리 숫자) : 네이버 증권 모바일 공식 실시간 API
     if clean_code.isdigit() and len(clean_code) == 6:
         try:
             url = f"https://m.stock.naver.com/api/stock/{clean_code}/basic"
@@ -654,22 +723,7 @@ def get_live_market_data(ticker_symbol, fallback_price=None):
         except Exception:
             pass
 
-        # 2순위: 네이버 PC 실시간 Polling
-        try:
-            url_pc = f"https://polling.finance.naver.com/api/realtime/hasItem?itemCodes={clean_code}"
-            req_pc = urllib.request.Request(url_pc, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req_pc, timeout=2.5) as resp:
-                p_data = json.loads(resp.read().decode('utf-8'))
-                datas = p_data.get("result", {}).get("areas", [{}])[0].get("datas", [])
-                if datas:
-                    cur_p = float(datas[0].get("nv", 0))
-                    delta_pct = float(datas[0].get("cr", 0.0))
-                    if cur_p > 0:
-                        return cur_p, delta_pct
-        except Exception:
-            pass
-
-    # 3순위: 미국 주식 또는 해외 지수 (yfinance)
+    # 3. 미국 주식 및 글로벌 지수 (yfinance: ^SOX, ^GSPC, ^KS11 등)
     try:
         yf_symbol = ticker_symbol
         if clean_code.isdigit() and len(clean_code) == 6 and not (yf_symbol.endswith(".KS") or yf_symbol.endswith(".KQ")):
@@ -686,7 +740,7 @@ def get_live_market_data(ticker_symbol, fallback_price=None):
     except Exception:
         pass
 
-    # 4순위: 휴장일/오프라인 시 기준 종가
+    # 4. 휴장일/오프라인 시 기준 종가
     if fallback_price is not None:
         return float(fallback_price), 0.0
 
@@ -694,7 +748,7 @@ def get_live_market_data(ticker_symbol, fallback_price=None):
 
 def get_batch_market_data(portfolio_items):
     results = {}
-    with concurrent.futures.ThreadPoolExecutor(max_workers=min(12, len(portfolio_items) + 1)) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(14, len(portfolio_items) + 1)) as executor:
         future_to_item = {
             executor.submit(get_live_market_data, item.get("티커", ""), item.get("현재가", item.get("매입단가"))): item.get("티커", "")
             for item in portfolio_items
@@ -763,7 +817,56 @@ def compute_portfolio_summary(portfolio, live_prices_map, usd_krw=1380.0, cash_b
         "calculated_rows": calculated_rows
     }
 
-# 9. 네이버 블로그 방문자 수 및 RSS 조회
+# 9. [미국장 요일별 순환 주목 종목 풀]
+def get_daily_us_spotlight_stocks():
+    today_weekday = datetime.now(KST).weekday()
+    spotlight_pools = {
+        0: [ # 월요일: 글로벌 AI & 빅테크 코어
+            {"ticker": "NVDA", "name": "엔비디아", "tag": "AI 가속기 대장", "reason": "차세대 블랙웰 GPU 공급 및 데이터센터 AI 수요 지속"},
+            {"ticker": "MSFT", "name": "마이크로소프트", "tag": "클라우드 AI", "reason": "애저(Azure) AI 클라우드 인프라 매출 가속화"},
+            {"ticker": "AAPL", "name": "애플", "tag": "온디바이스 AI", "reason": "애플 인텔리전스 탑재 신제품 교체 사이클 도래"},
+            {"ticker": "TSM", "name": "TSMC", "tag": "파운드리 1위", "reason": "3나노/2나노 첨단 반도체 공정 가동률 풀가동"}
+        ],
+        1: [ # 화요일: 차세대 반도체 & 커스텀 실리콘
+            {"ticker": "AVGO", "name": "브로드컴", "tag": "AI ASIC 커스텀", "reason": "빅테크 맞춤형 가속기 및 네트워킹 스위치 수주 급증"},
+            {"ticker": "AMD", "name": "AMD", "tag": "MI300 시리즈", "reason": "데이터센터용 GPU 및 AI PC 라이젠 라인업 확대"},
+            {"ticker": "ARM", "name": "ARM 홀딩스", "tag": "칩 아키텍처", "reason": "스마트폰 및 PC 전력 효율 AI 아키텍처 로열티 증가"},
+            {"ticker": "QCOM", "name": "퀄컴", "tag": "AI PC & 모바일", "reason": "스냅드래곤 X 엘리트 탑재 코파일럿+ PC 시장 진입"}
+        ],
+        2: [ # 수요일: 클라우드 & 소프트웨어 플랫폼
+            {"ticker": "AMZN", "name": "아마존", "tag": "AWS & 물류", "reason": "AWS 클라우드 마진 개선 및 전자상거래 물류 효율화"},
+            {"ticker": "GOOGL", "name": "알파벳 (구글)", "tag": "제미나이 AI", "reason": "검색 광고 견조 및 기업용 제미나이 AI 생태계 확장"},
+            {"ticker": "META", "name": "메타", "tag": "오픈소스 AI", "reason": "라마(Llama) 생태계 확장 및 AI 기반 광고 타겟팅 고도화"},
+            {"ticker": "PLTR", "name": "팔란티어", "tag": "기업용 AI 플랫폼", "reason": "AIP 플랫폼 민간 엔터프라이즈 고객 수 급증"}
+        ],
+        3: [ # 목요일: 고성능 하드웨어 & 모빌리티
+            {"ticker": "TSLA", "name": "테슬라", "tag": "자율주행 FSD", "reason": "자율주행 FSD 고도화 및 로보택시 비전 구체화"},
+            {"ticker": "MU", "name": "마이크론", "tag": "HBM 메모리", "reason": "차세대 HBM3E 공급 확대 및 메모리 업황 회복"},
+            {"ticker": "SMCI", "name": "슈퍼마이크로", "tag": "액체냉각 서버", "reason": "AI 데이터센터 수랭식 랙 인프라 수요 견조"},
+            {"ticker": "ASML", "name": "ASML", "tag": "EUV 노광장비", "reason": "High-NA EUV 노광장비 독점 및 수주 모멘텀"}
+        ],
+        4: [ # 금요일: 헬스케어 & 고배당 성장
+            {"ticker": "LLY", "name": "일라이 릴리", "tag": "비만치료제", "reason": "마운자로/젭바운드 글로벌 수요 폭증 및 신약 승인"},
+            {"ticker": "SCHD", "name": "슈왑 US 디비던드", "tag": "고배당 대표 ETF", "reason": "우량 배당성장주 포트폴리오로 하방 방어력 우수"},
+            {"ticker": "COST", "name": "코스트코", "tag": "필수소비재", "reason": "압도적인 멤버십 갱신율 및 안정적 현금흐름 창출"},
+            {"ticker": "ISRG", "name": "인튜이티브 서지컬", "tag": "의료 로봇", "reason": "다빈치 5 차세대 수술 로봇 글로벌 도입 확대"}
+        ],
+        5: [ # 토요일: 주간 모멘텀 톱픽
+            {"ticker": "NVDA", "name": "엔비디아", "tag": "주간 톱 모멘텀", "reason": "글로벌 AI 인프라 투자 지속 및 기관 매수세"},
+            {"ticker": "LLY", "name": "일라이 릴리", "tag": "헬스케어 대장", "reason": "바이오 헬스케어 섹터 주도주 모멘텀"},
+            {"ticker": "PLTR", "name": "팔란티어", "tag": "AI 소프트웨어", "reason": "상업 부문 매출 고성장 및 탄탄한 재무구조"},
+            {"ticker": "AVGO", "name": "브로드컴", "tag": "AI 통신·ASIC", "reason": "엔터프라이즈 네트워킹 및 커스텀 가속기 성장"}
+        ],
+        6: [ # 일요일: 차주 개장 준비 종목
+            {"ticker": "AAPL", "name": "애플", "tag": "글로벌 시총 1위", "reason": "하반기 신제품 라인업 및 서비스 마진 확대"},
+            {"ticker": "MSFT", "name": "마이크로소프트", "tag": "AI 엔터프라이즈", "reason": "B2B 코파일럿 구독 도입률 지속 증가"},
+            {"ticker": "TSM", "name": "TSMC", "tag": "글로벌 파운드리", "reason": "글로벌 빅테크 첨단 패키징 주문 집중"},
+            {"ticker": "AMZN", "name": "아마존", "tag": "클라우드·AI", "reason": "생성형 AI 서비스 탑재 AWS 매출 성장"}
+        ]
+    }
+    return spotlight_pools.get(today_weekday, spotlight_pools[0])
+
+# 10. 네이버 블로그 방문자 수 및 RSS 조회
 @st.cache_data(ttl=300)
 def fetch_naver_blog_live_data(blog_id="early_leave_lab"):
     visitor_records = []
@@ -811,7 +914,7 @@ def fetch_naver_blog_live_data(blog_id="early_leave_lab"):
         "rss_post_count": total_posts_rss
     }
 
-# 10. 실시간 위치 기반 날씨 데이터 조회
+# 11. 실시간 위치 기반 날씨 데이터 조회
 @st.cache_data(ttl=1800)
 def get_current_weather(lat=37.2410, lon=127.1775, default_name="용인시"):
     try:
@@ -853,7 +956,7 @@ def fetch_news_feed(query, max_results=8):
     except Exception:
         return []
 
-# 11. AI 호출 엔진
+# 12. AI 호출 엔진
 def call_gemini_api(prompt_text, api_key, system_instruction=None, image_bytes=None, chat_contents=None):
     if not api_key or not api_key.strip():
         return None, "Gemini API Key를 입력해 주세요."
@@ -988,7 +1091,7 @@ def ask_gemini_chat(chat_history, user_msg, portfolio_items, api_key):
 
 
 # =============================================================
-# ⭐ [실시간 라이브 포트폴리오 렌더링 프래그먼트]
+# ⭐ [실시간 라이브 포트폴리오 렌더링]
 # =============================================================
 
 def render_live_portfolio_content():
@@ -1015,6 +1118,7 @@ def render_live_portfolio_content():
         st.metric("총 매입원금", f"{summary['total_buy_krw']:,.0f}원", f"총 {len(user_portfolio)}개 종목")
 
     st.dataframe(pd.DataFrame(summary["calculated_rows"]), use_container_width=True)
+
 
 # -------------------------------------------------------------
 # 1. [데일리 허브 모듈]
@@ -1151,8 +1255,9 @@ def render_daily_hub():
                     save_todos(current_todos)
                     st.rerun()
 
+
 # -------------------------------------------------------------
-# 2. [주식 & 금융 허브 모듈 - 실시간 초단위 자동 계산]
+# 2. [주식 & 금융 허브 모듈 - 필라델피아 반도체/환율 & 미국장 데일리 주목 종목]
 # -------------------------------------------------------------
 def render_stock_hub():
     sub_s1, sub_s2, sub_s3, sub_s4, sub_s5 = st.tabs([
@@ -1200,21 +1305,70 @@ def render_stock_hub():
                             st.rerun()
 
     with sub_s2:
-        market_tickers = ["^KS11", "^GSPC", "^IXIC", "BZ=F", "005930", "000660", "005380", "NVDA"]
-        m_items = [{"티커": t, "현재가": 0.0} for t in market_tickers]
+        # 1. 글로벌 4대 핵심 지표 (코스피, S&P 500, 필라델피아 반도체, 원/달러 환율)
+        market_tickers = ["^KS11", "^GSPC", "^SOX", "USDKRW=X"]
+        m_items = [
+            {"티커": "^KS11", "현재가": 6977.94},
+            {"티커": "^GSPC", "현재가": 5554.20},
+            {"티커": "^SOX", "현재가": 5234.50},
+            {"티커": "USDKRW=X", "현재가": 1380.0}
+        ]
         m_prices = get_batch_market_data(m_items)
         kospi_p, kospi_d = m_prices.get("^KS11", (None, None))
         sp500_p, sp500_d = m_prices.get("^GSPC", (None, None))
-        samsung_p, samsung_d = m_prices.get("005930", (None, None))
-        nvda_p, nvda_d = m_prices.get("NVDA", (None, None))
-        
+        sox_p, sox_d = m_prices.get("^SOX", (None, None))
+        fx_p, fx_d = m_prices.get("USDKRW=X", (None, None))
+
+        st.markdown("##### 🌐 글로벌 주요 지수 및 환율")
         c1, c2 = st.columns(2)
         with c1:
             st.metric("코스피 (KOSPI)", f"{kospi_p:,.2f}" if kospi_p else "6,977.94", f"{kospi_d:+.2f}%" if kospi_d else "+2.42%")
-            st.metric("삼성전자", f"{samsung_p:,.0f}원" if samsung_p else "84,500원", f"{samsung_d:+.2f}%" if samsung_d else "+2.43%")
+            st.metric("필라델피아 반도체 (SOX)", f"{sox_p:,.2f}" if sox_p else "5,234.50", f"{sox_d:+.2f}%" if sox_d else "+1.85%")
         with c2:
             st.metric("S&P 500", f"{sp500_p:,.2f}" if sp500_p else "5,554.20", f"{sp500_d:+.2f}%" if sp500_d else "-0.20%")
-            st.metric("엔비디아 (NVDA)", f"${nvda_p:.2f}" if nvda_p else "$224.92", f"{nvda_d:+.2f}%" if nvda_d else "-0.18%")
+            st.metric("원/달러 환율 (USD/KRW)", f"{fx_p:,.1f}원" if fx_p else "1,385.5원", f"{fx_d:+.2f}%" if fx_d else "-0.25%")
+
+        st.markdown("---")
+
+        # 2. 미국장 오늘의 주목 종목 (요일별 자동 순환 & 실시간 시세 연동)
+        today_us_stocks = get_daily_us_spotlight_stocks()
+        us_tickers_for_batch = [{"티커": s["ticker"], "현재가": 0.0} for s in today_us_stocks]
+        us_prices_map = get_batch_market_data(us_tickers_for_batch)
+
+        today_name = ["월요일 (글로벌 AI·빅테크 코어)", "화요일 (차세대 반도체 & 커스텀 실리콘)", "수요일 (클라우드 & AI 소프트웨어)", "목요일 (고성능 하드웨어 & 모빌리티)", "금요일 (헬스케어 & 배당 성장)", "토요일 (주간 톱 모멘텀 픽)", "일요일 (차주 개장 준비 픽)"][datetime.now(KST).weekday()]
+
+        st.markdown(f"""
+        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px;">
+            <span style="font-size: 17px; font-weight: 800; color: #f8fafc;">🇺🇸 오늘 미국장 주목 종목</span>
+            <span style="font-size: 13px; font-weight: 600; color: #c4b5fd;">{today_name}</span>
+        </div>
+        """, unsafe_allow_html=True)
+
+        cols_us = st.columns(len(today_us_stocks))
+        for idx, stock_info in enumerate(today_us_stocks):
+            t_symbol = stock_info["ticker"]
+            p_val, p_delta = us_prices_map.get(t_symbol, (None, None))
+            price_str = f"${p_val:.2f}" if p_val else "실시간 조회"
+            delta_str = f"{p_delta:+.2f}%" if p_delta is not None else ""
+            delta_class = "pill-up" if (p_delta and p_delta >= 0) else "pill-down"
+
+            with cols_us[idx]:
+                st.markdown(f"""
+                <div class="us-stock-card">
+                    <div>
+                        <div class="us-stock-header">
+                            <div>
+                                <div class="us-stock-name">{stock_info['name']}</div>
+                                <div class="us-stock-ticker">{stock_info['ticker']}</div>
+                            </div>
+                            <span class="us-stock-tag">{stock_info['tag']}</span>
+                        </div>
+                        <div class="us-stock-price">{price_str}</div>
+                        <div style="font-size: 12px; font-weight: 700;"><span class="{delta_class}">{delta_str}</span></div>
+                    </div>
+                    <div class="us-stock-reason">{stock_info['reason']}</div>
+                </div>
+                """, unsafe_allow_html=True)
 
     with sub_s3:
         my_stock_names = [item["종목명"] for item in user_portfolio]
@@ -1299,6 +1453,7 @@ def render_stock_hub():
                     st.session_state.chat_messages.append({"role": "assistant", "content": reply})
                     st.rerun()
 
+
 # -------------------------------------------------------------
 # 3. [스포츠 허브 모듈]
 # -------------------------------------------------------------
@@ -1356,6 +1511,7 @@ def render_sports_hub():
                 if idx < len(my_teams)-1 and st.button("아래로", key=f"d_{idx}"):
                     my_teams[idx], my_teams[idx+1] = my_teams[idx+1], my_teams[idx]
                     save_sports_teams(my_teams); st.rerun()
+
 
 # -------------------------------------------------------------
 # 4. [블로그 관리 모듈]
