@@ -204,14 +204,28 @@ html, body, p, span, div, label, li {
     color: white !important;
     text-decoration: none;
     font-weight: 800;
-    padding: 10px 18px;
+    padding: 8px 16px;
     border-radius: 10px;
-    font-size: 15px;
-    margin-top: 10px;
+    font-size: 14px;
+    margin-top: 8px;
+    margin-right: 8px;
     box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
 }
 .blog-btn:hover {
     background: linear-gradient(135deg, #059669 0%, #047857 100%);
+}
+
+.blog-btn-secondary {
+    display: inline-block;
+    background: rgba(255, 255, 255, 0.15);
+    color: white !important;
+    text-decoration: none;
+    font-weight: 700;
+    padding: 8px 16px;
+    border-radius: 10px;
+    font-size: 14px;
+    margin-top: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 [data-testid="stMetricValue"] {
@@ -293,7 +307,7 @@ DEFAULT_BLOG_STATS = {
     "target_monthly_income": 300000,
     "current_monthly_income": 0,
     "manual_today_visitors": 0,
-    "manual_total_visitors": 0
+    "visitor_history": []
 }
 
 # 예시 데이터 완전 삭제 (빈 목록)
@@ -452,16 +466,21 @@ def save_blog_posts(posts):
     except Exception as e: pass
 
 # 7. [네이버 블로그 실시간 방문자 수 및 포스팅 데이터 조회 엔진]
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=300)
 def fetch_naver_blog_live_data(blog_id="early_leave_lab"):
     visitor_records = []
     today_vis = 0
     total_posts_rss = 0
-    recent_rss_posts = []
 
     try:
         url_vis = f"https://blog.naver.com/NVisitorgp4Ajax.nhn?blogId={blog_id}"
-        req_vis = urllib.request.Request(url_vis, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+        req_vis = urllib.request.Request(
+            url_vis,
+            headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Referer': f'https://blog.naver.com/{blog_id}'
+            }
+        )
         with urllib.request.urlopen(req_vis, timeout=3) as resp:
             xml_data = resp.read().decode('utf-8')
             root = ET.fromstring(xml_data)
@@ -485,19 +504,13 @@ def fetch_naver_blog_live_data(blog_id="early_leave_lab"):
             if channel is not None:
                 items = channel.findall('item')
                 total_posts_rss = len(items)
-                for it in items[:6]:
-                    t = it.find('title').text if it.find('title') is not None else "제목 없음"
-                    l = it.find('link').text if it.find('link') is not None else f"https://m.blog.naver.com/{blog_id}"
-                    p = it.find('pubDate').text if it.find('pubDate') is not None else ""
-                    recent_rss_posts.append({"title": t, "link": l, "date": p[:16] if p else ""})
     except Exception:
         pass
 
     return {
         "today_visitors": today_vis,
         "visitor_history": visitor_records,
-        "rss_post_count": total_posts_rss,
-        "recent_published_posts": recent_rss_posts
+        "rss_post_count": total_posts_rss
     }
 
 # 8. 실시간 위치 기반 날씨 데이터 조회
@@ -1136,7 +1149,7 @@ def render_sports_hub():
                     save_sports_teams(my_teams); st.rerun()
 
 # -------------------------------------------------------------
-# 4. ✍️ [블로그 관리 모듈 - 실시간 통계 & 포스팅 관리장]
+# 4. ✍️ [블로그 관리 모듈 - 실시간 통계 & 1초 빠른 동기화 대시보드]
 # -------------------------------------------------------------
 def render_blog_hub():
     st.subheader("✍️ 내 네이버 블로그 실시간 대시보드")
@@ -1145,14 +1158,24 @@ def render_blog_hub():
     blog_posts = load_blog_posts()
     blog_id = blog_stats.get("blog_id", "early_leave_lab")
 
-    # 1) 실시간 네이버 블로그 데이터 가져오기
+    # 1) 네이버 블로그 실시간 데이터 가져오기
     live_data = fetch_naver_blog_live_data(blog_id)
     today_visitors_live = live_data.get("today_visitors", 0)
     history_vis = live_data.get("visitor_history", [])
     total_posts_rss = live_data.get("rss_post_count", 0)
 
-    display_today_vis = max(today_visitors_live, blog_stats.get("manual_today_visitors", 0))
+    # 수동 설정값과 라이브값 중 우선 적용
+    display_today_vis = today_visitors_live if today_visitors_live > 0 else blog_stats.get("manual_today_visitors", 0)
     display_total_posts = len(blog_posts) if len(blog_posts) > 0 else total_posts_rss
+
+    # 저장된 방문자 히스토리가 있으면 사용
+    stored_hist = blog_stats.get("visitor_history", [])
+    if history_vis:
+        final_history = history_vis
+    elif stored_hist:
+        final_history = stored_hist
+    else:
+        final_history = []
 
     # 🌟 내 블로그 브랜드 카드 & 바로가기 링크
     st.markdown(f"""
@@ -1166,7 +1189,10 @@ def render_blog_hub():
         </div>
         <div style="margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.15); padding-top: 10px;">
             <a class="blog-btn" href="https://m.blog.naver.com/{blog_id}" target="_blank">
-                🌐 칼퇴연구소 네이버 블로그 바로가기 ↗️
+                🌐 내 네이버 블로그 바로가기 ↗️
+            </a>
+            <a class="blog-btn-secondary" href="https://stat.blog.naver.com" target="_blank">
+                📊 네이버 실시간 통계센터 바로가기 ↗️
             </a>
         </div>
     </div>
@@ -1179,17 +1205,46 @@ def render_blog_hub():
 
     c_b1, c_b2, c_b3, c_b4 = st.columns(4)
     with c_b1:
-        st.metric("오늘 방문자 수", f"{display_today_vis:,}명", "실시간 연동")
+        st.metric("오늘 방문자 수", f"{display_today_vis:,}명", "네이버 실시간 통계")
     with c_b2:
-        st.metric("총 포스팅 수", f"{display_total_posts:,}편", f"관리장 {len(blog_posts)}개")
+        st.metric("총 포스팅 수", f"{display_total_posts:,}편", f"관리 대장: {len(blog_posts)}편")
     with c_b3:
         st.metric("애드포스트 수익", f"{curr_inc:,.0f}원", f"목표 {target_inc:,.0f}원")
     with c_b4:
         st.metric("수익 목표 달성률", f"{achieve_rate:.1f}%")
 
-    # 📈 최근 일별 방문자 수 추이 차트 (네이버 연동 데이터)
-    if history_vis:
-        df_vis = pd.DataFrame(history_vis)
+    # ⚡ 오늘자 방문자 수 & 애드포스트 1초 간편 업데이트
+    with st.expander("⚡ 오늘 방문자 수 & 애드포스트 수익 1초 간편 갱신", expanded=False):
+        st.caption("💡 네이버 블로그는 PC 관리 화면에서 [방문자수 위젯]이 켜져 있어야 외부 조회가 가능하며, 해외 클라우드 서버 특성상 조회가 지연될 경우 아래에 직접 입력하시면 즉시 차트와 대시보드에 반영됩니다.")
+        with st.form("quick_blog_sync_form"):
+            col_q1, col_q2 = st.columns(2)
+            with col_q1:
+                q_vis = st.number_input("오늘 실제 방문자 수 (명)", value=int(display_today_vis), step=10)
+            with col_q2:
+                q_inc = st.number_input("이번 달 현재 애드포스트 수익 (원)", value=int(curr_inc), step=10000)
+            if st.form_submit_button("통계 갱신 및 차트 반영 💾"):
+                blog_stats["manual_today_visitors"] = int(q_vis)
+                blog_stats["current_monthly_income"] = int(q_inc)
+                
+                # 방문자 히스토리에 오늘 날짜 자동 기록
+                today_tag = datetime.now(KST).strftime('%m/%d')
+                curr_hist = blog_stats.get("visitor_history", [])
+                found = False
+                for it in curr_hist:
+                    if it.get("날짜") == today_tag:
+                        it["방문자수"] = int(q_vis)
+                        found = True
+                        break
+                if not found:
+                    curr_hist.append({"날짜": today_tag, "방문자수": int(q_vis)})
+                blog_stats["visitor_history"] = curr_hist[-7:]
+                save_blog_stats(blog_stats)
+                st.success("방문자 수와 수익이 성공적으로 반영되었습니다!")
+                st.rerun()
+
+    # 📈 최근 일별 방문자 수 추이 차트
+    if final_history:
+        df_vis = pd.DataFrame(final_history)
         fig_vis = go.Figure()
         fig_vis.add_trace(go.Bar(
             x=df_vis['날짜'],
@@ -1199,19 +1254,19 @@ def render_blog_hub():
             textposition='auto'
         ))
         fig_vis.update_layout(
-            title="📊 최근 일별 방문자 수 추이 (네이버 실시간 통계)",
+            title="📊 최근 일별 방문자 수 추이",
             paper_bgcolor='rgba(0,0,0,0)',
             plot_bgcolor='rgba(0,0,0,0)',
             font=dict(color='#f8fafc'),
             margin=dict(l=10, r=10, t=40, b=20),
-            height=250
+            height=240
         )
         st.plotly_chart(fig_vis, use_container_width=True)
 
-    sub_tab_p, sub_tab_s = st.tabs(["📋 포스팅 관리 대장", "⚙️ 블로그 정보 & 통계 설정"])
+    sub_tab_p, sub_tab_s = st.tabs(["📋 포스팅 관리 대장", "⚙️ 블로그 정보 & 목표 설정"])
 
     # ---------------------------------------------------------
-    # 서브탭 1: 포스팅 관리 대장 (예시 데이터 완전 삭제)
+    # 서브탭 1: 포스팅 관리 대장
     # ---------------------------------------------------------
     with sub_tab_p:
         st.markdown("##### 📋 내 포스팅 관리 대장")
@@ -1267,22 +1322,20 @@ def render_blog_hub():
                         st.warning("포스팅 제목을 입력해주세요.")
 
     # ---------------------------------------------------------
-    # 서브탭 2: 블로그 정보 & 통계 수동 보정 설정
+    # 서브탭 2: 블로그 정보 & 목표 설정
     # ---------------------------------------------------------
     with sub_tab_s:
-        st.markdown("##### ⚙️ 블로그 정보 및 애드포스트 수익 설정")
+        st.markdown("##### ⚙️ 블로그 정보 및 애드포스트 목표 설정")
         with st.form("edit_blog_info_form"):
             in_blog_id = st.text_input("네이버 블로그 ID", value=blog_id)
             in_target_inc = st.number_input("목표 월 애드포스트 수익(원)", value=int(target_inc), step=50000)
             in_curr_inc = st.number_input("이번 달 현재 애드포스트 수익(원)", value=int(curr_inc), step=10000)
-            in_man_today_vis = st.number_input("오늘 방문자 수 (수기 보정용)", value=int(blog_stats.get("manual_today_visitors", 0)), step=10)
             
             if st.form_submit_button("설정 저장하기"):
                 blog_stats["blog_id"] = in_blog_id.strip()
                 blog_stats["blog_url"] = f"https://m.blog.naver.com/{in_blog_id.strip()}"
                 blog_stats["target_monthly_income"] = int(in_target_inc)
                 blog_stats["current_monthly_income"] = int(in_curr_inc)
-                blog_stats["manual_today_visitors"] = int(in_man_today_vis)
                 save_blog_stats(blog_stats)
                 st.success("블로그 설정이 저장되었습니다!")
                 st.rerun()
