@@ -562,6 +562,7 @@ DEFAULT_LOCATION = {
 }
 
 LOCATION_PRESETS = {
+    "경기도 화성시": {"lat": 37.1995, "lon": 126.8315, "name": "화성시"},
     "경기도 용인시": {"lat": 37.2410, "lon": 127.1775, "name": "용인시"},
     "경기도 성남시 (분당/판교)": {"lat": 37.4200, "lon": 127.1265, "name": "성남시"},
     "서울특별시 강남구": {"lat": 37.4979, "lon": 127.0276, "name": "서울 강남"},
@@ -905,7 +906,8 @@ def save_blog_posts(posts):
             json.dump(posts, f, ensure_ascii=False, indent=2)
     except Exception as e: pass
 
-@st.cache_data(ttl=1)
+# 🌟 2초 캐시 TTL로 3초마다 최신 시세 갱신
+@st.cache_data(ttl=2)
 def get_live_market_data(ticker_symbol, fallback_price=None):
     clean_code = str(ticker_symbol).replace(".KS", "").replace(".KQ", "").strip()
 
@@ -1212,7 +1214,6 @@ def call_gemini_api(prompt_text, api_key, system_instruction=None, image_bytes=N
     clean_key = str(api_key).strip().replace('"', '').replace("'", "")
     headers = {"Content-Type": "application/json"}
     
-    # 🌟 구버전 모델 제거 및 최신 활성 모델 목록 구성
     discovered = get_available_gemini_models(clean_key)
     candidate_models = discovered if discovered else ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro", "gemini-3.5-flash"]
     
@@ -1254,7 +1255,6 @@ def call_gemini_api(prompt_text, api_key, system_instruction=None, image_bytes=N
             sanitized_contents = [{"role": "user", "parts": [{"text": final_p}]}]
 
     last_err = ""
-    # 1차 시도: v1beta + 최신 모델 + systemInstruction
     for model_name in candidate_models:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={clean_key}"
         payload = {"contents": sanitized_contents}
@@ -1277,7 +1277,6 @@ def call_gemini_api(prompt_text, api_key, system_instruction=None, image_bytes=N
         except Exception as e:
             last_err = str(e)
             
-    # 2차 시도: 프롬프트에 시스템 지침 인라인 결합 폴백
     inline_contents = []
     for c in sanitized_contents:
         inline_parts = []
@@ -1391,9 +1390,10 @@ def ask_gemini_chat(chat_history, user_msg, portfolio_items, api_key):
 
 
 # =============================================================
-# ⭐ [실시간 라이브 포트폴리오 렌더링]
+# ⭐ [실시간 라이브 포트폴리오 렌더링 - 3초 주기 부분 자동 갱신]
 # =============================================================
 
+@st.fragment(run_every=3)
 def render_live_portfolio_content():
     user_settings = load_settings()
     user_portfolio = load_portfolio()
@@ -1618,8 +1618,9 @@ def render_daily_hub():
 
 
 # -------------------------------------------------------------
-# 2. [주식 & 금융 허브 모듈]
+# 2. [주식 & 금융 허브 모듈 - 3초 주기 부분 자동 갱신]
 # -------------------------------------------------------------
+@st.fragment(run_every=3)
 def render_live_market_overview_content():
     m_items = [
         {"티커": "^KS11", "현재가": 6977.94},
@@ -1696,7 +1697,7 @@ def render_stock_hub():
         st.markdown("""
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
             <div style="font-size: 16px; font-weight: 800; color: #f8fafc;">보유 자산 실시간 현황</div>
-            <div class="live-indicator"><span class="live-dot"></span>실시간 시세 자동 연동중</div>
+            <div class="live-indicator"><span class="live-dot"></span>3초 주기 자동 시세 연동중</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -1735,7 +1736,7 @@ def render_stock_hub():
         st.markdown("""
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
             <div style="font-size: 16px; font-weight: 800; color: #f8fafc;">글로벌 마켓 실시간 시황</div>
-            <div class="live-indicator"><span class="live-dot"></span>실시간 글로벌 시세 수신중</div>
+            <div class="live-indicator"><span class="live-dot"></span>3초 주기 글로벌 시세 수신중</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -2109,10 +2110,9 @@ if "saved_gemini_key" not in st.session_state:
 
 
 # =============================================================
-# [상단 헤더 네비게이션 & 4단 위젯 스트립]
+# [상단 헤더 네비게이션 & 4단 위젯 스트립 - 3초 주기 부분 자동 갱신]
 # =============================================================
 
-# 1) 헤더 바
 st.markdown("""
 <div class="mori-navbar">
     <div class="mori-brand-box">
@@ -2123,49 +2123,52 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# 2) 네이버/토스 스타일 상단 4단 위젯 스트립 (D-Day 실시간 자동 연산 적용)
-w_temp, w_desc, w_hum, w_loc = get_current_weather(
-    current_loc_data.get("lat", 37.2410),
-    current_loc_data.get("lon", 127.1775),
-    current_loc_data.get("name", "용인시")
-)
-m_items_top = [{"티커": "^KS11", "현재가": 6977.94}, {"티커": "^IXIC", "현재가": 26644.9}, {"티커": "000660", "현재가": 1667000.0}]
-m_prices_top = get_batch_market_data(m_items_top)
-kospi_val, kospi_del = m_prices_top.get("^KS11", (None, None))
-nasdaq_val, nasdaq_del = m_prices_top.get("^IXIC", (None, None))
+# 🌟 3초마다 상단 위젯 스트립만 독립적으로 자동 갱신
+@st.fragment(run_every=3)
+def render_top_widget_strip():
+    w_temp, w_desc, w_hum, w_loc = get_current_weather(
+        current_loc_data.get("lat", 37.2410),
+        current_loc_data.get("lon", 127.1775),
+        current_loc_data.get("name", "용인시")
+    )
+    m_items_top = [{"티커": "^KS11", "현재가": 6977.94}, {"티커": "^IXIC", "현재가": 26644.9}, {"티커": "000660", "현재가": 1667000.0}]
+    m_prices_top = get_batch_market_data(m_items_top)
+    kospi_val, kospi_del = m_prices_top.get("^KS11", (None, None))
+    nasdaq_val, nasdaq_del = m_prices_top.get("^IXIC", (None, None))
 
-kospi_txt = f"{kospi_val:,.1f}" if kospi_val else "6,977.9"
-kospi_d_txt = f"{kospi_del:+.2f}%" if kospi_del else "+2.42%"
-nasdaq_txt = f"{nasdaq_val:,.1f}" if nasdaq_val else "26,644.9"
-nasdaq_d_txt = f"{nasdaq_del:+.2f}%" if nasdaq_del else "-0.32%"
+    kospi_txt = f"{kospi_val:,.1f}" if kospi_val else "6,977.9"
+    kospi_d_txt = f"{kospi_del:+.2f}%" if kospi_del else "+2.42%"
+    nasdaq_txt = f"{nasdaq_val:,.1f}" if nasdaq_val else "26,644.9"
+    nasdaq_d_txt = f"{nasdaq_del:+.2f}%" if nasdaq_del else "-0.32%"
 
-# 실시간 D-Day 정보 취득
-w_d_title, w_d_sub, w_d_main, w_d_footer = get_top_widget_dday_info()
+    w_d_title, w_d_sub, w_d_main, w_d_footer = get_top_widget_dday_info()
 
-st.markdown(f"""
-<div class="widget-grid">
-    <div class="widget-card">
-        <div class="widget-header"><span>날씨</span><span>{w_loc}</span></div>
-        <div class="widget-main">{w_desc} {w_temp}</div>
-        <div class="widget-footer" style="color: #94a3b8;">습도 {w_hum}</div>
+    st.markdown(f"""
+    <div class="widget-grid">
+        <div class="widget-card">
+            <div class="widget-header"><span>날씨</span><span>{w_loc}</span></div>
+            <div class="widget-main">{w_desc} {w_temp}</div>
+            <div class="widget-footer" style="color: #94a3b8;">습도 {w_hum}</div>
+        </div>
+        <div class="widget-card">
+            <div class="widget-header"><span>코스피</span><span>KOSPI</span></div>
+            <div class="widget-main">{kospi_txt}</div>
+            <div class="widget-footer"><span class="{'pill-up' if '+' in kospi_d_txt else 'pill-down'}">{kospi_d_txt}</span></div>
+        </div>
+        <div class="widget-card">
+            <div class="widget-header"><span>나스닥 종합</span><span>NASDAQ</span></div>
+            <div class="widget-main">{nasdaq_txt}</div>
+            <div class="widget-footer"><span class="{'pill-up' if '+' in nasdaq_d_txt else 'pill-down'}">{nasdaq_d_txt}</span></div>
+        </div>
+        <div class="widget-card">
+            <div class="widget-header"><span>{w_d_title}</span><span>{w_d_sub}</span></div>
+            <div class="widget-main">{w_d_main}</div>
+            <div class="widget-footer" style="color: #94a3b8;">{w_d_footer}</div>
+        </div>
     </div>
-    <div class="widget-card">
-        <div class="widget-header"><span>코스피</span><span>KOSPI</span></div>
-        <div class="widget-main">{kospi_txt}</div>
-        <div class="widget-footer"><span class="{'pill-up' if '+' in kospi_d_txt else 'pill-down'}">{kospi_d_txt}</span></div>
-    </div>
-    <div class="widget-card">
-        <div class="widget-header"><span>나스닥 종합</span><span>NASDAQ</span></div>
-        <div class="widget-main">{nasdaq_txt}</div>
-        <div class="widget-footer"><span class="{'pill-up' if '+' in nasdaq_d_txt else 'pill-down'}">{nasdaq_d_txt}</span></div>
-    </div>
-    <div class="widget-card">
-        <div class="widget-header"><span>{w_d_title}</span><span>{w_d_sub}</span></div>
-        <div class="widget-main">{w_d_main}</div>
-        <div class="widget-footer" style="color: #94a3b8;">{w_d_footer}</div>
-    </div>
-</div>
-""", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
+
+render_top_widget_strip()
 
 
 # =============================================================
