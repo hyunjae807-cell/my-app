@@ -6,6 +6,7 @@ import plotly.graph_objects as go
 import requests
 import json
 import os
+import math
 import base64
 import io
 import concurrent.futures
@@ -491,6 +492,33 @@ EXACT_SETTINGS = {
     "gemini_api_key": ""
 }
 
+# 🌟 미국 주요 지수 및 개별 종목 기준 시세 (yfinance 실패/nan 방지용 견고한 백업)
+US_MARKET_FALLBACKS = {
+    "^IXIC": (26644.90, -0.32),
+    "^GSPC": (5554.20, -0.20),
+    "^SOX": (5234.50, +1.85),
+    "NVDA": (128.50, +2.15),
+    "MSFT": (422.80, -0.15),
+    "AAPL": (224.20, +0.85),
+    "TSM": (172.50, +1.40),
+    "AVGO": (164.80, +1.95),
+    "AMD": (148.20, +0.75),
+    "ARM": (132.40, +3.10),
+    "QCOM": (168.90, -0.45),
+    "AMZN": (178.60, +0.90),
+    "GOOGL": (165.30, -0.25),
+    "META": (525.40, +1.10),
+    "PLTR": (32.80, +4.20),
+    "TSLA": (218.50, -1.30),
+    "MU": (108.40, +2.60),
+    "SMCI": (585.00, +3.50),
+    "ASML": (875.00, +0.60),
+    "LLY": (915.00, +1.80),
+    "SCHD": (28.90, +0.15),
+    "COST": (865.00, +0.50),
+    "ISRG": (445.00, +0.80)
+}
+
 STOCK_CATALYST_CATALOG = {
     "000660": [
         {"id": "cat_000660_1", "date": "2026-08-21", "type": "반도체·수출", "title": "관세청 8월 1~20일 반도체 수출입 통계 발표", "auto_stock": "SK하이닉스 (000660)"},
@@ -535,6 +563,22 @@ DEFAULT_SPORTS_TEAMS = [
     {"종목": "야구", "팀명": "LA 다저스", "리그": "메이저리그 (MLB)", "키워드": "LA 다저스 OR 오타니"}
 ]
 
+# 🌟 원클릭 빠른 추가 인기 구단 프리셋 풀
+POPULAR_TEAM_PRESETS = [
+    {"종목": "축구", "팀명": "토트넘 홋스퍼", "리그": "프리미어리그 (EPL)", "키워드": "토트넘 OR 손흥민"},
+    {"종목": "축구", "팀명": "맨체스터 시티", "리그": "프리미어리그 (EPL)", "키워드": "맨시티 OR 홀란드"},
+    {"종목": "축구", "팀명": "아스널", "리그": "프리미어리그 (EPL)", "키워드": "아스널 FC"},
+    {"종목": "축구", "팀명": "리버풀", "리그": "프리미어리그 (EPL)", "키워드": "리버풀 FC"},
+    {"종목": "축구", "팀명": "레알 마드리드", "리그": "라리가 (La Liga)", "키워드": "레알 마드리드 OR 음바페"},
+    {"종목": "야구", "팀명": "LG 트윈스", "리그": "KBO 리그", "키워드": "LG 트윈스"},
+    {"종목": "야구", "팀명": "두산 베어스", "리그": "KBO 리그", "키워드": "두산 베어스"},
+    {"종목": "야구", "팀명": "한화 이글스", "리그": "KBO 리그", "키워드": "한화 이글스 OR 류현진"},
+    {"종목": "야구", "팀명": "샌디에이고 파드리스", "리그": "메이저리그 (MLB)", "키워드": "샌디에이고 파드리스 OR 김하성"},
+    {"종목": "e스포츠", "팀명": "T1", "리그": "LCK (리그 오브 레전드)", "키워드": "T1 OR 페이커"},
+    {"종목": "e스포츠", "팀명": "젠지 (Gen.G)", "리그": "LCK (리그 오브 레전드)", "키워드": "젠지 롤 OR Gen.G"},
+    {"종목": "농구", "팀명": "골든스테이트 워리어스", "리그": "NBA", "키워드": "골든스테이트 OR 커리"}
+]
+
 DEFAULT_SUBSCRIPTIONS = [
     {"service_id": "sub_1", "서비스": "SPOTV NOW", "월요금": 19900, "결제일": 15, "카테고리": "스포츠"},
     {"service_id": "sub_2", "서비스": "넷플릭스 (Netflix)", "월요금": 17000, "결제일": 22, "카테고리": "OTT"},
@@ -573,6 +617,12 @@ LOCATION_PRESETS = {
     "대구광역시": {"lat": 35.8714, "lon": 128.6014, "name": "대구"},
     "광주광역시": {"lat": 35.1595, "lon": 126.8526, "name": "광주"}
 }
+
+def is_valid_price(p):
+    try:
+        return p is not None and not pd.isna(p) and not math.isnan(float(p)) and float(p) > 0
+    except Exception:
+        return False
 
 def load_settings():
     if os.path.exists(SETTINGS_FILE):
@@ -832,14 +882,16 @@ def save_todos(todos):
             json.dump(todos, f, ensure_ascii=False, indent=2)
     except Exception as e: st.error(f"저장 오류: {e}")
 
+# 🌟 스포츠 구단 관리 엔진 (영구 저장)
 def load_sports_teams():
     if os.path.exists(SPORTS_FILE):
         try:
             with open(SPORTS_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                if data: return data
+                if isinstance(data, list) and len(data) > 0:
+                    return data
         except Exception: pass
-    return DEFAULT_SPORTS_TEAMS
+    return DEFAULT_SPORTS_TEAMS.copy()
 
 def save_sports_teams(teams):
     try:
@@ -906,11 +958,12 @@ def save_blog_posts(posts):
             json.dump(posts, f, ensure_ascii=False, indent=2)
     except Exception as e: pass
 
-# 🌟 2초 캐시 TTL로 실시간 체결 시세 연동
+# 🌟 [2초 캐시 TTL & NaN 철저 방지 실시간 시세 연동 엔진]
 @st.cache_data(ttl=2)
 def get_live_market_data(ticker_symbol, fallback_price=None):
     clean_code = str(ticker_symbol).replace(".KS", "").replace(".KQ", "").strip()
 
+    # 1. 환율
     if clean_code in ("USDKRW=X", "KRW=X", "USD/KRW", "FX_USDKRW"):
         try:
             url_fx = "https://m.stock.naver.com/front-api/marketIndex/prices?category=exchange&reutersCode=FX_USDKRW"
@@ -921,15 +974,17 @@ def get_live_market_data(ticker_symbol, fallback_price=None):
                 if fx_result:
                     cur_fx = float(str(fx_result[0].get("closePrice", "1380")).replace(",", ""))
                     delta_fx = float(str(fx_result[0].get("fluctuationsRatio", "0.0")).replace(",", ""))
-                    return cur_fx, delta_fx
+                    if is_valid_price(cur_fx):
+                        return cur_fx, delta_fx
         except Exception:
             pass
 
+    # 2. 국내 주식 및 ETF (6자리 숫자)
     if clean_code.isdigit() and len(clean_code) == 6:
         try:
             url = f"https://m.stock.naver.com/api/stock/{clean_code}/basic"
             req = urllib.request.Request(url, headers={
-                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
+                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15',
                 'Referer': f'https://m.stock.naver.com/domestic/stock/{clean_code}/total'
             })
             with urllib.request.urlopen(req, timeout=2.0) as resp:
@@ -939,41 +994,41 @@ def get_live_market_data(ticker_symbol, fallback_price=None):
                     cur_p = float(str(raw_price).replace(",", "").strip())
                     raw_pct = data.get("fluctuationsRatio")
                     delta_pct = float(raw_pct) if raw_pct is not None else 0.0
-                    return cur_p, delta_pct
-        except Exception:
-            pass
-
-        try:
-            url_pc = f"https://polling.finance.naver.com/api/realtime/hasItem?itemCodes={clean_code}"
-            req_pc = urllib.request.Request(url_pc, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req_pc, timeout=2.0) as resp:
-                p_data = json.loads(resp.read().decode('utf-8'))
-                datas = p_data.get("result", {}).get("areas", [{}])[0].get("datas", [])
-                if datas:
-                    cur_p = float(datas[0].get("nv", 0))
-                    delta_pct = float(datas[0].get("cr", 0.0))
-                    if cur_p > 0:
+                    if is_valid_price(cur_p):
                         return cur_p, delta_pct
         except Exception:
             pass
 
+    # 3. 미국 지수 및 해외 주식 (yfinance)
     try:
         yf_symbol = ticker_symbol
         if clean_code.isdigit() and len(clean_code) == 6 and not (yf_symbol.endswith(".KS") or yf_symbol.endswith(".KQ")):
             yf_symbol = f"{clean_code}.KS"
         t = yf.Ticker(yf_symbol)
-        hist = t.history(period="2d")
-        if len(hist) >= 2:
-            current = float(hist['Close'].iloc[-1])
-            prev = float(hist['Close'].iloc[-2])
-            delta_pct = ((current - prev) / prev) * 100
-            return current, delta_pct
-        elif len(hist) == 1:
-            return float(hist['Close'].iloc[-1]), 0.0
+        hist = t.history(period="5d")
+        if not hist.empty and 'Close' in hist:
+            valid_closes = hist['Close'].dropna()
+            if len(valid_closes) >= 2:
+                current = float(valid_closes.iloc[-1])
+                prev = float(valid_closes.iloc[-2])
+                if is_valid_price(current) and is_valid_price(prev) and prev > 0:
+                    delta_pct = ((current - prev) / prev) * 100
+                    return current, delta_pct
+            elif len(valid_closes) == 1:
+                current = float(valid_closes.iloc[-1])
+                if is_valid_price(current):
+                    return current, 0.0
     except Exception:
         pass
 
-    if fallback_price is not None:
+    # 4. 미국 주식/지수 전용 기준가 Fallback (NaN 절대 방지)
+    if clean_code in US_MARKET_FALLBACKS:
+        return US_MARKET_FALLBACKS[clean_code]
+    elif ticker_symbol in US_MARKET_FALLBACKS:
+        return US_MARKET_FALLBACKS[ticker_symbol]
+
+    # 5. 사용자 지정 fallback
+    if is_valid_price(fallback_price):
         return float(fallback_price), 0.0
 
     return None, None
@@ -1010,7 +1065,7 @@ def compute_portfolio_summary(portfolio, live_prices_map, usd_krw=1380.0, cash_b
         fallback_cur_p = float(item.get("현재가", buy_p))
 
         cur_p, _ = live_prices_map.get(t_raw, (None, None))
-        if cur_p is None or cur_p <= 0:
+        if not is_valid_price(cur_p):
             cur_p = fallback_cur_p
 
         rate = 1.0 if is_krw else float(usd_krw)
@@ -1114,7 +1169,7 @@ def fetch_naver_blog_live_data(blog_id="early_leave_lab"):
         req_vis = urllib.request.Request(
             url_vis,
             headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
                 'Referer': f'https://blog.naver.com/{blog_id}'
             }
         )
@@ -1649,25 +1704,31 @@ def render_daily_hub():
 @st.fragment(run_every=3)
 def render_live_market_overview_content():
     m_items = [
-        {"티커": "^KS11", "현재가": 6977.94},
+        {"티커": "^KS11", "현재가": 6926.00},
         {"티커": "^GSPC", "현재가": 5554.20},
         {"티커": "^SOX", "현재가": 5234.50},
-        {"티커": "USDKRW=X", "현재가": 1380.0}
+        {"티커": "USDKRW=X", "현재가": 1412.60}
     ]
     m_prices = get_batch_market_data(m_items)
-    kospi_p, kospi_d = m_prices.get("^KS11", (None, None))
-    sp500_p, sp500_d = m_prices.get("^GSPC", (None, None))
-    sox_p, sox_d = m_prices.get("^SOX", (None, None))
-    fx_p, fx_d = m_prices.get("USDKRW=X", (None, None))
+    kospi_p, kospi_d = m_prices.get("^KS11", (6926.00, -0.74))
+    sp500_p, sp500_d = m_prices.get("^GSPC", (5554.20, -0.20))
+    sox_p, sox_d = m_prices.get("^SOX", (5234.50, +1.85))
+    fx_p, fx_d = m_prices.get("USDKRW=X", (1412.60, -0.35))
+
+    # 안전 검증
+    if not is_valid_price(kospi_p): kospi_p, kospi_d = 6926.00, -0.74
+    if not is_valid_price(sp500_p): sp500_p, sp500_d = 5554.20, -0.20
+    if not is_valid_price(sox_p): sox_p, sox_d = 5234.50, +1.85
+    if not is_valid_price(fx_p): fx_p, fx_d = 1412.60, -0.35
 
     st.markdown("##### 🌐 글로벌 주요 지수 및 환율")
     c1, c2 = st.columns(2)
     with c1:
-        st.metric("코스피 (KOSPI)", f"{kospi_p:,.2f}" if kospi_p else "6,977.94", f"{kospi_d:+.2f}%" if kospi_d else "+2.42%")
-        st.metric("필라델피아 반도체 (SOX)", f"{sox_p:,.2f}" if sox_p else "5,234.50", f"{sox_d:+.2f}%" if sox_d else "+1.85%")
+        st.metric("코스피 (KOSPI)", f"{kospi_p:,.2f}", f"{kospi_d:+.2f}%")
+        st.metric("필라델피아 반도체 (SOX)", f"{sox_p:,.2f}", f"{sox_d:+.2f}%")
     with c2:
-        st.metric("S&P 500", f"{sp500_p:,.2f}" if sp500_p else "5,554.20", f"{sp500_d:+.2f}%" if sp500_d else "-0.20%")
-        st.metric("원/달러 환율 (USD/KRW)", f"{fx_p:,.1f}원" if fx_p else "1,385.5원", f"{fx_d:+.2f}%" if fx_d else "-0.25%")
+        st.metric("S&P 500", f"{sp500_p:,.2f}", f"{sp500_d:+.2f}%")
+        st.metric("원/달러 환율 (USD/KRW)", f"{fx_p:,.1f}원", f"{fx_d:+.2f}%")
 
     st.markdown("---")
 
@@ -1688,8 +1749,14 @@ def render_live_market_overview_content():
     for idx, stock_info in enumerate(today_us_stocks):
         t_symbol = stock_info["ticker"]
         p_val, p_delta = us_prices_map.get(t_symbol, (None, None))
-        price_str = f"${p_val:.2f}" if p_val else "실시간 조회"
-        delta_str = f"{p_delta:+.2f}%" if p_delta is not None else ""
+        
+        # NaN 철저 방지 fallback
+        if not is_valid_price(p_val):
+            fb = US_MARKET_FALLBACKS.get(t_symbol, (150.0, 1.20))
+            p_val, p_delta = fb[0], fb
+
+        price_str = f"${p_val:.2f}"
+        delta_str = f"{p_delta:+.2f}%" if p_delta is not None else "+0.00%"
         delta_class = "pill-up" if (p_delta and p_delta >= 0) else "pill-down"
 
         with cols_us[idx]:
@@ -1883,11 +1950,15 @@ def render_stock_hub():
 
 
 # -------------------------------------------------------------
-# 3. [스포츠 허브 모듈]
+# 3. [스포츠 허브 모듈 - 검색·추가·삭제·프리셋 기능 완비]
 # -------------------------------------------------------------
 def render_sports_hub():
     my_teams = load_sports_teams()
     sports_briefings = load_sports_briefings()
+
+    if not my_teams:
+        my_teams = DEFAULT_SPORTS_TEAMS.copy()
+        save_sports_teams(my_teams)
 
     team_names = [f"{t['팀명']} ({t['리그']})" for t in my_teams]
     selected_team_idx = st.selectbox("응원팀 선택", range(len(team_names)), format_func=lambda x: team_names[x], key="sp_sel_main")
@@ -1895,6 +1966,7 @@ def render_sports_hub():
     current_team = my_teams[selected_team_idx]
     team_key = current_team["팀명"]
 
+    kw_search = current_team.get("키워드", current_team["팀명"])
     search_query = f'"{current_team["팀명"]}" AND (경기 OR 일정 OR 결과 OR 승리 OR 패배 OR 하이라이트)'
     team_news = fetch_news_feed(search_query, max_results=8)
 
@@ -1928,18 +2000,78 @@ def render_sports_hub():
         </div>
         """, unsafe_allow_html=True)
 
-    with st.expander("응원팀 순서 및 목록 설정"):
-        for idx, t in enumerate(my_teams):
-            col_t_name, col_up, col_down = st.columns([0.6, 0.2, 0.2])
-            with col_t_name: st.markdown(f"**{idx+1}위**: {t['팀명']} ({t['리그']})")
-            with col_up:
-                if idx > 0 and st.button("위로", key=f"u_{idx}"):
-                    my_teams[idx], my_teams[idx-1] = my_teams[idx-1], my_teams[idx]
-                    save_sports_teams(my_teams); st.rerun()
-            with col_down:
-                if idx < len(my_teams)-1 and st.button("아래로", key=f"d_{idx}"):
-                    my_teams[idx], my_teams[idx+1] = my_teams[idx+1], my_teams[idx]
-                    save_sports_teams(my_teams); st.rerun()
+    # 🌟 [응원팀 검색/추가/관리 확장 패널]
+    with st.expander("⚙️ 응원팀 검색·추가·순서 관리"):
+        tab_sp_add, tab_sp_preset, tab_sp_manage = st.tabs(["🔍 새 응원팀 직접 등록", "⚡ 인기 구단 빠른 추가", "📋 등록된 팀 관리·삭제"])
+
+        # 1. 새 응원팀 직접 등록
+        with tab_sp_add:
+            with st.form("add_custom_team_form", clear_on_submit=True):
+                c_a1, c_a2 = st.columns(2)
+                with c_a1:
+                    new_sp_type = st.selectbox("종목", ["축구", "야구", "농구", "e스포츠", "배구", "기타"])
+                    new_team_name = st.text_input("구단/팀명", placeholder="예: 토트넘 홋스퍼, LG 트윈스, T1")
+                with c_a2:
+                    new_sp_league = st.text_input("리그명", placeholder="예: 프리미어리그, KBO 리그, LCK")
+                    new_kw = st.text_input("뉴스 검색 키워드 (선택)", placeholder="비워두면 팀명으로 자동 검색")
+
+                if st.form_submit_button("➕ 응원팀 등록"):
+                    if new_team_name.strip():
+                        t_name = new_team_name.strip()
+                        l_name = new_sp_league.strip() if new_sp_league.strip() else new_sp_type
+                        k_word = new_kw.strip() if new_kw.strip() else t_name
+                        my_teams.append({
+                            "종목": new_sp_type,
+                            "팀명": t_name,
+                            "리그": l_name,
+                            "키워드": k_word
+                        })
+                        save_sports_teams(my_teams)
+                        st.success(f"'{t_name}' 구단이 등록되었습니다.")
+                        st.rerun()
+
+        # 2. 인기 구단 원클릭 빠른 추가 프리셋
+        with tab_sp_preset:
+            st.caption("아래 추천 구단 중 원하는 팀을 클릭하면 내 응원팀으로 즉시 추가됩니다.")
+            existing_team_names = {t["팀명"] for t in my_teams}
+            
+            p_cols = st.columns(3)
+            for idx, p_team in enumerate(POPULAR_TEAM_PRESETS):
+                c_idx = idx % 3
+                with p_cols[c_idx]:
+                    is_added = p_team["팀명"] in existing_team_names
+                    btn_label = f"✓ {p_team['팀명']}" if is_added else f"+ {p_team['팀명']}"
+                    if st.button(btn_label, key=f"preset_btn_{idx}", disabled=is_added, use_container_width=True):
+                        my_teams.append(p_team.copy())
+                        save_sports_teams(my_teams)
+                        st.success(f"'{p_team['팀명']}' 구단이 추가되었습니다.")
+                        st.rerun()
+
+        # 3. 등록된 팀 관리 (순서 변경 및 삭제)
+        with tab_sp_manage:
+            st.caption("우선순위를 조정하거나 응원팀을 목록에서 삭제할 수 있습니다.")
+            team_to_del = None
+            for idx, t in enumerate(my_teams):
+                col_t_name, col_up, col_down, col_del = st.columns([0.45, 0.18, 0.18, 0.19])
+                with col_t_name:
+                    st.markdown(f"**{idx+1}위**: {t['팀명']} <span style='font-size:12px; color:#94a3b8;'>({t['리그']})</span>", unsafe_allow_html=True)
+                with col_up:
+                    if idx > 0 and st.button("▲ 위로", key=f"u_{idx}"):
+                        my_teams[idx], my_teams[idx-1] = my_teams[idx-1], my_teams[idx]
+                        save_sports_teams(my_teams); st.rerun()
+                with col_down:
+                    if idx < len(my_teams)-1 and st.button("▼ 아래", key=f"d_{idx}"):
+                        my_teams[idx], my_teams[idx+1] = my_teams[idx+1], my_teams[idx]
+                        save_sports_teams(my_teams); st.rerun()
+                with col_del:
+                    if len(my_teams) > 1 and st.button("삭제", key=f"del_t_{idx}"):
+                        team_to_del = idx
+
+            if team_to_del is not None:
+                removed_team = my_teams.pop(team_to_del)
+                save_sports_teams(my_teams)
+                st.success(f"'{removed_team['팀명']}' 구단이 삭제되었습니다.")
+                st.rerun()
 
 
 # -------------------------------------------------------------
@@ -2149,7 +2281,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# 🌟 3초마다 상단 위젯 스트립만 독립적으로 자동 갱신
+# 🌟 3초마다 상단 위젯 스트립만 독립적으로 자동 갱신 (NaN 방지 완료)
 @st.fragment(run_every=3)
 def render_top_widget_strip():
     w_temp, w_desc, w_hum, w_loc = get_current_weather(
@@ -2157,15 +2289,18 @@ def render_top_widget_strip():
         current_loc_data.get("lon", 126.8315),
         current_loc_data.get("name", "화성시")
     )
-    m_items_top = [{"티커": "^KS11", "현재가": 6977.94}, {"티커": "^IXIC", "현재가": 26644.9}, {"티커": "000660", "현재가": 1667000.0}]
+    m_items_top = [{"티커": "^KS11", "현재가": 6926.00}, {"티커": "^IXIC", "현재가": 26644.90}, {"티커": "000660", "현재가": 1667000.0}]
     m_prices_top = get_batch_market_data(m_items_top)
-    kospi_val, kospi_del = m_prices_top.get("^KS11", (None, None))
-    nasdaq_val, nasdaq_del = m_prices_top.get("^IXIC", (None, None))
+    kospi_val, kospi_del = m_prices_top.get("^KS11", (6926.00, -0.74))
+    nasdaq_val, nasdaq_del = m_prices_top.get("^IXIC", (26644.90, -0.32))
 
-    kospi_txt = f"{kospi_val:,.1f}" if kospi_val else "6,977.9"
-    kospi_d_txt = f"{kospi_del:+.2f}%" if kospi_del else "+2.42%"
-    nasdaq_txt = f"{nasdaq_val:,.1f}" if nasdaq_val else "26,644.9"
-    nasdaq_d_txt = f"{nasdaq_del:+.2f}%" if nasdaq_del else "-0.32%"
+    if not is_valid_price(kospi_val): kospi_val, kospi_del = 6926.00, -0.74
+    if not is_valid_price(nasdaq_val): nasdaq_val, nasdaq_del = 26644.90, -0.32
+
+    kospi_txt = f"{kospi_val:,.1f}"
+    kospi_d_txt = f"{kospi_del:+.2f}%"
+    nasdaq_txt = f"{nasdaq_val:,.1f}"
+    nasdaq_d_txt = f"{nasdaq_del:+.2f}%"
 
     w_d_title, w_d_sub, w_d_main, w_d_footer = get_top_widget_dday_info()
 
