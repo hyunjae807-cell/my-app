@@ -556,9 +556,9 @@ DEFAULT_BLOG_STATS = {
 DEFAULT_BLOG_POSTS = []
 
 DEFAULT_LOCATION = {
-    "name": "용인시",
-    "lat": 37.2410,
-    "lon": 127.1775
+    "name": "화성시",
+    "lat": 37.1995,
+    "lon": 126.8315
 }
 
 LOCATION_PRESETS = {
@@ -906,7 +906,7 @@ def save_blog_posts(posts):
             json.dump(posts, f, ensure_ascii=False, indent=2)
     except Exception as e: pass
 
-# 🌟 2초 캐시 TTL로 3초마다 최신 시세 갱신
+# 🌟 2초 캐시 TTL로 실시간 체결 시세 연동
 @st.cache_data(ttl=2)
 def get_live_market_data(ticker_symbol, fallback_price=None):
     clean_code = str(ticker_symbol).replace(".KS", "").replace(".KQ", "").strip()
@@ -993,6 +993,7 @@ def get_batch_market_data(portfolio_items):
                 results[t] = (None, None)
     return results
 
+# 🌟 [기준가 대비 등락률 및 평가금액 정밀 연산]
 def compute_portfolio_summary(portfolio, live_prices_map, usd_krw=1380.0, cash_balance=810924.0):
     total_eval_krw = 0.0
     total_buy_krw = 0.0
@@ -1024,13 +1025,19 @@ def compute_portfolio_summary(portfolio, live_prices_map, usd_krw=1380.0, cash_b
         total_eval_krw += item_eval_krw
         total_buy_krw += item_buy_krw
 
+        # 상승 시 ▲, 하락 시 ▼ 심볼 부착
+        symbol = "▲ " if item_profit_rate > 0 else ("▼ " if item_profit_rate < 0 else "")
+        profit_rate_formatted = f"{symbol}{item_profit_rate:+.2f}%"
+        profit_krw_formatted = f"{item_profit_krw:+,.0f}원" if is_krw else f"${item_profit_krw:+,.2f}"
+
         calculated_rows.append({
             "종목명": item.get("종목명", ""),
             "수량": f"{shares:,}주",
-            "매입가": f"{buy_p:,.0f}원" if is_krw else f"${buy_p:.2f}",
+            "매입단가 (기준가)": f"{buy_p:,.0f}원" if is_krw else f"${buy_p:.2f}",
             "현재가": f"{cur_p:,.0f}원" if is_krw else f"${cur_p:.2f}",
             "평가금액": f"{cur_p * shares:,.0f}원" if is_krw else f"${cur_p * shares:.2f}",
-            "수익률": f"{item_profit_rate:+.2f}%"
+            "평가손익": profit_krw_formatted,
+            "수익률 (기준가 대비)": profit_rate_formatted
         })
 
     adjusted_buy_krw = 40767449.0 if abs(total_buy_krw - 40767419.0) < 50 else total_buy_krw
@@ -1144,7 +1151,7 @@ def fetch_naver_blog_live_data(blog_id="early_leave_lab"):
     }
 
 @st.cache_data(ttl=1800)
-def get_current_weather(lat=37.2410, lon=127.1775, default_name="용인시"):
+def get_current_weather(lat=37.1995, lon=126.8315, default_name="화성시"):
     try:
         url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto"
         res = requests.get(url, timeout=3).json()
@@ -1390,7 +1397,7 @@ def ask_gemini_chat(chat_history, user_msg, portfolio_items, api_key):
 
 
 # =============================================================
-# ⭐ [실시간 라이브 포트폴리오 렌더링 - 3초 주기 부분 자동 갱신]
+# ⭐ [실시간 라이브 포트폴리오 렌더링 - 3초 주기 부분 자동 갱신 + 등락 색상 적용]
 # =============================================================
 
 @st.fragment(run_every=3)
@@ -1416,7 +1423,26 @@ def render_live_portfolio_content():
     with c4:
         st.metric("총 매입원금", f"{summary['total_buy_krw']:,.0f}원", f"총 {len(user_portfolio)}개 종목")
 
-    st.dataframe(pd.DataFrame(summary["calculated_rows"]), use_container_width=True)
+    # 🌟 상승(빨간색), 하락(파란색) 자동 스타일링
+    df_portfolio = pd.DataFrame(summary["calculated_rows"])
+
+    def color_profit_cell(val):
+        s = str(val)
+        if "▲" in s or (s.startswith("+") and "%" in s) or (s.startswith("+") and "원" in s) or (s.startswith("+$")):
+            return 'color: #f87171; font-weight: 800;'
+        elif "▼" in s or (s.startswith("-") and "%" in s) or (s.startswith("-") and "원" in s) or (s.startswith("-$")):
+            return 'color: #60a5fa; font-weight: 800;'
+        return 'color: #f8fafc;'
+
+    try:
+        map_func = getattr(df_portfolio.style, "map", getattr(df_portfolio.style, "applymap", None))
+        if map_func:
+            styled_df = map_func(color_profit_cell, subset=["평가손익", "수익률 (기준가 대비)"])
+            st.dataframe(styled_df, use_container_width=True, hide_index=True)
+        else:
+            st.dataframe(df_portfolio, use_container_width=True, hide_index=True)
+    except Exception:
+        st.dataframe(df_portfolio, use_container_width=True, hide_index=True)
 
 
 # -------------------------------------------------------------
@@ -1440,9 +1466,9 @@ def render_daily_hub():
 
     with sub_d1:
         temp_val, weather_val, humid_val, loc_tag = get_current_weather(
-            current_loc_data.get("lat", 37.2410),
-            current_loc_data.get("lon", 127.1775),
-            current_loc_data.get("name", "용인시")
+            current_loc_data.get("lat", 37.1995),
+            current_loc_data.get("lon", 126.8315),
+            current_loc_data.get("name", "화성시")
         )
 
         with st.container(border=True):
@@ -2127,9 +2153,9 @@ st.markdown("""
 @st.fragment(run_every=3)
 def render_top_widget_strip():
     w_temp, w_desc, w_hum, w_loc = get_current_weather(
-        current_loc_data.get("lat", 37.2410),
-        current_loc_data.get("lon", 127.1775),
-        current_loc_data.get("name", "용인시")
+        current_loc_data.get("lat", 37.1995),
+        current_loc_data.get("lon", 126.8315),
+        current_loc_data.get("name", "화성시")
     )
     m_items_top = [{"티커": "^KS11", "현재가": 6977.94}, {"티커": "^IXIC", "현재가": 26644.9}, {"티커": "000660", "현재가": 1667000.0}]
     m_prices_top = get_batch_market_data(m_items_top)
