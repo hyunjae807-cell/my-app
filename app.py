@@ -492,7 +492,6 @@ EXACT_SETTINGS = {
     "gemini_api_key": ""
 }
 
-# 🌟 미국 주요 지수 및 개별 종목 기준 시세 (yfinance 실패/nan 방지용 견고한 백업)
 US_MARKET_FALLBACKS = {
     "^IXIC": (26644.90, -0.32),
     "^GSPC": (5554.20, -0.20),
@@ -563,7 +562,6 @@ DEFAULT_SPORTS_TEAMS = [
     {"종목": "야구", "팀명": "LA 다저스", "리그": "메이저리그 (MLB)", "키워드": "LA 다저스 OR 오타니"}
 ]
 
-# 🌟 원클릭 빠른 추가 인기 구단 프리셋 풀
 POPULAR_TEAM_PRESETS = [
     {"종목": "축구", "팀명": "토트넘 홋스퍼", "리그": "프리미어리그 (EPL)", "키워드": "토트넘 OR 손흥민"},
     {"종목": "축구", "팀명": "맨체스터 시티", "리그": "프리미어리그 (EPL)", "키워드": "맨시티 OR 홀란드"},
@@ -600,14 +598,14 @@ DEFAULT_BLOG_STATS = {
 DEFAULT_BLOG_POSTS = []
 
 DEFAULT_LOCATION = {
-    "name": "화성시",
-    "lat": 37.1995,
-    "lon": 126.8315
+    "name": "용인시",
+    "lat": 37.2410,
+    "lon": 127.1775
 }
 
 LOCATION_PRESETS = {
-    "경기도 화성시": {"lat": 37.1995, "lon": 126.8315, "name": "화성시"},
     "경기도 용인시": {"lat": 37.2410, "lon": 127.1775, "name": "용인시"},
+    "경기도 화성시": {"lat": 37.1995, "lon": 126.8315, "name": "화성시"},
     "경기도 성남시 (분당/판교)": {"lat": 37.4200, "lon": 127.1265, "name": "성남시"},
     "서울특별시 강남구": {"lat": 37.4979, "lon": 127.0276, "name": "서울 강남"},
     "서울특별시 종로/중구": {"lat": 37.5636, "lon": 126.9976, "name": "서울 종로"},
@@ -882,7 +880,6 @@ def save_todos(todos):
             json.dump(todos, f, ensure_ascii=False, indent=2)
     except Exception as e: st.error(f"저장 오류: {e}")
 
-# 🌟 스포츠 구단 관리 엔진 (영구 저장)
 def load_sports_teams():
     if os.path.exists(SPORTS_FILE):
         try:
@@ -958,7 +955,7 @@ def save_blog_posts(posts):
             json.dump(posts, f, ensure_ascii=False, indent=2)
     except Exception as e: pass
 
-# 🌟 [2초 캐시 TTL & NaN 철저 방지 실시간 시세 연동 엔진]
+# 🌟 2초 캐시 TTL & NaN 철저 방지 실시간 시세 연동 엔진
 @st.cache_data(ttl=2)
 def get_live_market_data(ticker_symbol, fallback_price=None):
     clean_code = str(ticker_symbol).replace(".KS", "").replace(".KQ", "").strip()
@@ -1021,7 +1018,7 @@ def get_live_market_data(ticker_symbol, fallback_price=None):
     except Exception:
         pass
 
-    # 4. 미국 주식/지수 전용 기준가 Fallback (NaN 절대 방지)
+    # 4. 미국 주식/지수 전용 기준가 Fallback (NaN 방지)
     if clean_code in US_MARKET_FALLBACKS:
         return US_MARKET_FALLBACKS[clean_code]
     elif ticker_symbol in US_MARKET_FALLBACKS:
@@ -1080,7 +1077,6 @@ def compute_portfolio_summary(portfolio, live_prices_map, usd_krw=1380.0, cash_b
         total_eval_krw += item_eval_krw
         total_buy_krw += item_buy_krw
 
-        # 상승 시 ▲, 하락 시 ▼ 심볼 부착
         symbol = "▲ " if item_profit_rate > 0 else ("▼ " if item_profit_rate < 0 else "")
         profit_rate_formatted = f"{symbol}{item_profit_rate:+.2f}%"
         profit_krw_formatted = f"{item_profit_krw:+,.0f}원" if is_krw else f"${item_profit_krw:+,.2f}"
@@ -1206,7 +1202,7 @@ def fetch_naver_blog_live_data(blog_id="early_leave_lab"):
     }
 
 @st.cache_data(ttl=1800)
-def get_current_weather(lat=37.1995, lon=126.8315, default_name="화성시"):
+def get_current_weather(lat=37.2410, lon=127.1775, default_name="용인시"):
     try:
         url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto"
         res = requests.get(url, timeout=3).json()
@@ -1246,7 +1242,7 @@ def fetch_news_feed(query, max_results=8):
     except Exception:
         return []
 
-# 🌟 [동적 사용 가능 모델 탐색 캐시]
+# 🌟 [동적 사용 가능 모델 탐색 - Gemini 3.x 우선 정렬 및 자동 백업]
 @st.cache_data(ttl=1800)
 def get_available_gemini_models(clean_key):
     try:
@@ -1262,13 +1258,22 @@ def get_available_gemini_models(clean_key):
                     if not any(old in m_name for old in ["1.5-", "2.0-", "gemini-pro"]):
                         valid_models.append(m_name)
             if valid_models:
-                valid_models.sort(key=lambda x: (0 if "flash" in x.lower() else 1, x))
+                # 3.x Flash -> 3.x Pro -> 2.5 Flash -> 2.5 Pro 순서로 우선 정렬
+                def model_sort_key(name):
+                    n = name.lower()
+                    if "3.7" in n: return 0
+                    if "3.5" in n: return 1
+                    if "3.1" in n: return 2
+                    if "3" in n: return 3
+                    if "2.5" in n and "flash" in n: return 4
+                    return 5
+                valid_models.sort(key=model_sort_key)
                 return valid_models
     except Exception:
         pass
-    return ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro", "gemini-3.5-flash"]
+    return ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-3.7-flash", "gemini-2.5-flash", "gemini-2.5-pro"]
 
-# 12. 🌟 [최신 Gemini 2.5 호환 AI 호출 엔진]
+# 12. 🌟 [최신 Gemini 3.x 주력 & 2.5 스마트 백업 AI 호출 엔진]
 def call_gemini_api(prompt_text, api_key, system_instruction=None, image_bytes=None, chat_contents=None):
     if not api_key or not str(api_key).strip():
         return None, "Gemini API Key를 입력해 주세요."
@@ -1277,7 +1282,13 @@ def call_gemini_api(prompt_text, api_key, system_instruction=None, image_bytes=N
     headers = {"Content-Type": "application/json"}
     
     discovered = get_available_gemini_models(clean_key)
-    candidate_models = discovered if discovered else ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro", "gemini-3.5-flash"]
+    candidate_models = discovered if discovered else [
+        "gemini-3.5-flash",
+        "gemini-3.1-flash-lite",
+        "gemini-3.7-flash",
+        "gemini-2.5-flash",
+        "gemini-2.5-pro"
+    ]
     
     sanitized_contents = []
     if chat_contents:
@@ -1317,6 +1328,7 @@ def call_gemini_api(prompt_text, api_key, system_instruction=None, image_bytes=N
             sanitized_contents = [{"role": "user", "parts": [{"text": final_p}]}]
 
     last_err = ""
+    # 1차 시도: v1beta + 3.x 최신 모델 및 2.5 백업 + systemInstruction 정석 호출
     for model_name in candidate_models:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={clean_key}"
         payload = {"contents": sanitized_contents}
@@ -1339,6 +1351,7 @@ def call_gemini_api(prompt_text, api_key, system_instruction=None, image_bytes=N
         except Exception as e:
             last_err = str(e)
             
+    # 2차 시도: 프롬프트 인라인 결합 폴백
     inline_contents = []
     for c in sanitized_contents:
         inline_parts = []
@@ -1355,7 +1368,7 @@ def call_gemini_api(prompt_text, api_key, system_instruction=None, image_bytes=N
         if inline_contents[0]["parts"] and "text" in inline_contents[0]["parts"][0]:
             inline_contents[0]["parts"][0]["text"] = f"[{system_instruction.strip()}]\n\n" + inline_contents[0]["parts"][0]["text"]
         
-    for model_name in ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro", "gemini-3.5-flash"]:
+    for model_name in ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-2.5-flash", "gemini-2.5-pro"]:
         for api_ver in ["v1beta", "v1"]:
             url = f"https://generativelanguage.googleapis.com/{api_ver}/models/{model_name}:generateContent?key={clean_key}"
             payload = {"contents": inline_contents}
@@ -1478,7 +1491,6 @@ def render_live_portfolio_content():
     with c4:
         st.metric("총 매입원금", f"{summary['total_buy_krw']:,.0f}원", f"총 {len(user_portfolio)}개 종목")
 
-    # 🌟 상승(빨간색), 하락(파란색) 자동 스타일링
     df_portfolio = pd.DataFrame(summary["calculated_rows"])
 
     def color_profit_cell(val):
@@ -1521,9 +1533,9 @@ def render_daily_hub():
 
     with sub_d1:
         temp_val, weather_val, humid_val, loc_tag = get_current_weather(
-            current_loc_data.get("lat", 37.1995),
-            current_loc_data.get("lon", 126.8315),
-            current_loc_data.get("name", "화성시")
+            current_loc_data.get("lat", 37.2410),
+            current_loc_data.get("lon", 127.1775),
+            current_loc_data.get("name", "용인시")
         )
 
         with st.container(border=True):
@@ -1715,7 +1727,6 @@ def render_live_market_overview_content():
     sox_p, sox_d = m_prices.get("^SOX", (5234.50, +1.85))
     fx_p, fx_d = m_prices.get("USDKRW=X", (1412.60, -0.35))
 
-    # 안전 검증
     if not is_valid_price(kospi_p): kospi_p, kospi_d = 6926.00, -0.74
     if not is_valid_price(sp500_p): sp500_p, sp500_d = 5554.20, -0.20
     if not is_valid_price(sox_p): sox_p, sox_d = 5234.50, +1.85
@@ -1750,7 +1761,6 @@ def render_live_market_overview_content():
         t_symbol = stock_info["ticker"]
         p_val, p_delta = us_prices_map.get(t_symbol, (None, None))
         
-        # NaN 철저 방지 fallback
         if not is_valid_price(p_val):
             fb = US_MARKET_FALLBACKS.get(t_symbol, (150.0, 1.20))
             p_val, p_delta = fb[0], fb
@@ -1880,7 +1890,7 @@ def render_stock_hub():
                 if not active_key:
                     st.warning("API Key를 입력해주세요. [AI 투자 비서] 탭에서 등록할 수 있습니다.")
                 else:
-                    with st.spinner("증시 브리핑 작성 중..."):
+                    with st.spinner("최신 Gemini AI 모델로 증시 브리핑 작성 중..."):
                         b_res, status = generate_ai_briefing(recent_news, user_portfolio, active_key)
                         if status == "SUCCESS" and b_res:
                             save_briefing(b_res, datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S'))
@@ -1941,7 +1951,7 @@ def render_stock_hub():
             
             active_key = st.session_state.saved_gemini_key
             if active_key:
-                with st.spinner("분석 중..."):
+                with st.spinner("Gemini 3.x AI 분석 중..."):
                     reply = ask_gemini_chat(st.session_state.chat_messages, u_text, load_portfolio(), active_key)
                     st.session_state.chat_messages.append({"role": "assistant", "content": reply})
                     st.rerun()
@@ -2000,11 +2010,9 @@ def render_sports_hub():
         </div>
         """, unsafe_allow_html=True)
 
-    # 🌟 [응원팀 검색/추가/관리 확장 패널]
     with st.expander("⚙️ 응원팀 검색·추가·순서 관리"):
         tab_sp_add, tab_sp_preset, tab_sp_manage = st.tabs(["🔍 새 응원팀 직접 등록", "⚡ 인기 구단 빠른 추가", "📋 등록된 팀 관리·삭제"])
 
-        # 1. 새 응원팀 직접 등록
         with tab_sp_add:
             with st.form("add_custom_team_form", clear_on_submit=True):
                 c_a1, c_a2 = st.columns(2)
@@ -2030,7 +2038,6 @@ def render_sports_hub():
                         st.success(f"'{t_name}' 구단이 등록되었습니다.")
                         st.rerun()
 
-        # 2. 인기 구단 원클릭 빠른 추가 프리셋
         with tab_sp_preset:
             st.caption("아래 추천 구단 중 원하는 팀을 클릭하면 내 응원팀으로 즉시 추가됩니다.")
             existing_team_names = {t["팀명"] for t in my_teams}
@@ -2047,7 +2054,6 @@ def render_sports_hub():
                         st.success(f"'{p_team['팀명']}' 구단이 추가되었습니다.")
                         st.rerun()
 
-        # 3. 등록된 팀 관리 (순서 변경 및 삭제)
         with tab_sp_manage:
             st.caption("우선순위를 조정하거나 응원팀을 목록에서 삭제할 수 있습니다.")
             team_to_del = None
@@ -2281,13 +2287,13 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# 🌟 3초마다 상단 위젯 스트립만 독립적으로 자동 갱신 (NaN 방지 완료)
+# 🌟 3초마다 상단 위젯 스트립만 독립적으로 자동 갱신
 @st.fragment(run_every=3)
 def render_top_widget_strip():
     w_temp, w_desc, w_hum, w_loc = get_current_weather(
-        current_loc_data.get("lat", 37.1995),
-        current_loc_data.get("lon", 126.8315),
-        current_loc_data.get("name", "화성시")
+        current_loc_data.get("lat", 37.2410),
+        current_loc_data.get("lon", 127.1775),
+        current_loc_data.get("name", "용인시")
     )
     m_items_top = [{"티커": "^KS11", "현재가": 6926.00}, {"티커": "^IXIC", "현재가": 26644.90}, {"티커": "000660", "현재가": 1667000.0}]
     m_prices_top = get_batch_market_data(m_items_top)
@@ -2393,3 +2399,4 @@ elif active_tab_key == "sports":
     render_sports_hub()
 elif active_tab_key == "blog":
     render_blog_hub()
+
