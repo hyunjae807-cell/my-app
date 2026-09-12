@@ -1791,7 +1791,6 @@ def render_daily_hub():
                 with col_cost: st.markdown(f"{s.get('월요금', 0):,}원 / 월")
                 with col_dday: st.markdown(f"매월 **{s.get('결제일', 1)}일**")
                 with col_del:
-                    # 버튼 고유 키 생성으로 충돌 방지
                     s_id = s.get("service_id", f"sub_{idx}")
                     if st.button("삭제", key=f"btn_del_sub_{s_id}_{idx}"):
                         sub_to_delete = idx
@@ -1820,7 +1819,6 @@ def render_daily_hub():
                         save_subscriptions(subs_list)
                         st.success("등록 완료되었습니다.")
                         st.rerun()
-
     with sub_d4:
         with st.expander("날씨 지역 설정"):
             preset_names = list(LOCATION_PRESETS.keys())
