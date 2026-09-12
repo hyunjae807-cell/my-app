@@ -460,7 +460,65 @@ input, select, textarea {
 </style>
 """, unsafe_allow_html=True)
 
-# 6. 영구 저장소 파일 관리
+# =============================================================
+# 6. [개선] 영구 저장소 관리 (GitHub Gist 클라우드 + 로컬 안전 백업)
+# =============================================================
+
+# Streamlit Secrets에서 Gist 접속 키 불러오기
+try:
+    GIST_ID = st.secrets.get("GIST_ID", "")
+    GITHUB_TOKEN = st.secrets.get("GITHUB_TOKEN", "")
+except Exception:
+    GIST_ID = ""
+    GITHUB_TOKEN = ""
+
+# --- 클라우드 원격 저장소 핵심 통신 엔진 ---
+@st.cache_data(ttl=3)
+def get_remote_storage():
+    """Gist에서 전체 앱 데이터를 불러옵니다."""
+    if not GIST_ID or not GITHUB_TOKEN:
+        return None
+    url = f"https://api.github.com/gists/{GIST_ID}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    try:
+        res = requests.get(url, headers=headers, timeout=4)
+        if res.status_code == 200:
+            files = res.json().get("files", {})
+            if "mori_data.json" in files:
+                raw_txt = files["mori_data.json"].get("content", "{}")
+                return json.loads(raw_txt)
+    except Exception:
+        pass
+    return {}
+
+def update_remote_storage(key, val):
+    """특정 항목의 데이터를 Gist에 영구 저장합니다."""
+    if not GIST_ID or not GITHUB_TOKEN:
+        return False
+    current_data = get_remote_storage()
+    if current_data is None:
+        current_data = {}
+    current_data[key] = val
+    url = f"https://api.github.com/gists/{GIST_ID}"
+    headers = {
+        "Authorization": f"token {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+    payload = {
+        "files": {
+            "mori_data.json": {
+                "content": json.dumps(current_data, ensure_ascii=False, indent=2)
+            }
+        }
+    }
+    try:
+        requests.patch(url, json=payload, headers=headers, timeout=4)
+        get_remote_storage.clear()
+        return True
+    except Exception:
+        return False
+
+# 로컬 파일명 정의
 PORTFOLIO_FILE = "portfolio.json"
 BRIEFING_FILE = "briefing.json"
 TODOS_FILE = "todos.json"
@@ -622,7 +680,15 @@ def is_valid_price(p):
     except Exception:
         return False
 
+# --- 데이터 읽기/쓰기 구현부 ---
+
 def load_settings():
+    remote = get_remote_storage()
+    if remote and "settings" in remote:
+        data = remote["settings"]
+        if data.get("cash_balance", 0) <= 0:
+            data["cash_balance"] = 810924.0
+        return data
     if os.path.exists(SETTINGS_FILE):
         try:
             with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
@@ -635,12 +701,16 @@ def load_settings():
     return EXACT_SETTINGS.copy()
 
 def save_settings(s_data):
+    update_remote_storage("settings", s_data)
     try:
         with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
             json.dump(s_data, f, ensure_ascii=False, indent=2)
-    except Exception as e: pass
+    except Exception: pass
 
 def load_location():
+    remote = get_remote_storage()
+    if remote and "location" in remote:
+        return remote["location"]
     if os.path.exists(LOCATION_FILE):
         try:
             with open(LOCATION_FILE, "r", encoding="utf-8") as f:
@@ -650,42 +720,52 @@ def load_location():
     return DEFAULT_LOCATION
 
 def save_location(loc_data):
+    update_remote_storage("location", loc_data)
     try:
         with open(LOCATION_FILE, "w", encoding="utf-8") as f:
             json.dump(loc_data, f, ensure_ascii=False, indent=2)
-    except Exception as e: pass
+    except Exception: pass
 
 def load_portfolio():
-    if os.path.exists(PORTFOLIO_FILE):
+    remote = get_remote_storage()
+    data = None
+    if remote and "portfolio" in remote:
+        data = remote["portfolio"]
+    elif os.path.exists(PORTFOLIO_FILE):
         try:
             with open(PORTFOLIO_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                if isinstance(data, list) and len(data) >= 8:
-                    for item in data:
-                        t = str(item.get("티커", "")).strip()
-                        matched = next((d for d in EXACT_KIWOOM_PORTFOLIO if d["티커"] == t or d["종목명"] == item.get("종목명")), None)
-                        if matched:
-                            item["매입단가"] = matched["매입단가"]
-                            item["보유수량"] = matched["보유수량"]
-                            if t == "161510" or "PLUS" in item.get("종목명", ""):
-                                item["현재가"] = 25575.0
-                            elif t == "395160" or "AI반도체" in item.get("종목명", ""):
-                                item["현재가"] = 41000.0
-                            elif t == "448290" or "레버리지" in item.get("종목명", ""):
-                                item["현재가"] = 9780.0
-                            elif "현재가" not in item or float(item.get("현재가", 0)) <= 0:
-                                item["현재가"] = matched["현재가"]
-                    return data
         except Exception: pass
+
+    if isinstance(data, list) and len(data) >= 8:
+        for item in data:
+            t = str(item.get("티커", "")).strip()
+            matched = next((d for d in EXACT_KIWOOM_PORTFOLIO if d["티커"] == t or d["종목명"] == item.get("종목명")), None)
+            if matched:
+                item["매입단가"] = matched["매입단가"]
+                item["보유수량"] = matched["보유수량"]
+                if t == "161510" or "PLUS" in item.get("종목명", ""):
+                    item["현재가"] = 25575.0
+                elif t == "395160" or "AI반도체" in item.get("종목명", ""):
+                    item["현재가"] = 41000.0
+                elif t == "448290" or "레버리지" in item.get("종목명", ""):
+                    item["현재가"] = 9780.0
+                elif "현재가" not in item or float(item.get("현재가", 0)) <= 0:
+                    item["현재가"] = matched["현재가"]
+        return data
     return EXACT_KIWOOM_PORTFOLIO
 
 def save_portfolio(data):
+    update_remote_storage("portfolio", data)
     try:
         with open(PORTFOLIO_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
     except Exception as e: st.error(f"저장 오류: {e}")
 
 def load_deleted_event_ids():
+    remote = get_remote_storage()
+    if remote and "deleted_event_ids" in remote:
+        return set(remote["deleted_event_ids"])
     if os.path.exists(DELETED_EVENTS_FILE):
         try:
             with open(DELETED_EVENTS_FILE, "r", encoding="utf-8") as f:
@@ -695,6 +775,7 @@ def load_deleted_event_ids():
     return set()
 
 def save_deleted_event_ids(del_set):
+    update_remote_storage("deleted_event_ids", list(del_set))
     try:
         with open(DELETED_EVENTS_FILE, "w", encoding="utf-8") as f:
             json.dump(list(del_set), f, ensure_ascii=False, indent=2)
@@ -705,15 +786,20 @@ def sync_and_load_calendar_events(current_portfolio):
     deleted_ids = load_deleted_event_ids()
     custom_events = []
 
-    if os.path.exists(CALENDAR_FILE):
+    remote = get_remote_storage()
+    saved_list = []
+    if remote and "calendar_events" in remote:
+        saved_list = remote["calendar_events"]
+    elif os.path.exists(CALENDAR_FILE):
         try:
             with open(CALENDAR_FILE, "r", encoding="utf-8") as f:
-                saved = json.load(f)
-                for s in saved:
-                    if str(s.get("id", "")).startswith("custom_") and s["id"] not in deleted_ids:
-                        custom_events.append(s)
+                saved_list = json.load(f)
         except Exception:
             pass
+
+    for s in saved_list:
+        if str(s.get("id", "")).startswith("custom_") and s["id"] not in deleted_ids:
+            custom_events.append(s)
 
     active_tickers = {str(item.get("티커", "")).replace(".KS", "").replace(".KQ", "").strip() for item in current_portfolio}
 
@@ -748,6 +834,7 @@ def sync_and_load_calendar_events(current_portfolio):
     final_events.extend(custom_events)
     final_events.sort(key=lambda x: x.get("date", "9999-12-31"))
 
+    update_remote_storage("calendar_events", final_events)
     try:
         with open(CALENDAR_FILE, "w", encoding="utf-8") as f:
             json.dump(final_events, f, ensure_ascii=False, indent=2)
@@ -764,14 +851,18 @@ def add_custom_calendar_event(title, date_str, type_str, stock_str):
         "title": title.strip(),
         "auto_stock": stock_str.strip() if stock_str.strip() else "-"
     }
+    remote = get_remote_storage()
     events = []
-    if os.path.exists(CALENDAR_FILE):
+    if remote and "calendar_events" in remote:
+        events = remote["calendar_events"]
+    elif os.path.exists(CALENDAR_FILE):
         try:
             with open(CALENDAR_FILE, "r", encoding="utf-8") as f:
                 events = json.load(f)
         except Exception:
             events = []
     events.append(new_ev)
+    update_remote_storage("calendar_events", events)
     try:
         with open(CALENDAR_FILE, "w", encoding="utf-8") as f:
             json.dump(events, f, ensure_ascii=False, indent=2)
@@ -783,15 +874,23 @@ def delete_calendar_event_permanently(event_id):
     deleted_ids.add(event_id)
     save_deleted_event_ids(deleted_ids)
     
-    if os.path.exists(CALENDAR_FILE):
+    remote = get_remote_storage()
+    events = []
+    if remote and "calendar_events" in remote:
+        events = remote["calendar_events"]
+    elif os.path.exists(CALENDAR_FILE):
         try:
             with open(CALENDAR_FILE, "r", encoding="utf-8") as f:
                 events = json.load(f)
-            events = [e for e in events if e.get("id") != event_id]
-            with open(CALENDAR_FILE, "w", encoding="utf-8") as f:
-                json.dump(events, f, ensure_ascii=False, indent=2)
         except Exception:
             pass
+    events = [e for e in events if e.get("id") != event_id]
+    update_remote_storage("calendar_events", events)
+    try:
+        with open(CALENDAR_FILE, "w", encoding="utf-8") as f:
+            json.dump(events, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
 
 def get_weekly_filtered_events(events, current_dt):
     today_date = current_dt.date()
@@ -820,11 +919,8 @@ def get_weekly_filtered_events(events, current_dt):
     weekly.sort(key=lambda x: x["raw_date"])
     return weekly
 
-# 🌟 [상단 4단 위젯용 실시간 D-Day 동적 계산 엔진]
 def get_top_widget_dday_info():
     today_dt = datetime.now(KST).date()
-    
-    # 1순위: 오픽 시험(2026-08-23) D-Day 실시간 자동 연산
     opic_target = datetime(2026, 8, 23).date()
     diff_opic = (opic_target - today_dt).days
     
@@ -833,7 +929,6 @@ def get_top_widget_dday_info():
     elif diff_opic == 0:
         return "주요 D-Day", "어학", "오픽 D-Day", "오늘 13:00 발표"
         
-    # 2순위: 오픽 이후 캘린더에서 가장 임박한 미래 일정 자동 추출
     try:
         user_p = load_portfolio()
         all_evs = sync_and_load_calendar_events(user_p)
@@ -851,6 +946,10 @@ def get_top_widget_dday_info():
     return "주요 D-Day", "일정", "일정 없음", "-"
 
 def load_briefing():
+    remote = get_remote_storage()
+    if remote and "briefing" in remote:
+        b_data = remote["briefing"]
+        return b_data.get("text"), b_data.get("generated_at")
     if os.path.exists(BRIEFING_FILE):
         try:
             with open(BRIEFING_FILE, "r", encoding="utf-8") as f:
@@ -860,12 +959,16 @@ def load_briefing():
     return None, None
 
 def save_briefing(text, generated_at_str):
+    update_remote_storage("briefing", {"text": text, "generated_at": generated_at_str})
     try:
         with open(BRIEFING_FILE, "w", encoding="utf-8") as f:
             json.dump({"text": text, "generated_at": generated_at_str}, f, ensure_ascii=False, indent=2)
     except Exception as e: st.error(f"저장 오류: {e}")
 
 def load_todos():
+    remote = get_remote_storage()
+    if remote and "todos" in remote:
+        return remote["todos"]
     if os.path.exists(TODOS_FILE):
         try:
             with open(TODOS_FILE, "r", encoding="utf-8") as f:
@@ -875,12 +978,16 @@ def load_todos():
     return ["주요 증시 캘린더 확인", "응원팀 경기 일정 체크"]
 
 def save_todos(todos):
+    update_remote_storage("todos", todos)
     try:
         with open(TODOS_FILE, "w", encoding="utf-8") as f:
             json.dump(todos, f, ensure_ascii=False, indent=2)
     except Exception as e: st.error(f"저장 오류: {e}")
 
 def load_sports_teams():
+    remote = get_remote_storage()
+    if remote and "sports_teams" in remote:
+        return remote["sports_teams"]
     if os.path.exists(SPORTS_FILE):
         try:
             with open(SPORTS_FILE, "r", encoding="utf-8") as f:
@@ -891,12 +998,16 @@ def load_sports_teams():
     return DEFAULT_SPORTS_TEAMS.copy()
 
 def save_sports_teams(teams):
+    update_remote_storage("sports_teams", teams)
     try:
         with open(SPORTS_FILE, "w", encoding="utf-8") as f:
             json.dump(teams, f, ensure_ascii=False, indent=2)
     except Exception as e: st.error(f"스포츠 설정 저장 오류: {e}")
 
 def load_sports_briefings():
+    remote = get_remote_storage()
+    if remote and "sports_briefings" in remote:
+        return remote["sports_briefings"]
     if os.path.exists(SPORTS_BRIEFINGS_FILE):
         try:
             with open(SPORTS_BRIEFINGS_FILE, "r", encoding="utf-8") as f:
@@ -905,12 +1016,16 @@ def load_sports_briefings():
     return {}
 
 def save_sports_briefings(briefings):
+    update_remote_storage("sports_briefings", briefings)
     try:
         with open(SPORTS_BRIEFINGS_FILE, "w", encoding="utf-8") as f:
             json.dump(briefings, f, ensure_ascii=False, indent=2)
-    except Exception as e: pass
+    except Exception: pass
 
 def load_subscriptions():
+    remote = get_remote_storage()
+    if remote and "subscriptions" in remote:
+        return remote["subscriptions"]
     if os.path.exists(SUBS_FILE):
         try:
             with open(SUBS_FILE, "r", encoding="utf-8") as f:
@@ -920,12 +1035,16 @@ def load_subscriptions():
     return DEFAULT_SUBSCRIPTIONS
 
 def save_subscriptions(subs):
+    update_remote_storage("subscriptions", subs)
     try:
         with open(SUBS_FILE, "w", encoding="utf-8") as f:
             json.dump(subs, f, ensure_ascii=False, indent=2)
     except Exception as e: st.error(f"구독 정보 저장 오류: {e}")
 
 def load_blog_stats():
+    remote = get_remote_storage()
+    if remote and "blog_stats" in remote:
+        return remote["blog_stats"]
     if os.path.exists(BLOG_STATS_FILE):
         try:
             with open(BLOG_STATS_FILE, "r", encoding="utf-8") as f:
@@ -935,12 +1054,16 @@ def load_blog_stats():
     return DEFAULT_BLOG_STATS
 
 def save_blog_stats(stats):
+    update_remote_storage("blog_stats", stats)
     try:
         with open(BLOG_STATS_FILE, "w", encoding="utf-8") as f:
             json.dump(stats, f, ensure_ascii=False, indent=2)
-    except Exception as e: pass
+    except Exception: pass
 
 def load_blog_posts():
+    remote = get_remote_storage()
+    if remote and "blog_posts" in remote:
+        return remote["blog_posts"]
     if os.path.exists(BLOG_POSTS_FILE):
         try:
             with open(BLOG_POSTS_FILE, "r", encoding="utf-8") as f:
@@ -950,11 +1073,11 @@ def load_blog_posts():
     return DEFAULT_BLOG_POSTS
 
 def save_blog_posts(posts):
+    update_remote_storage("blog_posts", posts)
     try:
         with open(BLOG_POSTS_FILE, "w", encoding="utf-8") as f:
             json.dump(posts, f, ensure_ascii=False, indent=2)
-    except Exception as e: pass
-
+    except Exception: pass
 # 🌟 2초 캐시 TTL & NaN 철저 방지 실시간 시세 연동 엔진
 @st.cache_data(ttl=2)
 def get_live_market_data(ticker_symbol, fallback_price=None):
