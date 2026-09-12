@@ -641,12 +641,8 @@ POPULAR_TEAM_PRESETS = [
     {"종목": "농구", "팀명": "골든스테이트 워리어스", "리그": "NBA", "키워드": "골든스테이트 OR 커리"}
 ]
 
-DEFAULT_SUBSCRIPTIONS = [
-    {"service_id": "sub_1", "서비스": "SPOTV NOW", "월요금": 19900, "결제일": 15, "카테고리": "스포츠"},
-    {"service_id": "sub_2", "서비스": "넷플릭스 (Netflix)", "월요금": 17000, "결제일": 22, "카테고리": "OTT"},
-    {"service_id": "sub_3", "서비스": "쿠팡 와우멤버십", "월요금": 7890, "결제일": 8, "카테고리": "쇼핑·OTT"},
-    {"service_id": "sub_4", "서비스": "Spotify (스포티파이)", "월요금": 11990, "결제일": 1, "카테고리": "음악"}
-]
+DEFAULT_SUBSCRIPTIONS = []
+
 
 DEFAULT_BLOG_STATS = {
     "blog_url": "https://m.blog.naver.com/early_leave_lab",
@@ -1043,6 +1039,8 @@ def load_subscriptions():
     return [s.copy() for s in DEFAULT_SUBSCRIPTIONS]
 
 def save_subscriptions(subs):
+    if "subs_list" in st.session_state:
+        st.session_state.subs_list = subs  # 화면 메모리 즉시 동기화
     update_remote_storage("subscriptions", subs)
     try:
         with open(SUBS_FILE, "w", encoding="utf-8") as f:
@@ -1770,7 +1768,11 @@ def render_daily_hub():
                             st.rerun()
 
     with sub_d3:
-        subs_list = load_subscriptions()
+        # 세션 상태와 동기화하여 삭제 시 즉각 반영
+        if "subs_list" not in st.session_state:
+            st.session_state.subs_list = load_subscriptions()
+            
+        subs_list = st.session_state.subs_list
         total_sub_monthly = sum(s.get("월요금", 0) for s in subs_list) if subs_list else 0
         monthly_div = summary['total_monthly_div_krw']
         coverage_rate = (monthly_div / total_sub_monthly * 100) if total_sub_monthly > 0 else 0
@@ -1782,7 +1784,7 @@ def render_daily_hub():
         st.markdown("##### 💳 구독 서비스 목록 및 삭제")
         
         if not subs_list:
-            st.info("현재 등록된 구독 서비스가 없습니다. 아래에서 새로운 서비스를 추가해보세요.")
+            st.info("현재 등록된 구독 서비스가 없습니다. 아래에서 실제로 이용 중인 구독을 추가해보세요.")
         else:
             sub_to_delete = None
             for idx, s in enumerate(subs_list):
@@ -1796,8 +1798,8 @@ def render_daily_hub():
                         sub_to_delete = idx
 
             if sub_to_delete is not None:
-                removed_sub = subs_list.pop(sub_to_delete)
-                save_subscriptions(subs_list)
+                removed_sub = st.session_state.subs_list.pop(sub_to_delete)
+                save_subscriptions(st.session_state.subs_list)
                 st.success(f"'{removed_sub.get('서비스')}' 구독이 삭제되었습니다.")
                 st.rerun()
 
@@ -1809,14 +1811,15 @@ def render_daily_hub():
                 new_s_cat = st.selectbox("카테고리", ["OTT·영상", "스포츠", "음악", "생산성", "쇼핑·기타"])
                 if st.form_submit_button("등록"):
                     if new_s_name.strip():
-                        subs_list.append({
+                        new_item = {
                             "service_id": f"sub_{int(datetime.now().timestamp())}",
                             "서비스": new_s_name.strip(),
                             "월요금": int(new_s_cost),
                             "결제일": int(new_s_day),
                             "카테고리": new_s_cat
-                        })
-                        save_subscriptions(subs_list)
+                        }
+                        st.session_state.subs_list.append(new_item)
+                        save_subscriptions(st.session_state.subs_list)
                         st.success("등록 완료되었습니다.")
                         st.rerun()
     with sub_d4:
