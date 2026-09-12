@@ -479,7 +479,10 @@ def get_remote_storage():
     if not GIST_ID or not GITHUB_TOKEN:
         return None
     url = f"https://api.github.com/gists/{GIST_ID}"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    headers = {
+        "Authorization": f"token {GITHUB_TOKEN}",
+        "User-Agent": "MORI-App"  # 🌟 GitHub 필수 헤더 추가
+    }
     try:
         res = requests.get(url, headers=headers, timeout=4)
         if res.status_code == 200:
@@ -502,7 +505,8 @@ def update_remote_storage(key, val):
     url = f"https://api.github.com/gists/{GIST_ID}"
     headers = {
         "Authorization": f"token {GITHUB_TOKEN}",
-        "Accept": "application/vnd.github.v3+json"
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "MORI-App"  # 🌟 GitHub 필수 헤더 추가
     }
     payload = {
         "files": {
@@ -512,11 +516,13 @@ def update_remote_storage(key, val):
         }
     }
     try:
-        requests.patch(url, json=payload, headers=headers, timeout=4)
-        get_remote_storage.clear()
-        return True
+        res = requests.patch(url, json=payload, headers=headers, timeout=4)
+        if res.status_code == 200:
+            get_remote_storage.clear()
+            return True
     except Exception:
-        return False
+        pass
+    return False
 
 # 로컬 파일명 정의
 PORTFOLIO_FILE = "portfolio.json"
@@ -1022,17 +1028,19 @@ def save_sports_briefings(briefings):
             json.dump(briefings, f, ensure_ascii=False, indent=2)
     except Exception: pass
 
+# 🌟 빈 리스트([])가 저장되어도 기본값으로 되돌아가지 않도록 완벽 수정
 def load_subscriptions():
     remote = get_remote_storage()
-    if remote and "subscriptions" in remote:
+    if remote is not None and "subscriptions" in remote:
         return remote["subscriptions"]
     if os.path.exists(SUBS_FILE):
         try:
             with open(SUBS_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                if data: return data
+                if isinstance(data, list):  # 빈 리스트([])여도 정상 반환
+                    return data
         except Exception: pass
-    return DEFAULT_SUBSCRIPTIONS
+    return [s.copy() for s in DEFAULT_SUBSCRIPTIONS]
 
 def save_subscriptions(subs):
     update_remote_storage("subscriptions", subs)
@@ -1761,9 +1769,9 @@ def render_daily_hub():
                             st.success("새 일정이 등록되었습니다.")
                             st.rerun()
 
-    with sub_d3:
+   with sub_d3:
         subs_list = load_subscriptions()
-        total_sub_monthly = sum(s["월요금"] for s in subs_list)
+        total_sub_monthly = sum(s.get("월요금", 0) for s in subs_list) if subs_list else 0
         monthly_div = summary['total_monthly_div_krw']
         coverage_rate = (monthly_div / total_sub_monthly * 100) if total_sub_monthly > 0 else 0
 
@@ -1772,31 +1780,43 @@ def render_daily_hub():
         with c_s2: st.metric("배당금 방어율", f"{coverage_rate:.1f}%", f"월 배당 {monthly_div:,.0f}원")
 
         st.markdown("##### 💳 구독 서비스 목록 및 삭제")
-        sub_to_delete = None
-        for idx, s in enumerate(subs_list):
-            col_name, col_cost, col_dday, col_del = st.columns([0.45, 0.25, 0.18, 0.12])
-            with col_name: st.markdown(f"**{s['서비스']}** ({s['카테고리']})")
-            with col_cost: st.markdown(f"{s['월요금']:,}원 / 월")
-            with col_dday: st.markdown(f"매월 **{s['결제일']}일**")
-            with col_del:
-                if st.button("삭제", key=f"btn_del_sub_{idx}"):
-                    sub_to_delete = idx
+        
+        if not subs_list:
+            st.info("현재 등록된 구독 서비스가 없습니다. 아래에서 새로운 서비스를 추가해보세요.")
+        else:
+            sub_to_delete = None
+            for idx, s in enumerate(subs_list):
+                col_name, col_cost, col_dday, col_del = st.columns([0.45, 0.25, 0.18, 0.12])
+                with col_name: st.markdown(f"**{s.get('서비스', '구독')}** ({s.get('카테고리', '기타')})")
+                with col_cost: st.markdown(f"{s.get('월요금', 0):,}원 / 월")
+                with col_dday: st.markdown(f"매월 **{s.get('결제일', 1)}일**")
+                with col_del:
+                    # 버튼 고유 키 생성으로 충돌 방지
+                    s_id = s.get("service_id", f"sub_{idx}")
+                    if st.button("삭제", key=f"btn_del_sub_{s_id}_{idx}"):
+                        sub_to_delete = idx
 
-        if sub_to_delete is not None:
-            removed_sub = subs_list.pop(sub_to_delete)
-            save_subscriptions(subs_list)
-            st.success(f"'{removed_sub.get('서비스')}' 구독이 삭제되었습니다.")
-            st.rerun()
+            if sub_to_delete is not None:
+                removed_sub = subs_list.pop(sub_to_delete)
+                save_subscriptions(subs_list)
+                st.success(f"'{removed_sub.get('서비스')}' 구독이 삭제되었습니다.")
+                st.rerun()
 
         with st.expander("➕ 새 구독 서비스 추가"):
-            with st.form("add_sub_form"):
-                new_s_name = st.text_input("서비스명", value="유튜브 프리미엄")
+            with st.form("add_sub_form", clear_on_submit=True):
+                new_s_name = st.text_input("서비스명", placeholder="예: 유튜브 프리미엄")
                 new_s_cost = st.number_input("월 구독료(원)", value=14900, step=1000)
                 new_s_day = st.number_input("결제일 (1~31일)", value=1, min_value=1, max_value=31)
                 new_s_cat = st.selectbox("카테고리", ["OTT·영상", "스포츠", "음악", "생산성", "쇼핑·기타"])
                 if st.form_submit_button("등록"):
                     if new_s_name.strip():
-                        subs_list.append({"service_id": f"sub_{int(datetime.now().timestamp())}", "서비스": new_s_name.strip(), "월요금": int(new_s_cost), "결제일": int(new_s_day), "카테고리": new_s_cat})
+                        subs_list.append({
+                            "service_id": f"sub_{int(datetime.now().timestamp())}",
+                            "서비스": new_s_name.strip(),
+                            "월요금": int(new_s_cost),
+                            "결제일": int(new_s_day),
+                            "카테고리": new_s_cat
+                        })
                         save_subscriptions(subs_list)
                         st.success("등록 완료되었습니다.")
                         st.rerun()
