@@ -1769,7 +1769,7 @@ def render_daily_hub():
                             st.success("새 일정이 등록되었습니다.")
                             st.rerun()
 
-   with sub_d3:
+    with sub_d3:
         subs_list = load_subscriptions()
         total_sub_monthly = sum(s.get("월요금", 0) for s in subs_list) if subs_list else 0
         monthly_div = summary['total_monthly_div_krw']
