@@ -494,6 +494,36 @@ def get_remote_storage():
         pass
     return {}
 
+# =============================================================
+# 🔍 [저장소 실시간 연결 진단 함수]
+# =============================================================
+def check_gist_status():
+    """Gist 연결 상태를 점검하고 정확한 원인을 반환합니다."""
+    if not GIST_ID or not GITHUB_TOKEN:
+        return False, "Streamlit Secrets에 GIST_ID 또는 GITHUB_TOKEN이 없습니다."
+    if "gist.github.com" in GIST_ID:
+        return False, "GIST_ID에 URL 주소 전체가 들어가 있습니다! 맨 끝의 '32자리 ID'만 입력해주세요."
+    
+    url = f"https://api.github.com/gists/{GIST_ID}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}", "User-Agent": "MORI-App"}
+    try:
+        res = requests.get(url, headers=headers, timeout=4)
+        if res.status_code == 200:
+            files = res.json().get("files", {})
+            if "mori_data.json" not in files:
+                existing_files = list(files.keys())
+                return False, f"Gist에 'mori_data.json' 파일이 없습니다. (현재 파일명: {existing_files})"
+            return True, "정상 연결됨"
+        elif res.status_code == 401:
+            return False, "토큰(GITHUB_TOKEN) 인증 실패 (401). 토큰 값이나 gist 체크 권한을 확인해주세요."
+        elif res.status_code == 404:
+            return False, "GIST_ID를 찾을 수 없습니다 (404). ID 값을 확인해주세요."
+        else:
+            return False, f"GitHub 통신 오류 (상태 코드: {res.status_code})"
+    except Exception as e:
+        return False, f"네트워크 통신 오류: {e}"
+
+
 def update_remote_storage(key, val):
     """특정 항목의 데이터를 Gist에 영구 저장합니다."""
     if not GIST_ID or not GITHUB_TOKEN:
