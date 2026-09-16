@@ -3,28 +3,108 @@ import json
 import requests
 from datetime import datetime, timezone, timedelta
 
+# 한국 표준시(KST) 정의
 KST = timezone(timedelta(hours=9))
 
 # ==========================================
-# 1. 카카오톡 액세스 토큰 갱신
+# 1. Gist 스마트 자동 탐색 및 카카오 토큰 갱신
 # ==========================================
-def refresh_kakao_token(client_id, client_secret, refresh_token):
-    url = "https://kauth.kakao.com/oauth/token"
-    data = {
-        "grant_type": "refresh_token",
-        "client_id": client_id,
-        "refresh_token": refresh_token
+def get_kakao_access_token(kakao_rest_key, gist_id, gist_token, kakao_auth_code=""):
+    gist_headers = {
+        "Authorization": f"token {gist_token}",
+        "User-Agent": "MORI-App",
+        "Accept": "application/vnd.github.v3+json"
     }
-    if client_secret:
-        data["client_secret"] = client_secret
-        
-    res = requests.post(url, data=data, timeout=10)
-    if res.status_code == 200:
-        token_data = res.json()
-        return token_data.get("access_token")
-    else:
-        print(f"카카오 토큰 갱신 실패: {res.status_code} - {res.text}")
+    gist_url = f"https://api.github.com/gists/{gist_id}"
+    
+    files = {}
+    try:
+        r = requests.get(gist_url, headers=gist_headers, timeout=6)
+        if r.status_code == 200:
+            files = r.json().get("files", {})
+            print(f"🔍 Gist 연결 성공! 보관된 파일 목록: {list(files.keys())}")
+        else:
+            print(f"❌ Gist 조회 실패 (상태 코드 {r.status_code}): {r.text}")
+            return None
+    except Exception as e:
+        print(f"❌ Gist 네트워크 통신 오류: {e}")
         return None
+
+    target_filename = None
+    file_content_json = {}
+    tokens = {}
+
+    # 🌟 Gist 내 모든 파일을 검사하여 카카오 토큰이 들어있는 파일 자동 탐지
+    for fname, finfo in files.items():
+        try:
+            content = json.loads(finfo.get("content", "{}"))
+            if isinstance(content, dict):
+                if "refresh_token" in content or "access_token" in content:
+                    target_filename = fname
+                    file_content_json = content
+                    tokens = content
+                    break
+                elif "kakao_tokens" in content:
+                    target_filename = fname
+                    file_content_json = content
+                    tokens = content["kakao_tokens"]
+                    break
+        except Exception:
+            pass
+
+    if not target_filename:
+        print("❌ Gist 파일들 속에서 카카오 토큰(refresh_token)을 찾지 못했습니다.")
+        return None
+
+    print(f"🔑 카카오 토큰 파일 발견: [{target_filename}]")
+    refresh_token = tokens.get("refresh_token")
+    access_token = tokens.get("access_token")
+
+    # 🌟 리프레시 토큰으로 새 액세스 토큰 갱신
+    if refresh_token and kakao_rest_key:
+        print("🔄 카카오 리프레시 토큰으로 최신 액세스 토큰 갱신 중...")
+        token_url = "https://kauth.kakao.com/oauth/token"
+        data = {
+            "grant_type": "refresh_token",
+            "client_id": kakao_rest_key,
+            "refresh_token": refresh_token
+        }
+        res = requests.post(token_url, data=data, timeout=10)
+        if res.status_code == 200:
+            token_res = res.json()
+            new_access_token = token_res.get("access_token")
+            new_refresh_token = token_res.get("refresh_token")
+            
+            # 토큰 정보 업데이트
+            tokens["access_token"] = new_access_token
+            if new_refresh_token:
+                tokens["refresh_token"] = new_refresh_token
+                
+            if "kakao_tokens" in file_content_json:
+                file_content_json["kakao_tokens"] = tokens
+            else:
+                file_content_json.update(tokens)
+                
+            # Gist에 최신 갱신 토큰 저장
+            try:
+                payload = {
+                    "files": {
+                        target_filename: {
+                            "content": json.dumps(file_content_json, ensure_ascii=False, indent=2)
+                        }
+                    }
+                }
+                requests.patch(gist_url, json=payload, headers=gist_headers, timeout=6)
+                print("💾 최신 토큰을 Gist에 성공적으로 업데이트했습니다.")
+            except Exception as e:
+                print(f"Gist 저장 경고: {e}")
+                
+            print("✅ 새 카카오 액세스 토큰 발급 완료!")
+            return new_access_token
+        else:
+            print(f"❌ 카카오 리프레시 갱신 실패 ({res.status_code}): {res.text}")
+
+    return access_token
 
 # ==========================================
 # 2. 날씨 정보 수집 (용인시 기준)
@@ -34,7 +114,7 @@ def get_weather(lat=37.2410, lon=127.1775):
         url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,relative_humidity_2m,weather_code&timezone=Asia%2FSeoul"
         res = requests.get(url, timeout=5).json()
         cur = res.get("current", {})
-        temp = cur.get("temperature_2m", 20.0)
+        temp = cur.get("temperature_2m", 22.0)
         hum = cur.get("relative_humidity_2m", 70)
         code = cur.get("weather_code", 0)
         
@@ -44,54 +124,63 @@ def get_weather(lat=37.2410, lon=127.1775):
         elif code in (51, 53, 55, 61, 63, 65, 80, 81, 82): desc = "비"
         elif code in (71, 73, 75, 85, 86): desc = "눈"
         
-        return f"용인시 {desc}, 현재 {temp:.1f}°C, 습도 {hum}%"
+        return f"용인시 {desc}, 기온 {temp:.1f}°C, 습도 {hum}%"
     except Exception:
         return "용인시 맑음, 약 22°C"
 
 # ==========================================
 # 3. TimeTree 일정 가져오기
 # ==========================================
-def get_timetree_today(timetree_token, calendar_id):
+def get_timetree_today(email, password, calendar_code):
+    if not email or not password:
+        return "TimeTree 계정 정보 미등록"
+        
+    session = requests.Session()
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept": "application/json"
+    })
+    
     today_str = datetime.now(KST).strftime('%Y-%m-%d')
-    events = []
-    if not timetree_token or not calendar_id:
-        return "TimeTree 설정 미등록"
-        
+    events_text = []
+    
     try:
-        url = f"https://timetreeapis.com/calendars/{calendar_id}/upcoming_events?timezone=Asia/Seoul&days=1"
-        headers = {
-            "Accept": "application/vnd.timetree.v1+json",
-            "Authorization": f"Bearer {timetree_token}"
-        }
-        res = requests.get(url, headers=headers, timeout=5)
-        if res.status_code == 200:
-            data = res.json().get("data", [])
-            for item in data:
-                attr = item.get("attributes", {})
-                start_at = attr.get("start_at", "")
-                if start_at.startswith(today_str):
-                    t_str = start_at[11:16] if len(start_at) >= 16 else "종일"
-                    events.append(f"• [{t_str}] {attr.get('title')}")
-    except Exception as e:
-        print(f"TimeTree 수집 에러: {e}")
+        login_url = "https://timetreeapp.com/api/v1/session"
+        login_payload = {"session": {"email": email, "password": password}}
+        r = session.post(login_url, json=login_payload, timeout=8)
         
-    if events:
-        return "\n".join(events)
-    return "오늘 예정된 주요 일정이 없습니다."
+        if r.status_code in (200, 201):
+            cal_url = f"https://timetreeapp.com/api/v1/calendars/{calendar_code}/upcoming_events"
+            cr = session.get(cal_url, timeout=8)
+            if cr.status_code == 200:
+                data = cr.json().get("events", [])
+                for ev in data:
+                    start_at = ev.get("start_at", "")
+                    title = ev.get("title", "일정")
+                    if start_at.startswith(today_str):
+                        t_str = start_at[11:16] if len(start_at) >= 16 else "종일"
+                        events_text.append(f"• [{t_str}] {title}")
+    except Exception as e:
+        print(f"TimeTree 수집 오류: {e}")
+
+    return "\n".join(events_text) if events_text else "오늘 예정된 주요 일정이 없습니다."
 
 # ==========================================
-# 4. Gemini를 통한 고밀도 상세 브리핑 작성 (850~950자)
+# 4. Gemini 고밀도 상세 브리핑 작성 (850~950자)
 # ==========================================
 def make_ai_briefing(weather_str, timetree_events_str, api_key):
     today_kst = datetime.now(KST).strftime('%Y년 %m월 %d일')
     weekday_kr = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"][datetime.now(KST).weekday()]
     
+    if not api_key:
+        return f"[MORI 모닝 브리핑] {today_kst}\n\n🌤️ 날씨: {weather_str}\n📅 오늘의 일정:\n{timetree_events_str}\n\n좋은 하루 보내세요!"
+
     prompt = f"""
     당신은 직장인 투자자 이현재 님의 스마트 비서 AI 'MORI'입니다.
-    오늘자 실시간 아침 브리핑을 작성해주세요.
+    오늘자 아침 카카오톡 브리핑을 작성해주세요.
 
     [분량 및 스타일 규칙 - 매우 중요]
-    - 전체 분량은 반드시 공백 포함 **850자 ~ 950자 사이**로 풍부하고 상세하게 작성할 것 (1,000자 초과 금지).
+    - 전체 분량은 반드시 공백 포함 850자 ~ 950자 사이로 풍부하고 상세하게 작성할 것 (1,000자 초과 금지).
     - 전문적이고 정중한 어조로 작성하되, 가독성을 위해 항목별로 구분할 것.
 
     [데이터]
@@ -123,23 +212,23 @@ def make_ai_briefing(weather_str, timetree_events_str, api_key):
     💡 상세 포트폴리오 분석 리포트는 아래 앱에서 확인하실 수 있습니다.
     """
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
-    payload = {"contents": [{"role": "user", "parts": [{"text": prompt}]}]}
-    headers = {"Content-Type": "application/json"}
-    
-    try:
-        res = requests.post(url, json=payload, headers=headers, timeout=25)
-        if res.status_code == 200:
-            candidates = res.json().get('candidates', [])
-            if candidates:
-                text = candidates[0]['content']['parts'][0]['text'].strip()
-                if len(text) > 950:
-                    text = text[:940] + "\n...(자세한 내용은 MORI 앱 참조)"
-                return text
-    except Exception as e:
-        print(f"Gemini API 에러: {e}")
-        
-    return f"[MORI 모닝 브리핑]\n오늘 날씨: {weather_str}\n\n오늘의 일정:\n{timetree_events_str}\n\n좋은 하루 보내세요!"
+    for model_name in ["gemini-2.5-flash", "gemini-3.5-flash", "gemini-3.1-flash-lite"]:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+        payload = {"contents": [{"role": "user", "parts": [{"text": prompt}]}]}
+        headers = {"Content-Type": "application/json"}
+        try:
+            res = requests.post(url, json=payload, headers=headers, timeout=25)
+            if res.status_code == 200:
+                candidates = res.json().get('candidates', [])
+                if candidates:
+                    text = candidates[0]['content']['parts'][0]['text'].strip()
+                    if len(text) > 950:
+                        text = text[:940] + "\n...(자세한 내용은 MORI 앱 참조)"
+                    return text
+        except Exception:
+            pass
+            
+    return f"[MORI 모닝 브리핑] {today_kst}\n🌤️ 날씨: {weather_str}\n📅 오늘의 일정:\n{timetree_events_str}"
 
 # ==========================================
 # 5. 카카오톡 '나에게 보내기' 발송 (버튼 탑재)
@@ -147,7 +236,6 @@ def make_ai_briefing(weather_str, timetree_events_str, api_key):
 def send_kakao_briefing(final_text, access_token):
     send_url = "https://kapi.kakao.com/v2/api/talk/memo/default/send"
     headers = {"Authorization": f"Bearer {access_token}"}
-    
     template = {
         "object_type": "text",
         "text": final_text,
@@ -165,59 +253,37 @@ def send_kakao_briefing(final_text, access_token):
             }
         ]
     }
-    
-    res = requests.post(send_url, headers=headers, data={"template_object": json.dumps(template)})
+    res = requests.post(send_url, headers=headers, data={"template_object": json.dumps(template)}, timeout=10)
     if res.status_code == 200:
-        print("✅ 카카오톡 발송 완료!")
+        print("✅ 카카오톡 발송 성공!")
+        return True
     else:
-        print(f"❌ 카카오톡 발송 실패: {res.status_code} - {res.text}")
+        print(f"❌ 카카오톡 발송 실패 ({res.status_code}): {res.text}")
+        return False
 
 # ==========================================
-# 메인 실행부 (기존 토큰 방식 & 자동 갱신 방식 모두 완벽 호환)
+# 메인 실행부
 # ==========================================
 if __name__ == "__main__":
-    # 1. 깃허브 Secrets에 이미 저장되어 있던 기존 토큰 우선 확인
-    access_token = (
-        os.environ.get("KAKAO_ACCESS_TOKEN")
-        or os.environ.get("KAKAO_TOKEN")
-    )
+    KAKAO_REST_KEY = os.environ.get("KAKAO_REST_KEY")
+    KAKAO_AUTH_CODE = os.environ.get("KAKAO_AUTH_CODE", "")
+    GIST_ID = os.environ.get("GIST_ID")
+    GIST_TOKEN = os.environ.get("GIST_TOKEN")
     
-    # 2. 만약 기존 토큰이 없고 리프레시 토큰이 있는 경우에만 갱신 시도
-    if not access_token:
-        client_id = (
-            os.environ.get("KAKAO_CLIENT_ID")
-            or os.environ.get("KAKAO_REST_API_KEY")
-            or os.environ.get("REST_API_KEY")
-            or os.environ.get("KAKAO_API_KEY")
-        )
-        client_secret = os.environ.get("KAKAO_CLIENT_SECRET", "")
-        refresh_token = (
-            os.environ.get("KAKAO_REFRESH_TOKEN")
-            or os.environ.get("REFRESH_TOKEN")
-        )
-        
-        if client_id and refresh_token:
-            print("1. 카카오 리프레시 토큰으로 액세스 토큰 갱신 중...")
-            access_token = refresh_kakao_token(client_id, client_secret, refresh_token)
-        elif refresh_token and not client_id:
-            # 혹시 client_id 없이 refresh_token만 있는 경우
-            access_token = refresh_token
-
-    # 3. 토큰 검증
-    if not access_token:
-        print("❌ 카카오 발송 토큰을 찾을 수 없습니다.")
-        exit(1)
-
-    print("1. 카카오 토큰 준비 완료!")
-
-    # 환경변수 로드
+    TIMETREE_EMAIL = os.environ.get("TIMETREE_EMAIL", "")
+    TIMETREE_PASSWORD = os.environ.get("TIMETREE_PASSWORD", "")
+    TIMETREE_CALENDAR_CODE = os.environ.get("TIMETREE_CALENDAR_CODE", "")
     GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-    TIMETREE_TOKEN = os.environ.get("TIMETREE_TOKEN", "")
-    TIMETREE_CALENDAR_ID = os.environ.get("TIMETREE_CALENDAR_ID", "")
+
+    print("1. 카카오 액세스 토큰 준비 중 (Gist 스마트 연동)...")
+    access_token = get_kakao_access_token(KAKAO_REST_KEY, GIST_ID, GIST_TOKEN, KAKAO_AUTH_CODE)
+    if not access_token:
+        print("❌ 카카오 발송 토큰을 얻지 못했습니다.")
+        exit(1)
 
     print("2. 날씨 및 TimeTree 일정 수집 중...")
     weather_info = get_weather()
-    timetree_info = get_timetree_today(TIMETREE_TOKEN, TIMETREE_CALENDAR_ID)
+    timetree_info = get_timetree_today(TIMETREE_EMAIL, TIMETREE_PASSWORD, TIMETREE_CALENDAR_CODE)
 
     print("3. Gemini 고밀도 상세 브리핑 작성 중...")
     briefing_text = make_ai_briefing(weather_info, timetree_info, GEMINI_API_KEY)
