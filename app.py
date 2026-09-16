@@ -2695,9 +2695,6 @@ with col_nav4:
         st.query_params["tab"] = "blog"
         st.rerun()
 
-if active_tab_key ==_params["tab"] = "blog"
-        st.rerun()
-
 if active_tab_key == "daily":
     render_daily_hub()
 elif active_tab_key == "stock":
