@@ -222,81 +222,27 @@ def generate_ai_signal(sox_pct, nvda_pct):
 
 # 8. 최종 메시지 조립 및 카카오톡 전송
 def send_kakao_briefing():
-    access_token = get_kakao_access_token()
-    if not access_token:
-        print("카카오 토큰이 없어 발송을 중단합니다.")
-        return
-
-    sync_timetree_events()
-    weather_txt = get_weather()
-    sox_r, nvda_r = get_market_summary()
-    market_signal = generate_ai_signal(sox_r, nvda_r)
-    
-    # 오늘 일정 추출 (TimeTree + Gist 고정 일정)
-    gist_data = get_gist_data()
-    all_events = gist_data.get("calendar_events", []) + gist_data.get("timetree_events", [])
-    today_events = [e.get("title") for e in all_events if e.get("date") == today_str]
-    
-    # 중복 제거 및 최대 3개 선별
-    seen = set()
-    filtered_events = []
-    for t in today_events:
-        if t not in seen:
-            seen.add(t)
-            filtered_events.append(t)
-            
-    if filtered_events:
-        event_str = ", ".join(filtered_events[:3])
-        if len(filtered_events) > 3:
-            event_str += f" 외 {len(filtered_events)-3}건"
-    else:
-        event_str = "오늘 예정된 주요 일정 없음"
-
-    # 요일별 스포츠 한줄
-    sports_str = "오늘 밤 맨유 경기 없음"
-    if today_weekday in ["토", "일"]:
-        sports_str = "주말 매치데이 (맨유·KBO 일정 확인)"
-
-    # 완결형 텍스트 구성 (스크롤 없이 15초 완독)
-    msg_lines = [
-        f"[MORI 모닝 브리프] {today_now.month}.{today_now.day}({today_weekday})",
-        f"📈 {market_signal}",
-        f"• 필반도 {sox_r:+.1f}%, NVDA {nvda_r:+.1f}%",
-        "",
-        f"📍 경기 용인: {weather_txt}",
-        f"⏰ 오늘 일정: {event_str}",
-        f"⚽ 스포츠: {sports_str}"
-    ]
-    final_text = "\n".join(msg_lines)
-
-    # 카카오 '나에게 보내기' API 호출
+def send_kakao_briefing(final_text, access_token):
     send_url = "https://kapi.kakao.com/v2/api/talk/memo/default/send"
     headers = {"Authorization": f"Bearer {access_token}"}
-        template = {
+    
+    template = {
         "object_type": "text",
-        "text": final_text,  # (원래 쓰시던 변수명이 briefing_text라면 briefing_text로 유지)
+        "text": final_text,
         "link": {
             "web_url": "https://hj-app.streamlit.app",
             "mobile_web_url": "https://hj-app.streamlit.app"
         },
-        "buttons": [
-            {
-                "title": "📱 MORI 앱 열기",
-                "link": {
-                    "web_url": "https://hj-app.streamlit.app",
-                    "mobile_web_url": "https://hj-app.streamlit.app"
-                }
-            }
-        ]
+        "button_title": "📱 MORI 앱 열기"
     }
-
-
     
-    res = requests.post(send_url, headers=headers, data={"template_object": json.dumps(template)}, timeout=6)
+    res = requests.post(send_url, headers=headers, data={"template_object": json.dumps(template)}, timeout=10)
     if res.status_code == 200:
-        print("카카오톡 모닝 브리프 전송 성공! 🎉")
+        print("✅ 카카오톡 발송 성공!")
+        return True
     else:
-        print(f"카카오톡 전송 실패: {res.text}")
+        print(f"❌ 카카오톡 발송 실패 ({res.status_code}): {res.text}")
+        return False
 
 if __name__ == "__main__":
     send_kakao_briefing()
