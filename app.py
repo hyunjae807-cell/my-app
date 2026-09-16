@@ -754,7 +754,8 @@ def fetch_timetree_schedules():
 
 def sync_and_load_calendar_events(current_portfolio):
     """
-    TimeTree + 포트폴리오(정밀 계산) + 고정 구독료(향후 2개월 롤링) + 사용자 추가 일정을 완벽히 통합
+    TimeTree + 포트폴리오 + 고정 구독료 + 사용자 일정을 통합하며,
+    지나간 일정(오늘 이전)은 자동으로 필터링 및 정리합니다.
     """
     deleted_ids = load_deleted_event_ids()
     custom_events = []
@@ -821,17 +822,28 @@ def sync_and_load_calendar_events(current_portfolio):
 
     # 5. 사용자 직접 입력 일정
     final_events.extend(custom_events)
-    final_events.sort(key=lambda x: x.get("date", "9999-12-31"))
 
-    # 저장소 영구 반영
-    update_remote_storage("calendar_events", final_events)
+    # 🌟 [핵심] 오늘 이전의 지나간 일정은 모두 삭제(제외)하고 오늘 및 미래 일정만 보존
+    active_events = []
+    for ev in final_events:
+        try:
+            ev_date = datetime.strptime(ev["date"], "%Y-%m-%d").date()
+            if ev_date >= cur_d:
+                active_events.append(ev)
+        except Exception:
+            pass
+
+    active_events.sort(key=lambda x: x.get("date", "9999-12-31"))
+
+    # 저장소에 최신 유효 일정만 영구 반영
+    update_remote_storage("calendar_events", active_events)
     try:
         with open(CALENDAR_FILE, "w", encoding="utf-8") as f:
-            json.dump(final_events, f, ensure_ascii=False, indent=2)
+            json.dump(active_events, f, ensure_ascii=False, indent=2)
     except Exception:
         pass
 
-    return final_events
+    return active_events
 
 # --- 기본 데이터 I/O 함수군 ---
 
@@ -1052,7 +1064,8 @@ def get_weekly_filtered_events(events, current_dt):
             diff_days = (ev_date - today_date).days
             if 0 <= diff_days <= 7:
                 dday_str = "오늘 (D-Day)" if diff_days == 0 else f"D-{diff_days}"
-                date_label = f"{ev_date.month}월 {ev_date.day}일({weekdays_kr[ev_date.weekday()]})"
+                # 🌟 [연도 포함]
+                date_label = f"{ev_date.year}년 {ev_date.month}월 {ev_date.day}일({weekdays_kr[ev_date.weekday()]})"
                 weekly.append({
                     "id": ev.get("id"),
                     "날짜": date_label,
@@ -1830,7 +1843,7 @@ def render_daily_hub():
             with ch2:
                 st.metric("총 평가손익", f"{summary['total_profit_krw']:+,.0f}원", f"추정자산: {summary['total_net_assets_krw']:,.0f}원")
 
-    with sub_d2:
+        with sub_d2:
         monthly_div = summary['total_monthly_div_krw']
 
         with st.container(border=True):
@@ -1850,20 +1863,24 @@ def render_daily_hub():
         formatted_all_events = []
         today_d = datetime.now(KST).date()
         weekdays_kr = ["월", "화", "수", "목", "금", "토", "일"]
+        
         for ev in all_calendar_events:
             try:
                 ev_d = datetime.strptime(ev["date"], "%Y-%m-%d").date()
                 diff_d = (ev_d - today_d).days
+                
+                # 🌟 지나간 일정은 표시하지 않고 제외
                 if diff_d < 0:
-                    d_tag = f"지남({abs(diff_d)}일 전)"
+                    continue
                 elif diff_d == 0:
                     d_tag = "오늘 (D-Day)"
                 else:
                     d_tag = f"D-{diff_d}"
-                d_label = f"{ev_d.month}월 {ev_d.day}일({weekdays_kr[ev_d.weekday()]})"
+                    
+                # 🌟 [연도 포함 서식] 예: 2026년 9월 17일(목)
+                d_label = f"{ev_d.year}년 {ev_d.month}월 {ev_d.day}일({weekdays_kr[ev_d.weekday()]})"
             except Exception:
-                d_tag = "-"
-                d_label = ev.get("date", "")
+                continue
 
             formatted_all_events.append({
                 "id": ev.get("id"),
@@ -1878,11 +1895,11 @@ def render_daily_hub():
             df_all_events = pd.DataFrame(formatted_all_events)[["날짜", "구분", "내용", "연관종목", "D-Day"]]
             st.dataframe(df_all_events, use_container_width=True, hide_index=True)
         else:
-            st.info("등록된 일정이 없습니다.")
+            st.info("예정된 일정이 없습니다.")
 
         col_cal1, col_cal2 = st.columns(2)
         with col_cal1:
-            with st.expander("🗑️ 등록된 일정 삭제"):
+            with st.expander("🗑️ 등록된 일정 수동 삭제"):
                 if all_calendar_events:
                     del_event_idx = st.selectbox(
                         "삭제할 일정 선택",
