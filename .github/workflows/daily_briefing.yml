@@ -2,11 +2,10 @@ name: MORI Daily Kakao Briefing
 
 on:
   schedule:
-    # 🌟 UTC 21:55 = 한국 시간(KST) 매일 오전 6시 55분
-    # (0분 정각에는 깃허브 서버 대기열이 밀리므로 5분 일찍 설정하면 7시 정각 전에 딱 도착합니다)
+    # 🌟 한국 시간(KST) 매일 아침 06:55 (UTC 21:55) 자동 실행
+    # (0분 정각 대기열 지연을 피해 7시 정각 전에 여유 있게 도착합니다)
     - cron: '55 21 * * *'
-  workflow_dispatch: # 수동 실행 버튼 유지
-
+  workflow_dispatch: # Actions 탭에서 [Run workflow] 수동 실행 지원
 
 jobs:
   send_briefing:
@@ -14,24 +13,25 @@ jobs:
 
     steps:
       - name: 저장소 코드 불러오기
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: 파이썬 3.10 환경 설정
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
       - name: 필수 라이브러리 설치
         run: |
-          pip install requests timetree-exporter
+          python -m pip install --upgrade pip
+          pip install requests
 
-          - name: 카카오톡 브리핑 생성 및 발송
-      env:
-        # 🌟 Secrets에 저장된 키를 파이썬 환경변수로 주입
-        KAKAO_CLIENT_ID: ${{ secrets.KAKAO_CLIENT_ID }}
-        KAKAO_REFRESH_TOKEN: ${{ secrets.KAKAO_REFRESH_TOKEN }}
-        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        TIMETREE_TOKEN: ${{ secrets.TIMETREE_TOKEN }}
-        TIMETREE_CALENDAR_ID: ${{ secrets.TIMETREE_CALENDAR_ID }}
-      run: python send_daily_briefing.py
-
+      - name: 카카오톡 브리핑 생성 및 발송
+        env:
+          # 🌟 Secrets에 어떤 이름으로 등록되어 있어도 둘 다 매핑되도록 처리
+          KAKAO_CLIENT_ID: ${{ secrets.KAKAO_CLIENT_ID || secrets.KAKAO_REST_API_KEY }}
+          KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
+          KAKAO_REFRESH_TOKEN: ${{ secrets.KAKAO_REFRESH_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TIMETREE_TOKEN: ${{ secrets.TIMETREE_TOKEN }}
+          TIMETREE_CALENDAR_ID: ${{ secrets.TIMETREE_CALENDAR_ID }}
+        run: python send_daily_briefing.py
