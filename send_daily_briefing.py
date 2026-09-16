@@ -272,11 +272,9 @@ def send_kakao_briefing():
     # 카카오 '나에게 보내기' API 호출
     send_url = "https://kapi.kakao.com/v2/api/talk/memo/default/send"
     headers = {"Authorization": f"Bearer {access_token}"}
-    template = {
-        "object_type": "text",
         template = {
         "object_type": "text",
-        "text": briefing_text,
+        "text": final_text,  # (원래 쓰시던 변수명이 briefing_text라면 briefing_text로 유지)
         "link": {
             "web_url": "https://hj-app.streamlit.app",
             "mobile_web_url": "https://hj-app.streamlit.app"
@@ -291,6 +289,7 @@ def send_kakao_briefing():
             }
         ]
     }
+
 
     
     res = requests.post(send_url, headers=headers, data={"template_object": json.dumps(template)}, timeout=6)
