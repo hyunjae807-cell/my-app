@@ -104,25 +104,55 @@ def sync_timetree_events():
     if not TIMETREE_EMAIL or not TIMETREE_PASSWORD or not TIMETREE_CALENDAR_CODE:
         return
     try:
-        from timetree_exporter.timetree import TimeTreeClient
-        client = TimeTreeClient(TIMETREE_EMAIL, TIMETREE_PASSWORD)
-        cal_data = client.get_calendar_events(TIMETREE_CALENDAR_CODE)
-        
+        import subprocess
+        import sys
+        import re
+        import os
+
+        # 환경 변수 설정
+        env = os.environ.copy()
+        env["TIMETREE_EMAIL"] = TIMETREE_EMAIL
+        env["TIMETREE_PASSWORD"] = TIMETREE_PASSWORD
+
+        # timetree-exporter 실행하여 ics 파일 생성
+        ics_path = "timetree.ics"
+        cmd = [sys.executable, "-m", "timetree_exporter", "-c", TIMETREE_CALENDAR_CODE, "-o", ics_path]
+        res = subprocess.run(cmd, env=env, capture_output=True, text=True)
+
+        if res.returncode != 0:
+            err = res.stderr or res.stdout
+            print(f"TimeTree 수집 건너뜀 (내부 오류): {err.strip()}")
+            return
+
         extracted = []
-        for ev in cal_data:
-            start_at = ev.get("start_at", "")[:10]
-            title = ev.get("title", "")
-            if start_at and title:
-                extracted.append({
-                    "id": f"tt_{start_at}_{title}",
-                    "date": start_at,
-                    "type": "가족 일정",
-                    "title": title,
-                    "auto_stock": "-"
-                })
-        if extracted:
-            save_gist_key("timetree_events", extracted)
-            print(f"TimeTree 일정 {len(extracted)}건 수집 완료")
+        if os.path.exists(ics_path):
+            with open(ics_path, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+
+            # ics 파일에서 일정 제목과 날짜 추출
+            events = re.findall(r"BEGIN:VEVENT(.*?)END:VEVENT", content, re.DOTALL)
+            for ev in events:
+                summary_match = re.search(r"^SUMMARY:(.*)$", ev, re.MULTILINE)
+                title = summary_match.group(1).strip() if summary_match else ""
+
+                dt_match = re.search(r"^DTSTART.*?:(\d{4})(\d{2})(\d{2})", ev, re.MULTILINE)
+                if dt_match:
+                    start_at = f"{dt_match.group(1)}-{dt_match.group(2)}-{dt_match.group(3)}"
+                else:
+                    start_at = ""
+
+                if start_at and title:
+                    extracted.append({
+                        "id": f"tt_{start_at}_{title}",
+                        "date": start_at,
+                        "type": "가족 일정",
+                        "title": title,
+                        "auto_stock": "-"
+                    })
+
+            if extracted:
+                save_gist_key("timetree_events", extracted)
+                print(f"TimeTree 일정 {len(extracted)}건 수집 완료")
     except Exception as e:
         print(f"TimeTree 수집 건너뜀 (오류 또는 라이브러리 부재): {e}")
 
