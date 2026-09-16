@@ -2,12 +2,11 @@ name: MORI Daily Kakao Briefing
 
 on:
   schedule:
-    # 1) 평일(월~금) 한국 시간 07:00 KST (UTC 일~목 22:00)
-    - cron: '0 22 * * 0-4'
-    # 2) 주말(토~일) 한국 시간 10:00 KST (UTC 토,일 01:00)
-    - cron: '0 1 * * 6,0'
-  # 지금 당장 수동으로 테스트 실행할 수 있는 버튼 활성화
-  workflow_dispatch:
+    # 🌟 UTC 21:55 = 한국 시간(KST) 매일 오전 6시 55분
+    # (0분 정각에는 깃허브 서버 대기열이 밀리므로 5분 일찍 설정하면 7시 정각 전에 딱 도착합니다)
+    - cron: '55 21 * * *'
+  workflow_dispatch: # 수동 실행 버튼 유지
+
 
 jobs:
   send_briefing:
