@@ -11,7 +11,8 @@ import base64
 import io
 import concurrent.futures
 from PIL import Image, ImageDraw
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, date
+import calendar
 import urllib.request
 import xml.etree.ElementTree as ET
 import urllib.parse
@@ -74,13 +75,11 @@ st.markdown("""
     --text-muted: #64748b;
 }
 
-/* 폰트 적용 */
 html, body, p, div:not([data-testid*="Icon"]), span:not([data-testid*="Icon"]), label, li, input, select, textarea, button, h1, h2, h3, h4, h5, h6 {
     font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
     letter-spacing: -0.015em;
 }
 
-/* Streamlit 아이콘 및 _arrow 텍스트 겹침 방지 */
 [data-testid="stIcon"], [data-testid="stExpanderToggleIcon"], [data-testid="stExpander"] summary span:first-child, .material-symbols-rounded, .material-symbols-outlined, .material-icons {
     font-family: 'Material Symbols Rounded', 'Material Symbols Outlined', 'Material Icons', sans-serif !important;
     font-feature-settings: 'liga' 1 !important;
@@ -94,7 +93,6 @@ html, body, p, div:not([data-testid*="Icon"]), span:not([data-testid*="Icon"]), 
     color: #e2e8f0 !important;
 }
 
-/* 상단 여백 */
 .block-container {
     padding-top: 4.2rem !important;
     padding-bottom: 3.5rem !important;
@@ -104,7 +102,6 @@ html, body, p, div:not([data-testid*="Icon"]), span:not([data-testid*="Icon"]), 
     margin: 0 auto !important;
 }
 
-/* 상단 네비게이션 헤더 바 */
 .mori-navbar {
     display: flex;
     justify-content: space-between;
@@ -141,7 +138,6 @@ html, body, p, div:not([data-testid*="Icon"]), span:not([data-testid*="Icon"]), 
     color: #d8b4fe;
 }
 
-/* 실시간 라이브 펄스 뱃지 */
 .live-indicator {
     display: inline-flex;
     align-items: center;
@@ -162,7 +158,6 @@ html, body, p, div:not([data-testid*="Icon"]), span:not([data-testid*="Icon"]), 
     box-shadow: 0 0 10px #10b981;
 }
 
-/* 상단 4단 위젯 스트립 */
 .widget-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -222,7 +217,6 @@ html, body, p, div:not([data-testid*="Icon"]), span:not([data-testid*="Icon"]), 
     gap: 2px;
 }
 
-/* 메인 벤토 카드 스타일 */
 .bento-card {
     background: var(--card-bg);
     border: 1px solid var(--card-border);
@@ -242,7 +236,6 @@ html, body, p, div:not([data-testid*="Icon"]), span:not([data-testid*="Icon"]), 
     align-items: center;
 }
 
-/* 미국장 주목 종목 카드 */
 .us-stock-card {
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid var(--card-border);
@@ -298,7 +291,6 @@ html, body, p, div:not([data-testid*="Icon"]), span:not([data-testid*="Icon"]), 
     margin-top: 6px;
 }
 
-/* 버튼 스타일 */
 .btn-action-primary {
     display: inline-block;
     background: linear-gradient(135deg, #a855f7 0%, #9333ea 100%);
@@ -334,7 +326,6 @@ html, body, p, div:not([data-testid*="Icon"]), span:not([data-testid*="Icon"]), 
     color: #e9d5ff !important;
 }
 
-/* 뉴스 피드 아이템 */
 .news-row {
     background: rgba(255, 255, 255, 0.02);
     border: 1px solid var(--card-border);
@@ -364,7 +355,6 @@ html, body, p, div:not([data-testid*="Icon"]), span:not([data-testid*="Icon"]), 
     margin-top: 6px;
 }
 
-/* 4단 연보라 캡슐 탭 네비게이션 */
 div[data-testid="stHorizontalBlock"]:has(.mori-nav-anchor) {
     gap: 8px !important;
     background: rgba(147, 51, 234, 0.08) !important;
@@ -407,7 +397,6 @@ div[data-testid="stHorizontalBlock"]:has(.mori-nav-anchor) button[data-testid="s
     color: #e9d5ff !important;
 }
 
-/* 소메뉴 스타일 */
 div[data-testid="stTabs"] [data-baseweb="tab-list"] {
     gap: 6px !important;
     background: transparent !important;
@@ -435,7 +424,6 @@ div[data-testid="stTabs"] [aria-selected="true"] {
     box-shadow: none !important;
 }
 
-/* 메트릭 스타일 */
 [data-testid="stMetricValue"] {
     font-size: 26px !important;
     font-weight: 900 !important;
@@ -447,24 +435,13 @@ div[data-testid="stTabs"] [aria-selected="true"] {
     font-weight: 600 !important;
     color: #94a3b8 !important;
 }
-
-button {
-    font-size: 15px !important;
-    font-weight: 700 !important;
-    border-radius: 12px !important;
-}
-input, select, textarea {
-    font-size: 15px !important;
-    border-radius: 10px !important;
-}
 </style>
 """, unsafe_allow_html=True)
 
 # =============================================================
-# 6. [개선] 영구 저장소 관리 (GitHub Gist 클라우드 + 로컬 안전 백업)
+# 6. 영구 저장소 관리 (GitHub Gist 클라우드 + 로컬 안전 백업)
 # =============================================================
 
-# Streamlit Secrets에서 Gist 접속 키 불러오기
 try:
     GIST_ID = st.secrets.get("GIST_ID", "")
     GITHUB_TOKEN = st.secrets.get("GITHUB_TOKEN", "")
@@ -472,16 +449,14 @@ except Exception:
     GIST_ID = ""
     GITHUB_TOKEN = ""
 
-# --- 클라우드 원격 저장소 핵심 통신 엔진 ---
 @st.cache_data(ttl=3)
 def get_remote_storage():
-    """Gist에서 전체 앱 데이터를 불러옵니다."""
     if not GIST_ID or not GITHUB_TOKEN:
         return None
     url = f"https://api.github.com/gists/{GIST_ID}"
     headers = {
         "Authorization": f"token {GITHUB_TOKEN}",
-        "User-Agent": "MORI-App"  # 🌟 GitHub 필수 헤더 추가
+        "User-Agent": "MORI-App"
     }
     try:
         res = requests.get(url, headers=headers, timeout=4)
@@ -494,38 +469,7 @@ def get_remote_storage():
         pass
     return {}
 
-# =============================================================
-# 🔍 [저장소 실시간 연결 진단 함수]
-# =============================================================
-def check_gist_status():
-    """Gist 연결 상태를 점검하고 정확한 원인을 반환합니다."""
-    if not GIST_ID or not GITHUB_TOKEN:
-        return False, "Streamlit Secrets에 GIST_ID 또는 GITHUB_TOKEN이 없습니다."
-    if "gist.github.com" in GIST_ID:
-        return False, "GIST_ID에 URL 주소 전체가 들어가 있습니다! 맨 끝의 '32자리 ID'만 입력해주세요."
-    
-    url = f"https://api.github.com/gists/{GIST_ID}"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}", "User-Agent": "MORI-App"}
-    try:
-        res = requests.get(url, headers=headers, timeout=4)
-        if res.status_code == 200:
-            files = res.json().get("files", {})
-            if "mori_data.json" not in files:
-                existing_files = list(files.keys())
-                return False, f"Gist에 'mori_data.json' 파일이 없습니다. (현재 파일명: {existing_files})"
-            return True, "정상 연결됨"
-        elif res.status_code == 401:
-            return False, "토큰(GITHUB_TOKEN) 인증 실패 (401). 토큰 값이나 gist 체크 권한을 확인해주세요."
-        elif res.status_code == 404:
-            return False, "GIST_ID를 찾을 수 없습니다 (404). ID 값을 확인해주세요."
-        else:
-            return False, f"GitHub 통신 오류 (상태 코드: {res.status_code})"
-    except Exception as e:
-        return False, f"네트워크 통신 오류: {e}"
-
-
 def update_remote_storage(key, val):
-    """특정 항목의 데이터를 Gist에 영구 저장합니다."""
     if not GIST_ID or not GITHUB_TOKEN:
         return False
     current_data = get_remote_storage()
@@ -536,7 +480,7 @@ def update_remote_storage(key, val):
     headers = {
         "Authorization": f"token {GITHUB_TOKEN}",
         "Accept": "application/vnd.github.v3+json",
-        "User-Agent": "MORI-App"  # 🌟 GitHub 필수 헤더 추가
+        "User-Agent": "MORI-App"
     }
     payload = {
         "files": {
@@ -554,7 +498,7 @@ def update_remote_storage(key, val):
         pass
     return False
 
-# 로컬 파일명 정의
+# 파일명 정의
 PORTFOLIO_FILE = "portfolio.json"
 BRIEFING_FILE = "briefing.json"
 TODOS_FILE = "todos.json"
@@ -612,43 +556,284 @@ US_MARKET_FALLBACKS = {
     "ISRG": (445.00, +0.80)
 }
 
-STOCK_CATALYST_CATALOG = {
-    "000660": [
-        {"id": "cat_000660_1", "date": "2026-08-21", "type": "반도체·수출", "title": "관세청 8월 1~20일 반도체 수출입 통계 발표", "auto_stock": "SK하이닉스 (000660)"},
-        {"id": "cat_000660_2", "date": "2026-08-26", "type": "글로벌 실적", "title": "엔비디아(NVDA) 2분기 실적 발표 (SK하이닉스 HBM 영향)", "auto_stock": "SK하이닉스 (000660)"}
-    ],
-    "005380": [
-        {"id": "cat_005380_1", "date": "2026-08-18", "type": "자동차·수출", "title": "현대차·완성차 북미 수출 및 친환경차 판매 통계", "auto_stock": "현대차 (005380)"}
-    ],
-    "007660": [
-        {"id": "cat_007660_1", "date": "2026-08-24", "type": "AI·기판", "title": "이수페타시스 AI 가속기용 MLB 기판 공급망 점검", "auto_stock": "이수페타시스 (007660)"}
-    ],
-    "010120": [
-        {"id": "cat_010120_1", "date": "2026-08-25", "type": "전력·인프라", "title": "LS ELECTRIC 북미 변압기 및 배전 솔루션 수주 점검", "auto_stock": "LS ELECTRIC (010120)"}
-    ],
-    "012450": [
-        {"id": "cat_012450_1", "date": "2026-08-20", "type": "방산·모멘텀", "title": "한화에어로스페이스 K-방산 수출 수주 모멘텀 점검", "auto_stock": "한화에어로스페이스 (012450)"}
-    ],
-    "498400": [
-        {"id": "cat_498400_1", "date": "2026-09-01", "type": "배당 입금", "title": "KODEX 커버드콜 월 분배금(약 23.3만 원) 입금 예정일", "auto_stock": "KODEX 200타겟위클리커버드콜 (498400)"}
-    ],
-    "395160": [
-        {"id": "cat_395160_1", "date": "2026-08-26", "type": "AI 반도체", "title": "KODEX AI반도체 TOP2 포트폴리오 리밸런싱 및 실적 점검", "auto_stock": "KODEX AI반도체TOP2플러스 (395160)"}
-    ],
-    "161510": [
-        {"id": "cat_161510_1", "date": "2026-09-15", "type": "배당 시즌", "title": "PLUS 고배당주 편입 금융지주사 중간배당 점검", "auto_stock": "PLUS 고배당주 (161510)"}
-    ],
-    "448290": [
-        {"id": "cat_448290_1", "date": "2026-08-26", "type": "레버리지", "title": "SK하이닉스 단일종목 레버리지 롤오버 및 변동성 점검", "auto_stock": "KODEX SK하이닉스레버리지 (448290)"}
-    ]
-}
+# =============================================================
+# 7. 포트폴리오 일정 정밀 계산 엔진 (T+2 / 주말 보정 / 실제 배당일)
+# =============================================================
 
+def get_next_trading_day(target_date: date) -> date:
+    """주말(토/일)인 경우 다음 거래일(월요일)로 자동 보정"""
+    if target_date.weekday() == 5:
+        return target_date + timedelta(days=2)
+    elif target_date.weekday() == 6:
+        return target_date + timedelta(days=1)
+    return target_date
+
+def calculate_korea_ex_dividend(record_date: date) -> dict:
+    """
+    한국 배당기준일(Record Date) 기준
+    - 1영업일 전: 배당락일 (Ex-Dividend Date)
+    - 2영업일 전: 최종 매수 마감일 (Last Buying Date, T+2 기준)
+    """
+    cur = record_date - timedelta(days=1)
+    while cur.weekday() >= 5:
+        cur -= timedelta(days=1)
+    ex_date = cur
+    
+    cur = ex_date - timedelta(days=1)
+    while cur.weekday() >= 5:
+        cur -= timedelta(days=1)
+    last_buy_date = cur
+    
+    return {
+        "record_date": str(record_date),
+        "ex_date": str(ex_date),
+        "last_buy_date": str(last_buy_date)
+    }
+
+# 🌟 최신 증시·거시경제 주요 일정
 FIXED_GENERAL_EVENTS = [
-    {"id": "fixed_opic", "date": "2026-08-23", "type": "어학 시험", "title": "오픽(OPIc) 성적 발표 13:00", "auto_stock": "-"},
-    {"id": "fixed_macro_jackson", "date": "2026-08-28", "type": "거시 경제", "title": "미국 잭슨홀 심포지엄 (파월 연준 의장 연설)", "auto_stock": "글로벌 증시 전반"},
-    {"id": "fixed_deriv_witching", "date": "2026-09-10", "type": "파생 만기", "title": "국내 선물·옵션 동시 만기일 (쿼드러플 위칭데이)", "auto_stock": "KOSPI 200 전반"},
-    {"id": "fixed_fomc_sept", "date": "2026-09-16", "type": "거시 경제", "title": "미국 9월 FOMC 기준금리 결정 회의", "auto_stock": "글로벌 증시 전반"}
+    {"id": "fixed_macro_fomc_sept", "date": "2026-09-17", "type": "거시 경제", "title": "미국 9월 FOMC 기준금리 발표 및 경제전망 요약", "auto_stock": "글로벌 증시 전반"},
+    {"id": "fixed_macro_fomc_mins", "date": "2026-10-08", "type": "거시 경제", "title": "연준 9월 FOMC 의사록 공개", "auto_stock": "글로벌 증시 전반"},
+    {"id": "fixed_macro_fomc_nov", "date": "2026-11-05", "type": "거시 경제", "title": "미국 11월 FOMC 기준금리 회의", "auto_stock": "글로벌 증시 전반"},
+    {"id": "fixed_deriv_witching_dec", "date": "2026-12-10", "type": "파생 만기", "title": "국내 선물·옵션 동시 만기일 (쿼드러플 위칭데이)", "auto_stock": "KOSPI 200 전반"}
 ]
+
+# 🌟 보유 종목별 향후 일정 정밀 자동 생성기
+def generate_portfolio_catalysts(portfolio_items):
+    today = date.today()
+    catalysts = []
+    active_tickers = {str(item.get("티커", "")).replace(".KS", "").replace(".KQ", "").strip() for item in portfolio_items}
+
+    # 1. KODEX 200타겟위클리커버드콜 (498400) : 매월 1일 월 분배금 입금일
+    if "498400" in active_tickers:
+        for offset in range(3):
+            t_m = today.month + offset
+            t_y = today.year + ((t_m - 1) // 12)
+            t_m = ((t_m - 1) % 12) + 1
+            target_first = get_next_trading_day(date(t_y, t_m, 1))
+            if target_first >= today:
+                catalysts.append({
+                    "id": f"cat_498400_div_{target_first.strftime('%Y%m%d')}",
+                    "date": str(target_first),
+                    "type": "배당 입금",
+                    "title": f"KODEX 커버드콜 월 분배금(약 23.3만 원) 입금 예정일",
+                    "auto_stock": "KODEX 200타겟위클리커버드콜 (498400)"
+                })
+
+    # 2. SK하이닉스 (000660) & AI 반도체
+    if "000660" in active_tickers:
+        # 3분기 잠정 실적 발표 (10월 중순~하순 예상)
+        catalysts.append({
+            "id": "cat_000660_earnings_3q",
+            "date": "2026-10-22",
+            "type": "실적 발표",
+            "title": "SK하이닉스 3분기 잠정 실적 발표 (HBM 공급 실적)",
+            "auto_stock": "SK하이닉스 (000660)"
+        })
+        catalysts.append({
+            "id": "cat_000660_export_stat",
+            "date": "2026-09-21",
+            "type": "반도체·수출",
+            "title": "관세청 9월 1~20일 반도체 수출입 통계 발표",
+            "auto_stock": "SK하이닉스 (000660)"
+        })
+
+    # 3. 현대차 (005380)
+    if "005380" in active_tickers:
+        catalysts.append({
+            "id": "cat_005380_sales",
+            "date": str(get_next_trading_day(date(2026, 10, 2))),
+            "type": "자동차·수출",
+            "title": "현대차 9월 글로벌 및 북미 완성차 판매 통계 발표",
+            "auto_stock": "현대차 (005380)"
+        })
+
+    # 4. 이수페타시스 (007660)
+    if "007660" in active_tickers:
+        catalysts.append({
+            "id": "cat_007660_earnings",
+            "date": "2026-10-28",
+            "type": "AI·기판",
+            "title": "이수페타시스 AI 가속기용 MLB 기판 3분기 실적 및 수주 점검",
+            "auto_stock": "이수페타시스 (007660)"
+        })
+
+    # 5. LS ELECTRIC (010120)
+    if "010120" in active_tickers:
+        catalysts.append({
+            "id": "cat_010120_grid",
+            "date": "2026-10-23",
+            "type": "전력·인프라",
+            "title": "LS ELECTRIC 북미 초고압 변압기 및 배전반 수주 잔고 점검",
+            "auto_stock": "LS ELECTRIC (010120)"
+        })
+
+    # 6. 한화에어로스페이스 (012450)
+    if "012450" in active_tickers:
+        catalysts.append({
+            "id": "cat_012450_defense",
+            "date": "2026-10-27",
+            "type": "방산·모멘텀",
+            "title": "한화에어로스페이스 K9/천무 해외 납품 및 3분기 실적 점검",
+            "auto_stock": "한화에어로스페이스 (012450)"
+        })
+
+    # 7. PLUS 고배당주 (161510) : 3분기 결산 분배금 점검
+    if "161510" in active_tickers:
+        div_info = calculate_korea_ex_dividend(date(2026, 9, 30))
+        catalysts.append({
+            "id": "cat_161510_div_q3",
+            "date": div_info["last_buy_date"],
+            "type": "배당 시즌",
+            "title": f"PLUS 고배당주 3분기 분배금 최종 매수 마감일 (배당락: {div_info['ex_date']})",
+            "auto_stock": "PLUS 고배당주 (161510)"
+        })
+
+    return catalysts
+
+# =============================================================
+# 8. TimeTree 일정 연동 엔진
+# =============================================================
+
+@st.cache_data(ttl=600)
+def fetch_timetree_schedules():
+    """
+    TimeTree 일정을 가져와 표준 일정 리스트로 변환
+    1) Gist에 아침 브리핑 스크립트가 저장해 둔 'timetree_events'가 있으면 즉시 로드
+    2) 또는 Streamlit Secrets의 TIMETREE_TOKEN / CALENDAR_ID를 통해 직접 수집
+    """
+    events = []
+    
+    # 1. Gist 원격 캐시 확인 (send_daily_briefing.py와의 연동)
+    remote = get_remote_storage()
+    if remote and "timetree_events" in remote and isinstance(remote["timetree_events"], list):
+        for it in remote["timetree_events"]:
+            events.append({
+                "id": f"tt_{it.get('id', int(datetime.now().timestamp()))}",
+                "date": str(it.get("date", ""))[:10],
+                "type": "TimeTree",
+                "title": f"🗓️ {it.get('title', '개인 일정')}",
+                "auto_stock": it.get("location", "-")
+            })
+        if events:
+            return events
+
+    # 2. TimeTree Direct API (Secrets 연동 시)
+    try:
+        tt_token = st.secrets.get("TIMETREE_TOKEN", "")
+        tt_cal_id = st.secrets.get("TIMETREE_CALENDAR_ID", "")
+        if tt_token and tt_cal_id:
+            url = f"https://timetreeapis.com/calendars/{tt_cal_id}/upcoming_events?timezone=Asia/Seoul&days=14"
+            headers = {
+                "Accept": "application/vnd.timetree.v1+json",
+                "Authorization": f"Bearer {tt_token}"
+            }
+            res = requests.get(url, headers=headers, timeout=3)
+            if res.status_code == 200:
+                data = res.json().get("data", [])
+                for item in data:
+                    attr = item.get("attributes", {})
+                    start_at = attr.get("start_at", "")
+                    if start_at:
+                        date_str = start_at[:10]
+                        events.append({
+                            "id": f"tt_{item.get('id')}",
+                            "date": date_str,
+                            "type": "TimeTree",
+                            "title": f"🗓️ {attr.get('title', '일정')}",
+                            "auto_stock": "-"
+                        })
+    except Exception:
+        pass
+
+    return events
+
+# =============================================================
+# 9. 통합 일정 최신화 마스터 엔진
+# =============================================================
+
+def sync_and_load_calendar_events(current_portfolio):
+    """
+    TimeTree + 포트폴리오(정밀 계산) + 고정 구독료(향후 2개월 롤링) + 사용자 추가 일정을 완벽히 통합
+    """
+    deleted_ids = load_deleted_event_ids()
+    custom_events = []
+
+    remote = get_remote_storage()
+    saved_list = []
+    if remote and "calendar_events" in remote:
+        saved_list = remote["calendar_events"]
+    elif os.path.exists(CALENDAR_FILE):
+        try:
+            with open(CALENDAR_FILE, "r", encoding="utf-8") as f:
+                saved_list = json.load(f)
+        except Exception:
+            pass
+
+    for s in saved_list:
+        if str(s.get("id", "")).startswith("custom_") and s["id"] not in deleted_ids:
+            custom_events.append(s)
+
+    final_events = []
+
+    # 1. 고정 거시 경제 일정
+    for fe in FIXED_GENERAL_EVENTS:
+        if fe["id"] not in deleted_ids:
+            final_events.append(fe)
+
+    # 2. 포트폴리오 동적 촉매/배당 일정
+    port_catalysts = generate_portfolio_catalysts(current_portfolio)
+    for cat in port_catalysts:
+        if cat["id"] not in deleted_ids:
+            final_events.append(cat)
+
+    # 3. TimeTree 일정 연동
+    tt_events = fetch_timetree_schedules()
+    for te in tt_events:
+        if te["id"] not in deleted_ids:
+            final_events.append(te)
+
+    # 4. 고정 구독료 지출 일정 (오늘 이후 향후 2개월 롤링 생성)
+    subs = load_subscriptions()
+    today_dt = datetime.now(KST)
+    cur_d = today_dt.date()
+
+    for s in subs:
+        p_day = int(s.get("결제일", 1))
+        for m_offset in range(3):
+            t_month = today_dt.month + m_offset
+            t_year = today_dt.year + ((t_month - 1) // 12)
+            t_month = ((t_month - 1) % 12) + 1
+            max_day = calendar.monthrange(t_year, t_month)[1]
+            actual_day = min(p_day, max_day)
+            ev_date = date(t_year, t_month, actual_day)
+
+            if ev_date >= cur_d:
+                sub_ev_id = f"sub_pay_{s.get('서비스')}_{ev_date.strftime('%Y%m%d')}"
+                if sub_ev_id not in deleted_ids:
+                    final_events.append({
+                        "id": sub_ev_id,
+                        "date": str(ev_date),
+                        "type": "고정 결제",
+                        "title": f"💳 {s['서비스']} ({s['월요금']:,}원) 결제일",
+                        "auto_stock": "-"
+                    })
+
+    # 5. 사용자 직접 입력 일정
+    final_events.extend(custom_events)
+    final_events.sort(key=lambda x: x.get("date", "9999-12-31"))
+
+    # 저장소 영구 반영
+    update_remote_storage("calendar_events", final_events)
+    try:
+        with open(CALENDAR_FILE, "w", encoding="utf-8") as f:
+            json.dump(final_events, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+    return final_events
+
+# --- 기본 데이터 I/O 함수군 ---
 
 DEFAULT_SPORTS_TEAMS = [
     {"종목": "축구", "팀명": "맨체스터 유나이티드", "리그": "프리미어리그 (EPL)", "키워드": "맨체스터 유나이티드 OR 맨유"},
@@ -672,7 +857,6 @@ POPULAR_TEAM_PRESETS = [
 ]
 
 DEFAULT_SUBSCRIPTIONS = []
-
 
 DEFAULT_BLOG_STATS = {
     "blog_url": "https://m.blog.naver.com/early_leave_lab",
@@ -711,8 +895,6 @@ def is_valid_price(p):
         return p is not None and not pd.isna(p) and not math.isnan(float(p)) and float(p) > 0
     except Exception:
         return False
-
-# --- 데이터 읽기/쓰기 구현부 ---
 
 def load_settings():
     remote = get_remote_storage()
@@ -793,6 +975,8 @@ def save_portfolio(data):
         with open(PORTFOLIO_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
     except Exception as e: st.error(f"저장 오류: {e}")
+    # 🌟 포트폴리오 변경 즉시 캘린더 동기화
+    sync_and_load_calendar_events(data)
 
 def load_deleted_event_ids():
     remote = get_remote_storage()
@@ -802,8 +986,7 @@ def load_deleted_event_ids():
         try:
             with open(DELETED_EVENTS_FILE, "r", encoding="utf-8") as f:
                 return set(json.load(f))
-        except Exception:
-            pass
+        except Exception: pass
     return set()
 
 def save_deleted_event_ids(del_set):
@@ -811,69 +994,7 @@ def save_deleted_event_ids(del_set):
     try:
         with open(DELETED_EVENTS_FILE, "w", encoding="utf-8") as f:
             json.dump(list(del_set), f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
-
-def sync_and_load_calendar_events(current_portfolio):
-    deleted_ids = load_deleted_event_ids()
-    custom_events = []
-
-    remote = get_remote_storage()
-    saved_list = []
-    if remote and "calendar_events" in remote:
-        saved_list = remote["calendar_events"]
-    elif os.path.exists(CALENDAR_FILE):
-        try:
-            with open(CALENDAR_FILE, "r", encoding="utf-8") as f:
-                saved_list = json.load(f)
-        except Exception:
-            pass
-
-    for s in saved_list:
-        if str(s.get("id", "")).startswith("custom_") and s["id"] not in deleted_ids:
-            custom_events.append(s)
-
-    active_tickers = {str(item.get("티커", "")).replace(".KS", "").replace(".KQ", "").strip() for item in current_portfolio}
-
-    final_events = []
-    for fe in FIXED_GENERAL_EVENTS:
-        if fe["id"] not in deleted_ids:
-            final_events.append(fe)
-
-    for ticker, catalysts in STOCK_CATALYST_CATALOG.items():
-        if ticker in active_tickers:
-            for cat in catalysts:
-                if cat["id"] not in deleted_ids:
-                    final_events.append(cat)
-
-    subs = load_subscriptions()
-    today_dt = datetime.now(KST)
-    cur_year, cur_month = today_dt.year, today_dt.month
-    for s in subs:
-        p_day = int(s.get("결제일", 1))
-        target_month = cur_month if p_day >= today_dt.day else (cur_month + 1 if cur_month < 12 else 1)
-        target_year = cur_year if (cur_month < 12 or p_day >= today_dt.day) else cur_year + 1
-        sub_ev_id = f"sub_pay_{s.get('서비스')}_{p_day}"
-        if sub_ev_id not in deleted_ids:
-            final_events.append({
-                "id": sub_ev_id,
-                "date": f"{target_year:04d}-{target_month:02d}-{p_day:02d}",
-                "type": "고정 결제",
-                "title": f"{s['서비스']} ({s['월요금']:,}원) 결제일",
-                "auto_stock": "-"
-            })
-
-    final_events.extend(custom_events)
-    final_events.sort(key=lambda x: x.get("date", "9999-12-31"))
-
-    update_remote_storage("calendar_events", final_events)
-    try:
-        with open(CALENDAR_FILE, "w", encoding="utf-8") as f:
-            json.dump(final_events, f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
-
-    return final_events
+    except Exception: pass
 
 def add_custom_calendar_event(title, date_str, type_str, stock_str):
     new_ev = {
@@ -891,15 +1012,13 @@ def add_custom_calendar_event(title, date_str, type_str, stock_str):
         try:
             with open(CALENDAR_FILE, "r", encoding="utf-8") as f:
                 events = json.load(f)
-        except Exception:
-            events = []
+        except Exception: events = []
     events.append(new_ev)
     update_remote_storage("calendar_events", events)
     try:
         with open(CALENDAR_FILE, "w", encoding="utf-8") as f:
             json.dump(events, f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
+    except Exception: pass
 
 def delete_calendar_event_permanently(event_id):
     deleted_ids = load_deleted_event_ids()
@@ -914,15 +1033,13 @@ def delete_calendar_event_permanently(event_id):
         try:
             with open(CALENDAR_FILE, "r", encoding="utf-8") as f:
                 events = json.load(f)
-        except Exception:
-            pass
+        except Exception: pass
     events = [e for e in events if e.get("id") != event_id]
     update_remote_storage("calendar_events", events)
     try:
         with open(CALENDAR_FILE, "w", encoding="utf-8") as f:
             json.dump(events, f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
+    except Exception: pass
 
 def get_weekly_filtered_events(events, current_dt):
     today_date = current_dt.date()
@@ -951,16 +1068,9 @@ def get_weekly_filtered_events(events, current_dt):
     weekly.sort(key=lambda x: x["raw_date"])
     return weekly
 
+# 🌟 상단 4단 위젯 D-Day 동적 자동 추출
 def get_top_widget_dday_info():
     today_dt = datetime.now(KST).date()
-    opic_target = datetime(2026, 8, 23).date()
-    diff_opic = (opic_target - today_dt).days
-    
-    if diff_opic > 0:
-        return "주요 D-Day", "어학", f"오픽 D-{diff_opic}", "8.23 13:00 발표"
-    elif diff_opic == 0:
-        return "주요 D-Day", "어학", "오픽 D-Day", "오늘 13:00 발표"
-        
     try:
         user_p = load_portfolio()
         all_evs = sync_and_load_calendar_events(user_p)
@@ -974,7 +1084,6 @@ def get_top_widget_dday_info():
                 return "주요 D-Day", ev.get("type", "일정"), f"{short_title} {d_tag}", f"{ev_d.month}.{ev_d.day} 예정"
     except Exception:
         pass
-        
     return "주요 D-Day", "일정", "일정 없음", "-"
 
 def load_briefing():
@@ -1054,7 +1163,6 @@ def save_sports_briefings(briefings):
             json.dump(briefings, f, ensure_ascii=False, indent=2)
     except Exception: pass
 
-# 🌟 빈 리스트([])가 저장되어도 기본값으로 되돌아가지 않도록 완벽 수정
 def load_subscriptions():
     remote = get_remote_storage()
     if remote is not None and "subscriptions" in remote:
@@ -1063,19 +1171,21 @@ def load_subscriptions():
         try:
             with open(SUBS_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                if isinstance(data, list):  # 빈 리스트([])여도 정상 반환
+                if isinstance(data, list):
                     return data
         except Exception: pass
     return [s.copy() for s in DEFAULT_SUBSCRIPTIONS]
 
 def save_subscriptions(subs):
     if "subs_list" in st.session_state:
-        st.session_state.subs_list = subs  # 화면 메모리 즉시 동기화
+        st.session_state.subs_list = subs
     update_remote_storage("subscriptions", subs)
     try:
         with open(SUBS_FILE, "w", encoding="utf-8") as f:
             json.dump(subs, f, ensure_ascii=False, indent=2)
     except Exception as e: st.error(f"구독 정보 저장 오류: {e}")
+    # 🌟 구독 정보 변경 즉시 캘린더 동기화
+    sync_and_load_calendar_events(load_portfolio())
 
 def load_blog_stats():
     remote = get_remote_storage()
@@ -1114,7 +1224,11 @@ def save_blog_posts(posts):
         with open(BLOG_POSTS_FILE, "w", encoding="utf-8") as f:
             json.dump(posts, f, ensure_ascii=False, indent=2)
     except Exception: pass
-# 🌟 2초 캐시 TTL & NaN 철저 방지 실시간 시세 연동 엔진
+
+# =============================================================
+# 10. 실시간 시세 연동 엔진
+# =============================================================
+
 @st.cache_data(ttl=2)
 def get_live_market_data(ticker_symbol, fallback_price=None):
     clean_code = str(ticker_symbol).replace(".KS", "").replace(".KQ", "").strip()
@@ -1177,13 +1291,11 @@ def get_live_market_data(ticker_symbol, fallback_price=None):
     except Exception:
         pass
 
-    # 4. 미국 주식/지수 전용 기준가 Fallback (NaN 방지)
     if clean_code in US_MARKET_FALLBACKS:
         return US_MARKET_FALLBACKS[clean_code]
     elif ticker_symbol in US_MARKET_FALLBACKS:
         return US_MARKET_FALLBACKS[ticker_symbol]
 
-    # 5. 사용자 지정 fallback
     if is_valid_price(fallback_price):
         return float(fallback_price), 0.0
 
@@ -1204,7 +1316,6 @@ def get_batch_market_data(portfolio_items):
                 results[t] = (None, None)
     return results
 
-# 🌟 [기준가 대비 등락률 및 평가금액 정밀 연산]
 def compute_portfolio_summary(portfolio, live_prices_map, usd_krw=1380.0, cash_balance=810924.0):
     total_eval_krw = 0.0
     total_buy_krw = 0.0
@@ -1401,7 +1512,10 @@ def fetch_news_feed(query, max_results=8):
     except Exception:
         return []
 
-# 🌟 [동적 사용 가능 모델 탐색 - Gemini 3.x 우선 정렬 및 자동 백업]
+# =============================================================
+# 11. 최신 Gemini AI 연동 엔진
+# =============================================================
+
 @st.cache_data(ttl=1800)
 def get_available_gemini_models(clean_key):
     try:
@@ -1417,7 +1531,6 @@ def get_available_gemini_models(clean_key):
                     if not any(old in m_name for old in ["1.5-", "2.0-", "gemini-pro"]):
                         valid_models.append(m_name)
             if valid_models:
-                # 3.x Flash -> 3.x Pro -> 2.5 Flash -> 2.5 Pro 순서로 우선 정렬
                 def model_sort_key(name):
                     n = name.lower()
                     if "3.7" in n: return 0
@@ -1432,7 +1545,6 @@ def get_available_gemini_models(clean_key):
         pass
     return ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-3.7-flash", "gemini-2.5-flash", "gemini-2.5-pro"]
 
-# 12. 🌟 [최신 Gemini 3.x 주력 & 2.5 스마트 백업 AI 호출 엔진]
 def call_gemini_api(prompt_text, api_key, system_instruction=None, image_bytes=None, chat_contents=None):
     if not api_key or not str(api_key).strip():
         return None, "Gemini API Key를 입력해 주세요."
@@ -1462,10 +1574,8 @@ def call_gemini_api(prompt_text, api_key, system_instruction=None, image_bytes=N
                 
             if not txt or "AI 응답 오류" in txt or "AI 생성 오류" in txt or "error" in txt.lower():
                 continue
-                
             if not sanitized_contents and r != "user":
                 continue
-                
             if r == last_role:
                 sanitized_contents[-1]["parts"][0]["text"] += "\n\n" + txt
             else:
@@ -1487,7 +1597,6 @@ def call_gemini_api(prompt_text, api_key, system_instruction=None, image_bytes=N
             sanitized_contents = [{"role": "user", "parts": [{"text": final_p}]}]
 
     last_err = ""
-    # 1차 시도: v1beta + 3.x 최신 모델 및 2.5 백업 + systemInstruction 정석 호출
     for model_name in candidate_models:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={clean_key}"
         payload = {"contents": sanitized_contents}
@@ -1510,7 +1619,6 @@ def call_gemini_api(prompt_text, api_key, system_instruction=None, image_bytes=N
         except Exception as e:
             last_err = str(e)
             
-    # 2차 시도: 프롬프트 인라인 결합 폴백
     inline_contents = []
     for c in sanitized_contents:
         inline_parts = []
@@ -1550,13 +1658,11 @@ def call_gemini_api(prompt_text, api_key, system_instruction=None, image_bytes=N
 def analyze_portfolio_image(image_bytes, api_key):
     prompt = """
     이 이미지는 키움증권/영웅문S# 등의 증권사 주식 잔고 화면입니다.
-    종목명, 한국거래소 6자리 티커(예: SK하이닉스 000660, 현대차 005380, 이수페타시스 007660, LS ELECTRIC 010120, 한화에어로스페이스 012450, KODEX SK하이닉스단일종목레버리지 448290, PLUS 고배당주 161510, KODEX AI반도체TOP2플러스 395160, KODEX 200타겟위클리커버드콜 498400), 매입단가(숫자), 보유수량(정수), 현재가(숫자)를 정확히 추출해주세요.
+    종목명, 한국거래소 6자리 티커, 매입단가(숫자), 보유수량(정수), 현재가(숫자)를 정확히 추출해주세요.
     반드시 순수 JSON 배열 형식으로만 응답해주세요:
     [
         {"종목명": "SK하이닉스", "티커": "000660", "매입단가": 821714.0, "보유수량": 5, "현재가": 1667000.0},
-        {"종목명": "현대차", "티커": "005380", "매입단가": 610000.0, "보유수량": 6, "현재가": 459500.0},
-        {"종목명": "KODEX AI반도체TOP2플러스", "티커": "395160", "매입단가": 13234.0, "보유수량": 126, "현재가": 41000.0},
-        {"종목명": "KODEX 200타겟위클리커버드콜", "티커": "498400", "매입단가": 13012.0, "보유수량": 863, "현재가": 20750.0}
+        {"종목명": "현대차", "티커": "005380", "매입단가": 610000.0, "보유수량": 6, "현재가": 459500.0}
     ]
     """
     raw_text, status = call_gemini_api(prompt, api_key, image_bytes=image_bytes)
@@ -1596,7 +1702,7 @@ def generate_team_briefing(team_name, sports_type, league, team_news, api_key):
     
     prompt = f"""
     당신은 스포츠 전문 분석가 AI입니다.
-    현재 시점(2026년 8월)을 기준으로 [{sports_type} - {team_name} ({league})] 구단의 최신 경기 일정, 최근 경기 결과, 핵심 이슈를 간결하게 정리해주세요.
+    [{sports_type} - {team_name} ({league})] 구단의 최신 경기 일정, 최근 경기 결과, 핵심 이슈를 간결하게 정리해주세요.
 
     [규칙]
     - 모든 경기 일정 및 시간은 대한민국 표준시 (한국 시간, KST) 기준으로 표기해주세요.
@@ -1622,9 +1728,8 @@ def ask_gemini_chat(chat_history, user_msg, portfolio_items, api_key):
         return text
     return f"AI 응답 오류: {text if text else status}"
 
-
 # =============================================================
-# ⭐ [실시간 라이브 포트폴리오 렌더링 - 3초 주기 부분 자동 갱신 + 등락 색상 적용]
+# ⭐ 실시간 라이브 포트폴리오 렌더링
 # =============================================================
 
 @st.fragment(run_every=3)
@@ -1670,7 +1775,6 @@ def render_live_portfolio_content():
     except Exception:
         st.dataframe(df_portfolio, use_container_width=True, hide_index=True)
 
-
 # -------------------------------------------------------------
 # 1. [데일리 허브 모듈]
 # -------------------------------------------------------------
@@ -1701,7 +1805,7 @@ def render_daily_hub():
             st.markdown(f"**{loc_tag} 실시간 날씨** : {weather_val} **{temp_val}** (습도 {humid_val})")
 
         with st.container(border=True):
-            st.markdown("**📅 향후 7일간의 주요 일정 & 보유 종목 이슈**")
+            st.markdown("**📅 향후 7일간의 주요 일정 (TimeTree & 포트폴리오 & 구독)**")
             weekly_events = get_weekly_filtered_events(all_calendar_events, datetime.now(KST))
             if weekly_events:
                 df_weekly = pd.DataFrame(weekly_events)[["날짜", "구분", "내용", "연관종목", "D-Day"]]
@@ -1730,9 +1834,19 @@ def render_daily_hub():
         monthly_div = summary['total_monthly_div_krw']
 
         with st.container(border=True):
-            st.markdown(f"**월 배당(분배금) 예상 수령액** : **{monthly_div:,.0f}원** (KODEX 200타겟위클리커버드콜 863주 기준)")
+            st.markdown(f"**월 배당(분배금) 예상 수령액** : **{monthly_div:,.0f}원** (KODEX 커버드콜 863주 기준)")
 
-        st.markdown("##### 🗓️ 전체 통합 일정 목록")
+        col_tt_head, col_tt_btn = st.columns([0.7, 0.3])
+        with col_tt_head:
+            st.markdown("##### 🗓️ 전체 통합 일정 목록")
+        with col_tt_btn:
+            if st.button("🔄 TimeTree 동기화", key="sync_tt_cal_btn", use_container_width=True):
+                with st.spinner("TimeTree 일정 최신화 중..."):
+                    fetch_timetree_schedules.clear()
+                    all_calendar_events = sync_and_load_calendar_events(user_portfolio)
+                    st.success("TimeTree 일정이 성공적으로 동기화되었습니다!")
+                    st.rerun()
+
         formatted_all_events = []
         today_d = datetime.now(KST).date()
         weekdays_kr = ["월", "화", "수", "목", "금", "토", "일"]
@@ -1798,7 +1912,6 @@ def render_daily_hub():
                             st.rerun()
 
     with sub_d3:
-        # 세션 상태와 동기화하여 삭제 시 즉각 반영
         if "subs_list" not in st.session_state:
             st.session_state.subs_list = load_subscriptions()
             
@@ -1811,10 +1924,10 @@ def render_daily_hub():
         with c_s1: st.metric("월 고정 구독료", f"{total_sub_monthly:,.0f}원", f"총 {len(subs_list)}개 서비스")
         with c_s2: st.metric("배당금 방어율", f"{coverage_rate:.1f}%", f"월 배당 {monthly_div:,.0f}원")
 
-        st.markdown("##### 💳 구독 서비스 목록 및 삭제")
+        st.markdown("##### 💳 구독 서비스 목록 및 관리")
         
         if not subs_list:
-            st.info("현재 등록된 구독 서비스가 없습니다. 아래에서 실제로 이용 중인 구독을 추가해보세요.")
+            st.info("현재 등록된 구독 서비스가 없습니다. 아래에서 이용 중인 구독을 추가해보세요.")
         else:
             sub_to_delete = None
             for idx, s in enumerate(subs_list):
@@ -1830,7 +1943,7 @@ def render_daily_hub():
             if sub_to_delete is not None:
                 removed_sub = st.session_state.subs_list.pop(sub_to_delete)
                 save_subscriptions(st.session_state.subs_list)
-                st.success(f"'{removed_sub.get('서비스')}' 구독이 삭제되었습니다.")
+                st.success(f"'{removed_sub.get('서비스')}' 구독이 삭제되고 일정이 최신화되었습니다.")
                 st.rerun()
 
         with st.expander("➕ 새 구독 서비스 추가"):
@@ -1850,8 +1963,9 @@ def render_daily_hub():
                         }
                         st.session_state.subs_list.append(new_item)
                         save_subscriptions(st.session_state.subs_list)
-                        st.success("등록 완료되었습니다.")
+                        st.success("구독 서비스 등록 및 일정이 자동 최신화되었습니다.")
                         st.rerun()
+
     with sub_d4:
         with st.expander("날씨 지역 설정"):
             preset_names = list(LOCATION_PRESETS.keys())
@@ -1883,9 +1997,8 @@ def render_daily_hub():
                     save_todos(current_todos)
                     st.rerun()
 
-
 # -------------------------------------------------------------
-# 2. [주식 & 금융 허브 모듈 - 3초 주기 부분 자동 갱신]
+# 2. [주식 & 금융 허브 모듈]
 # -------------------------------------------------------------
 @st.fragment(run_every=3)
 def render_live_market_overview_content():
@@ -1961,7 +2074,6 @@ def render_live_market_overview_content():
             </div>
             """, unsafe_allow_html=True)
 
-
 def render_stock_hub():
     sub_s1, sub_s2, sub_s3, sub_s4, sub_s5 = st.tabs([
         "내 포트폴리오", "실시간 시황", "맞춤 뉴스", "모닝 브리핑", "AI 투자 비서"
@@ -2004,7 +2116,7 @@ def render_stock_hub():
                         parsed, status = analyze_portfolio_image(uploaded_file.getvalue(), active_key)
                         if status == "SUCCESS" and parsed:
                             save_portfolio(parsed)
-                            st.success("포트폴리오가 업데이트되었습니다.")
+                            st.success("포트폴리오 및 관련 투자 일정이 업데이트되었습니다.")
                             st.rerun()
                         else:
                             st.error(f"분석 실패: {status}")
@@ -2021,7 +2133,6 @@ def render_stock_hub():
 
     with sub_s3:
         my_stock_names = [item["종목명"] for item in user_portfolio]
-        
         category_options = (
             ["[전체] 내 보유 종목 뉴스"] +
             [f"{name}" for name in my_stock_names] +
@@ -2056,11 +2167,22 @@ def render_stock_hub():
 
     with sub_s4:
         recent_news = fetch_news_feed("코스피 OR 반도체 OR 연준 금리 OR 엔비디아 OR SK하이닉스", max_results=12)
+        saved_b, saved_t = load_briefing()
         
+        today_prefix = datetime.now(KST).strftime('%Y-%m-%d')
+        active_key = st.session_state.saved_gemini_key
+        
+        # 🌟 [자동 생성] 오늘 브리핑이 없으면 접속 시 1회 자동 생성
+        if (not saved_b or not saved_t or not saved_t.startswith(today_prefix)) and active_key:
+            with st.spinner("오늘자 모닝 증시 브리핑을 자동으로 생성하는 중입니다..."):
+                b_res, status = generate_ai_briefing(recent_news, user_portfolio, active_key)
+                if status == "SUCCESS" and b_res:
+                    save_briefing(b_res, datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S'))
+                    saved_b, saved_t = b_res, datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S')
+
         c_b1, c_b2 = st.columns(2)
         with c_b1:
-            if st.button("오늘자 AI 브리핑 생성", key="btn_b_re", use_container_width=True):
-                active_key = st.session_state.saved_gemini_key
+            if st.button("🔄 실시간 브리핑 다시 생성", key="btn_b_re", use_container_width=True):
                 if not active_key:
                     st.warning("API Key를 입력해주세요. [AI 투자 비서] 탭에서 등록할 수 있습니다.")
                 else:
@@ -2071,7 +2193,7 @@ def render_stock_hub():
                             st.rerun()
                         else:
                             st.error(f"브리핑 생성 오류: {status}")
-        saved_b, saved_t = load_briefing()
+
         with c_b2:
             if saved_b:
                 clean_speech = saved_b.replace("#", "").replace("*", "").replace("\n", " ").replace('"', '')[:300]
@@ -2081,9 +2203,12 @@ def render_stock_hub():
                 </button>
                 """
                 components.html(tts_html, height=42)
+
         if saved_b:
             st.caption(f"생성 시각: {saved_t}")
             st.markdown(saved_b)
+        elif not active_key:
+            st.info("💡 [AI 투자 비서] 탭에서 Gemini API Key를 입력하시면 접속 시 증시 브리핑이 자동 생성됩니다.")
 
     with sub_s5:
         with st.expander("🔑 Gemini API Key 설정 / 확인"):
@@ -2122,7 +2247,6 @@ def render_stock_hub():
         if send_btn and user_input.strip():
             u_text = user_input.strip()
             st.session_state.chat_messages.append({"role": "user", "content": u_text})
-            
             active_key = st.session_state.saved_gemini_key
             if active_key:
                 with st.spinner("Gemini 3.x AI 분석 중..."):
@@ -2132,9 +2256,8 @@ def render_stock_hub():
             else:
                 st.warning("상단 [Gemini API Key 설정 / 확인]에서 키를 입력해주세요.")
 
-
 # -------------------------------------------------------------
-# 3. [스포츠 허브 모듈 - 검색·추가·삭제·프리셋 기능 완비]
+# 3. [스포츠 허브 모듈]
 # -------------------------------------------------------------
 def render_sports_hub():
     my_teams = load_sports_teams()
@@ -2154,11 +2277,23 @@ def render_sports_hub():
     search_query = f'"{current_team["팀명"]}" AND (경기 OR 일정 OR 결과 OR 승리 OR 패배 OR 하이라이트)'
     team_news = fetch_news_feed(search_query, max_results=8)
 
+    today_prefix = datetime.now(KST).strftime('%Y-%m-%d')
+    active_key = st.session_state.saved_gemini_key
+    team_briefing_data = sports_briefings.get(team_key, {})
+    last_updated = team_briefing_data.get("updated_at", "")
+
+    # 🌟 [자동 생성] 오늘 구단 브리핑이 없으면 탭 접속 시 1회 자동 생성
+    if (not team_briefing_data or not last_updated.startswith(today_prefix)) and active_key:
+        with st.spinner(f"오늘자 {team_key} 구단 브리핑을 자동 생성하는 중입니다..."):
+            b_txt = generate_team_briefing(current_team['팀명'], current_team['종목'], current_team['리그'], team_news, active_key)
+            if b_txt:
+                sports_briefings[team_key] = {"text": b_txt, "updated_at": datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S')}
+                save_sports_briefings(sports_briefings)
+
     c_s1, c_s2 = st.columns([0.7, 0.3])
     with c_s1: st.markdown(f"#### {current_team['팀명']} ({current_team['리그']})")
     with c_s2:
-        if st.button("구단 브리핑 생성", key=f"btn_sb_m_{team_key}"):
-            active_key = st.session_state.saved_gemini_key
+        if st.button("🔄 구단 브리핑 다시 생성", key=f"btn_sb_m_{team_key}"):
             if not active_key:
                 st.warning("Gemini API Key가 필요합니다. [주식·금융 -> AI 투자 비서]에서 키를 등록해주세요.")
             else:
@@ -2252,7 +2387,6 @@ def render_sports_hub():
                 save_sports_teams(my_teams)
                 st.success(f"'{removed_team['팀명']}' 구단이 삭제되었습니다.")
                 st.rerun()
-
 
 # -------------------------------------------------------------
 # 4. [블로그 관리 모듈]
@@ -2422,7 +2556,6 @@ def render_blog_hub():
                 st.success("저장되었습니다.")
                 st.rerun()
 
-
 # =============================================================
 # 위치 정보 및 세션 안전 초기화
 # =============================================================
@@ -2446,9 +2579,8 @@ except Exception:
 if "saved_gemini_key" not in st.session_state:
     st.session_state.saved_gemini_key = user_settings_init.get("gemini_api_key") or default_secrets_key
 
-
 # =============================================================
-# [상단 헤더 네비게이션 & 4단 위젯 스트립 - 3초 주기 부분 자동 갱신]
+# [상단 헤더 네비게이션 & 4단 위젯 스트립]
 # =============================================================
 
 st.markdown("""
@@ -2461,7 +2593,6 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# 🌟 3초마다 상단 위젯 스트립만 독립적으로 자동 갱신
 @st.fragment(run_every=3)
 def render_top_widget_strip():
     w_temp, w_desc, w_hum, w_loc = get_current_weather(
@@ -2511,9 +2642,8 @@ def render_top_widget_strip():
 
 render_top_widget_strip()
 
-
 # =============================================================
-# ⭐ [새로고침 / 당겨서 새로고침 시에도 100% 유지되는 4단 단일 라인 탭 네비게이션]
+# 4단 단일 라인 탭 네비게이션
 # =============================================================
 
 components.html("""
@@ -2565,6 +2695,9 @@ with col_nav4:
         st.query_params["tab"] = "blog"
         st.rerun()
 
+if active_tab_key ==_params["tab"] = "blog"
+        st.rerun()
+
 if active_tab_key == "daily":
     render_daily_hub()
 elif active_tab_key == "stock":
@@ -2573,4 +2706,3 @@ elif active_tab_key == "sports":
     render_sports_hub()
 elif active_tab_key == "blog":
     render_blog_hub()
-
