@@ -25,15 +25,13 @@ jobs:
         run: |
           pip install requests timetree-exporter
 
-      - name: 카카오톡 브리핑 생성 및 발송
-        env:
-          GIST_ID: ${{ secrets.GIST_ID }}
-          GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          KAKAO_REST_KEY: ${{ secrets.KAKAO_REST_KEY }}
-          KAKAO_AUTH_CODE: ${{ secrets.KAKAO_AUTH_CODE }}
-          TIMETREE_EMAIL: ${{ secrets.TIMETREE_EMAIL }}
-          TIMETREE_PASSWORD: ${{ secrets.TIMETREE_PASSWORD }}
-          TIMETREE_CALENDAR_CODE: ${{ secrets.TIMETREE_CALENDAR_CODE }}
-        run: |
-          python send_daily_briefing.py
+          - name: 카카오톡 브리핑 생성 및 발송
+      env:
+        # 🌟 Secrets에 저장된 키를 파이썬 환경변수로 주입
+        KAKAO_CLIENT_ID: ${{ secrets.KAKAO_CLIENT_ID }}
+        KAKAO_REFRESH_TOKEN: ${{ secrets.KAKAO_REFRESH_TOKEN }}
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        TIMETREE_TOKEN: ${{ secrets.TIMETREE_TOKEN }}
+        TIMETREE_CALENDAR_ID: ${{ secrets.TIMETREE_CALENDAR_ID }}
+      run: python send_daily_briefing.py
+
