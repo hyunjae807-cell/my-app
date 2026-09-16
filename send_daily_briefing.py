@@ -268,7 +268,15 @@ def send_kakao_briefing():
             "web_url": "https://hj-app.streamlit.app",
             "mobile_web_url": "https://hj-app.streamlit.app"
         },
-        "button_title": "📱 MORI 앱 열기"
+        "buttons": [
+            {
+                "title": "📱 MORI 앱 열기",
+                "link": {
+                    "web_url": "https://hj-app.streamlit.app",
+                    "mobile_web_url": "https://hj-app.streamlit.app"
+                }
+            }
+        ]
     }
     
     res = requests.post(send_url, headers=headers, data={"template_object": json.dumps(template)}, timeout=6)
