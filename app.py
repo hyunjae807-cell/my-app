@@ -1843,7 +1843,7 @@ def render_daily_hub():
             with ch2:
                 st.metric("총 평가손익", f"{summary['total_profit_krw']:+,.0f}원", f"추정자산: {summary['total_net_assets_krw']:,.0f}원")
 
-        with sub_d2:
+    with sub_d2:
         monthly_div = summary['total_monthly_div_krw']
 
         with st.container(border=True):
@@ -1869,7 +1869,7 @@ def render_daily_hub():
                 ev_d = datetime.strptime(ev["date"], "%Y-%m-%d").date()
                 diff_d = (ev_d - today_d).days
                 
-                # 🌟 지나간 일정은 표시하지 않고 제외
+                # 지나간 일정(과거)은 표시하지 않고 제외
                 if diff_d < 0:
                     continue
                 elif diff_d == 0:
@@ -1877,7 +1877,7 @@ def render_daily_hub():
                 else:
                     d_tag = f"D-{diff_d}"
                     
-                # 🌟 [연도 포함 서식] 예: 2026년 9월 17일(목)
+                # 연도 포함 서식 (예: 2026년 9월 17일(목))
                 d_label = f"{ev_d.year}년 {ev_d.month}월 {ev_d.day}일({weekdays_kr[ev_d.weekday()]})"
             except Exception:
                 continue
@@ -2013,7 +2013,6 @@ def render_daily_hub():
                     current_todos.append(new_todo.strip())
                     save_todos(current_todos)
                     st.rerun()
-
 # -------------------------------------------------------------
 # 2. [주식 & 금융 허브 모듈]
 # -------------------------------------------------------------
