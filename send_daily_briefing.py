@@ -87,7 +87,7 @@ def get_kakao_access_token():
         data = {
             "grant_type": "authorization_code",
             "client_id": KAKAO_REST_KEY,
-            "redirect_uri": "http://localhost:5000",
+            "redirect_uri": "https://hj-app.streamlit.app",
             "code": KAKAO_AUTH_CODE
         }
         res = requests.post(url, data=data, timeout=5).json()
