@@ -1726,7 +1726,6 @@ def generate_ai_briefing(news_headlines, portfolio_items, api_key):
 
 
 def generate_team_briefing(team_name, sports_type, league, team_news, api_key):
-def generate_team_briefing(team_name, sports_type, league, team_news, api_key):
     news_text = "\n".join([f"- {h['title']} ({h.get('source', '')})" for h in team_news[:10]]) if team_news else f"{team_name} 최신 경기 일정"
     
     prompt = f"""
@@ -1748,6 +1747,7 @@ def generate_team_briefing(team_name, sports_type, league, team_news, api_key):
     """
     text, status = call_gemini_api(prompt, api_key)
     return text if status == "SUCCESS" else None
+
 
 
 def ask_gemini_chat(chat_history, user_msg, portfolio_items, api_key):
