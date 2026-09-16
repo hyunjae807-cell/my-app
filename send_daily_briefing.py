@@ -173,36 +173,54 @@ def send_kakao_briefing(final_text, access_token):
         print(f"❌ 카카오톡 발송 실패: {res.status_code} - {res.text}")
 
 # ==========================================
-# 메인 실행부
+# 메인 실행부 (기존 토큰 방식 & 자동 갱신 방식 모두 완벽 호환)
 # ==========================================
 if __name__ == "__main__":
-    # 🌟 어떤 이름으로 등록되어 있어도 자동으로 찾아오도록 보완
-    KAKAO_CLIENT_ID = (
-        os.environ.get("KAKAO_CLIENT_ID")
-        or os.environ.get("KAKAO_REST_API_KEY")
-        or os.environ.get("REST_API_KEY")
-        or os.environ.get("KAKAO_API_KEY")
+    # 1. 깃허브 Secrets에 이미 저장되어 있던 기존 토큰 우선 확인
+    access_token = (
+        os.environ.get("KAKAO_ACCESS_TOKEN")
+        or os.environ.get("KAKAO_TOKEN")
     )
-    KAKAO_CLIENT_SECRET = os.environ.get("KAKAO_CLIENT_SECRET", "")
-    KAKAO_REFRESH_TOKEN = (
-        os.environ.get("KAKAO_REFRESH_TOKEN")
-        or os.environ.get("REFRESH_TOKEN")
-    )
-    GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-    TIMETREE_TOKEN = os.environ.get("TIMETREE_TOKEN", "")
-    TIMETREE_CALENDAR_ID = os.environ.get("TIMETREE_CALENDAR_ID", "")
+    
+    # 2. 만약 기존 토큰이 없고 리프레시 토큰이 있는 경우에만 갱신 시도
+    if not access_token:
+        client_id = (
+            os.environ.get("KAKAO_CLIENT_ID")
+            or os.environ.get("KAKAO_REST_API_KEY")
+            or os.environ.get("REST_API_KEY")
+            or os.environ.get("KAKAO_API_KEY")
+        )
+        client_secret = os.environ.get("KAKAO_CLIENT_SECRET", "")
+        refresh_token = (
+            os.environ.get("KAKAO_REFRESH_TOKEN")
+            or os.environ.get("REFRESH_TOKEN")
+        )
+        
+        if client_id and refresh_token:
+            print("1. 카카오 리프레시 토큰으로 액세스 토큰 갱신 중...")
+            access_token = refresh_kakao_token(client_id, client_secret, refresh_token)
+        elif refresh_token and not client_id:
+            # 혹시 client_id 없이 refresh_token만 있는 경우
+            access_token = refresh_token
 
-    if not KAKAO_CLIENT_ID:
-        print("❌ KAKAO_CLIENT_ID(REST API 키)를 찾을 수 없습니다. GitHub Secrets 설정을 확인해주세요.")
+    # 3. 토큰 검증
+    if not access_token:
+        print("❌ 카카오 발송 토큰을 찾을 수 없습니다.")
         exit(1)
 
+    print("1. 카카오 토큰 준비 완료!")
+
+    # 환경변수 로드
+    GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+    TIMETREE_TOKEN = os.environ.get("TIMETREE_TOKEN", "")
+    TIMETREE_CALENDAR_ID = os.environ.get("TIMETREE_CALENDAR_ID", "")
 
     print("2. 날씨 및 TimeTree 일정 수집 중...")
     weather_info = get_weather()
     timetree_info = get_timetree_today(TIMETREE_TOKEN, TIMETREE_CALENDAR_ID)
 
-    print("3. Gemini 고밀도 상세 브리핑 생성 중...")
+    print("3. Gemini 고밀도 상세 브리핑 작성 중...")
     briefing_text = make_ai_briefing(weather_info, timetree_info, GEMINI_API_KEY)
 
-    print("4. 카카오톡 전송 실행...")
+    print("4. 카카오톡 메시지 전송 실행...")
     send_kakao_briefing(briefing_text, access_token)
