@@ -176,18 +176,26 @@ def send_kakao_briefing(final_text, access_token):
 # 메인 실행부
 # ==========================================
 if __name__ == "__main__":
-    KAKAO_CLIENT_ID = os.environ.get("KAKAO_CLIENT_ID")
+    # 🌟 어떤 이름으로 등록되어 있어도 자동으로 찾아오도록 보완
+    KAKAO_CLIENT_ID = (
+        os.environ.get("KAKAO_CLIENT_ID")
+        or os.environ.get("KAKAO_REST_API_KEY")
+        or os.environ.get("REST_API_KEY")
+        or os.environ.get("KAKAO_API_KEY")
+    )
     KAKAO_CLIENT_SECRET = os.environ.get("KAKAO_CLIENT_SECRET", "")
-    KAKAO_REFRESH_TOKEN = os.environ.get("KAKAO_REFRESH_TOKEN")
+    KAKAO_REFRESH_TOKEN = (
+        os.environ.get("KAKAO_REFRESH_TOKEN")
+        or os.environ.get("REFRESH_TOKEN")
+    )
     GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
     TIMETREE_TOKEN = os.environ.get("TIMETREE_TOKEN", "")
     TIMETREE_CALENDAR_ID = os.environ.get("TIMETREE_CALENDAR_ID", "")
 
-    print("1. 카카오 액세스 토큰 갱신 중...")
-    access_token = refresh_kakao_token(KAKAO_CLIENT_ID, KAKAO_CLIENT_SECRET, KAKAO_REFRESH_TOKEN)
-    if not access_token:
-        print("토큰 갱신 실패로 중단합니다.")
+    if not KAKAO_CLIENT_ID:
+        print("❌ KAKAO_CLIENT_ID(REST API 키)를 찾을 수 없습니다. GitHub Secrets 설정을 확인해주세요.")
         exit(1)
+
 
     print("2. 날씨 및 TimeTree 일정 수집 중...")
     weather_info = get_weather()
