@@ -448,7 +448,6 @@ try:
         or os.environ.get("GIST_ID", "") 
         or os.environ.get("GISTID", "")
     )
-    # GIST_TOKEN 또는 GITHUB_TOKEN 둘 다 호환 지원
     GITHUB_TOKEN = (
         st.secrets.get("GITHUB_TOKEN", "") 
         or st.secrets.get("GIST_TOKEN", "") 
@@ -790,27 +789,27 @@ def sync_and_load_calendar_events(current_portfolio):
     cur_d = today_dt.date()
 
     for s in subs:
-        p_day = int(s.get("결제일", 1))
+        p_day = s.get("결제일", 1)
         for m_offset in range(3):
             t_month = today_dt.month + m_offset
             t_year = today_dt.year + ((t_month - 1) // 12)
             t_month = ((t_month - 1) % 12) + 1
-            max_day = calendar.monthrange(t_year, t_month)
-           # p_day를 안전하게 정수(int)로 변환
-try:
-    if isinstance(p_day, str):
-        # '25일' 같은 문자열 처리: 숫자만 추출 후 변환
-        clean_day = "".join(filter(str.isdigit, p_day))
-        p_day_int = int(clean_day) if clean_day else 1
-    elif p_day is None:
-        p_day_int = 1
-    else:
-        p_day_int = int(p_day)
-except (ValueError, TypeError):
-    p_day_int = 1
+            max_day = calendar.monthrange(t_year, t_month)[1]
+            
+            # p_day를 안전하게 정수(int)로 변환
+            try:
+                if isinstance(p_day, str):
+                    clean_day = "".join(filter(str.isdigit, p_day))
+                    p_day_int = int(clean_day) if clean_day else 1
+                elif p_day is None:
+                    p_day_int = 1
+                else:
+                    p_day_int = int(p_day)
+            except (ValueError, TypeError):
+                p_day_int = 1
 
-# 1일부터 max_day 사이로 보정
-actual_day = max(1, min(p_day_int, max_day))
+            # 1일부터 max_day 사이로 보정
+            actual_day = max(1, min(p_day_int, max_day))
             ev_date = date(t_year, t_month, actual_day)
 
             if ev_date >= cur_d:
@@ -954,7 +953,7 @@ def save_location(loc_data):
             json.dump(loc_data, f, ensure_ascii=False, indent=2)
     except Exception: pass
 
-# 🌟 [완벽 개선] Gist에 저장된 실제 포트폴리오 그대로 보존 (하드코딩 덮어쓰기 완전 제거)
+# 🌟 Gist에 저장된 실제 포트폴리오 그대로 보존
 def load_portfolio():
     remote = get_remote_storage()
     data = None
@@ -966,7 +965,6 @@ def load_portfolio():
                 data = json.load(f)
         except Exception: pass
 
-    # Gist 또는 로컬에 저장된 데이터가 있으면 그대로 반환
     if isinstance(data, list) and len(data) > 0:
         return data
         
@@ -2029,7 +2027,7 @@ def render_live_market_overview_content():
         
         if not is_valid_price(p_val):
             fb = US_MARKET_FALLBACKS.get(t_symbol, (150.0, 1.20))
-            p_val, p_delta = fb[0], fb
+            p_val, p_delta = fb[0], fb[1]
 
         price_str = f"${p_val:.2f}"
         delta_str = f"{p_delta:+.2f}%" if p_delta is not None else "+0.00%"
@@ -2071,7 +2069,6 @@ def render_stock_hub():
 
         render_live_portfolio_content()
 
-        # 🌟 [신규] 종목 직접 추가 및 삭제 기능 (Gist 영구 반영)
         with st.expander("➕ 종목 직접 추가 / 🗑️ 보유 종목 삭제"):
             tab_add, tab_del = st.tabs(["새 종목 추가", "종목 삭제"])
             with tab_add:
@@ -2194,7 +2191,6 @@ def render_stock_hub():
         today_prefix = datetime.now(KST).strftime('%Y-%m-%d')
         active_key = st.session_state.saved_gemini_key
         
-        # [자동 생성] 오늘 브리핑이 없으면 접속 시 1회 자동 생성
         if (not saved_b or not saved_t or not saved_t.startswith(today_prefix)) and active_key:
             with st.spinner("오늘자 모닝 증시 브리핑을 자동으로 생성하는 중입니다..."):
                 b_res, status = generate_ai_briefing(recent_news, user_portfolio, active_key)
@@ -2305,7 +2301,6 @@ def render_sports_hub():
     team_briefing_data = sports_briefings.get(team_key, {})
     last_updated = team_briefing_data.get("updated_at", "")
 
-    # [자동 생성] 오늘 구단 브리핑이 없으면 탭 접속 시 1회 자동 생성
     if (not team_briefing_data or not last_updated.startswith(today_prefix)) and active_key:
         with st.spinner(f"오늘자 {team_key} 구단 브리핑을 자동 생성하는 중입니다..."):
             b_txt = generate_team_briefing(current_team['팀명'], current_team['종목'], current_team['리그'], team_news, active_key)
