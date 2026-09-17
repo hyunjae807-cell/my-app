@@ -15,7 +15,11 @@ GIST_ID = os.environ.get("GIST_ID", "")
 GIST_TOKEN = os.environ.get("GIST_TOKEN", "")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 KAKAO_REST_KEY = os.environ.get("KAKAO_REST_KEY", "")
-KAKAO_AUTH_CODE = os.environ.get("KAKAO_AUTH_CODE", "")
+KAKAO_AUTH_CODE = (
+    os.environ.get("KAKAO_AUTH_CODE", "")
+    or "o0-SeFabVjKnUJIl5n0qqqzuFFQITqnDQPptX3BiqBqFP-xjrLzdowAAAAQKFyIgAAABoKy6bXVUdd9ffL_GXA"
+)
+
 
 TIMETREE_EMAIL = os.environ.get("TIMETREE_EMAIL", "")
 TIMETREE_PASSWORD = os.environ.get("TIMETREE_PASSWORD", "")
