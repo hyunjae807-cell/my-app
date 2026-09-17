@@ -15,15 +15,19 @@ GIST_ID = os.environ.get("GIST_ID", "")
 GIST_TOKEN = os.environ.get("GIST_TOKEN", "")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 KAKAO_REST_KEY = os.environ.get("KAKAO_REST_KEY", "") or "98117624d9baa3910b9d03fb295cc27c"
-KAKAO_AUTH_CODE = os.environ.get("KAKAO_AUTH_CODE", "") or "mitfc9wAAKfgQ8Hr7vsXy4x7sv3Raki62PsPvCmWsQf-KDJ16WIjFQAAAAQKFxItAAABoKzUOyZAPV-WDrAHcw"
+KAKAO_AUTH_CODE = (
+    os.environ.get("KAKAO_AUTH_CODE", "")
+    or "S-ML9Yj7XQAnVvnfWJYZ5Ly2SIFzHwwoZpR9trzaNcCGfrf_r5fokQAAAAQKFwtrAAABoK8bL7S37mS5Kc-sjw"
+)
 
 TIMETREE_EMAIL = os.environ.get("TIMETREE_EMAIL", "")
 TIMETREE_PASSWORD = os.environ.get("TIMETREE_PASSWORD", "")
 TIMETREE_CALENDAR_CODE = os.environ.get("TIMETREE_CALENDAR_CODE", "")
 
-# 3. Gist 데이터 읽기/쓰기 유틸리티
+# 3. Gist 데이터 읽기/쓰기 유틸리티 (로그 강화)
 def get_gist_data():
     if not GIST_ID or not GIST_TOKEN:
+        print(f"⚠️ Gist 환경변수 확인: GIST_ID={'있음' if GIST_ID else '없음(비어있음)'}, GIST_TOKEN={'있음' if GIST_TOKEN else '없음(비어있음)'}")
         return {}
     url = f"https://api.github.com/gists/{GIST_ID}"
     headers = {"Authorization": f"token {GIST_TOKEN}", "User-Agent": "MORI-Bot"}
@@ -33,12 +37,15 @@ def get_gist_data():
             files = res.json().get("files", {})
             if "mori_data.json" in files:
                 return json.loads(files["mori_data.json"].get("content", "{}"))
+        else:
+            print(f"⚠️ Gist 읽기 실패 ({res.status_code}): {res.text}")
     except Exception as e:
         print(f"Gist 읽기 실패: {e}")
     return {}
 
 def save_gist_key(key, val):
     if not GIST_ID or not GIST_TOKEN:
+        print("⚠️ Gist 저장 건너뜀: GIST_ID 또는 GIST_TOKEN이 비어있어 토큰이 영구 저장되지 않습니다.")
         return
     data = get_gist_data()
     data[key] = val
@@ -56,7 +63,11 @@ def save_gist_key(key, val):
         }
     }
     try:
-        requests.patch(url, json=payload, headers=headers, timeout=5)
+        res = requests.patch(url, json=payload, headers=headers, timeout=5)
+        if res.status_code == 200:
+            print(f"💾 Gist 영구 저장 성공! [{key}]")
+        else:
+            print(f"❌ Gist 저장 실패 ({res.status_code}): {res.text}")
     except Exception as e:
         print(f"Gist 저장 실패: {e}")
 
@@ -70,7 +81,6 @@ def extract_portfolio_info(gist_data):
             return
             
         if isinstance(obj, dict):
-            # TimeTree 및 캘린더 일정 제외
             if 'date' in obj and ('auto_stock' in obj or obj.get('type') == '가족 일정'):
                 return
                 
@@ -83,7 +93,6 @@ def extract_portfolio_info(gist_data):
             
             if name and isinstance(name, str) and len(name) < 30 and not name.startswith('http'):
                 if not any(stop in name.lower() for stop in ['timetree', 'token', 'mori', 'gist', 'briefing', '날씨']):
-                    # 자식 객체에 종목 리스트를 품고 있는 계좌 객체 자체는 종목으로 오인하지 않음
                     has_nested = any(k in obj for k in ['stocks', 'holdings', 'items', 'positions', '종목', '종목들'])
                     if not has_nested:
                         detail = f"{name}"
@@ -107,7 +116,6 @@ def extract_portfolio_info(gist_data):
                 
     search(gist_data)
     
-    # 중복 제거
     seen = set()
     unique = []
     for s in found_stocks:
@@ -126,6 +134,7 @@ def get_kakao_access_token():
     
     # 1) 기존 리프레시 토큰으로 액세스 토큰 갱신
     if saved_refresh_token:
+        print("🔑 Gist에 저장된 리프레시 토큰으로 자동 갱신 시도 중...")
         url = "https://kauth.kakao.com/oauth/token"
         data = {
             "grant_type": "refresh_token",
@@ -141,6 +150,7 @@ def get_kakao_access_token():
 
     # 2) 최초 실행 시 KAKAO_AUTH_CODE로 최초 발급
     if KAKAO_AUTH_CODE:
+        print("🎫 인가 코드로 신규 토큰 발급 시도 중...")
         url = "https://kauth.kakao.com/oauth/token"
         data = {
             "grant_type": "authorization_code",
@@ -274,7 +284,7 @@ def generate_detailed_briefing(weather_str, sox_pct, nvda_pct, today_events, por
 
     📈 글로벌 증시 마감 & 내 실제 보유 종목 분석
     (뉴욕 증시 및 반도체 지수 마감 총평)
-    - 위 '사용자의 실제 MORI 연동 계좌 포트폴리오'에 나열된 종목들을 직접 호명하며, 각 종목의 업종 특성(반도체, 전력/인프라, 방산, 배당/커버드콜 등)에 맞춘 간밤 외인/기관 수급 및 오늘 장 대응 전략을 구체적으로 분석해주세요.
+    - 위 '사용자의 실제 MORI 연동 계좌 포트폴리오'에 나열된 종목들을 직접 호명하며, 각 종목의 업종 특성에 맞춘 간밤 외인/기관 수급 및 오늘 장 대응 전략을 구체적으로 분석해주세요.
 
     ⚽ 맨체스터 유나이티드 소식
     (다음 경기 일정 KST 시간 표기 및 최근 구단 핵심 이슈 1~2줄)
@@ -302,7 +312,7 @@ def generate_detailed_briefing(weather_str, sox_pct, nvda_pct, today_events, por
 
 # 9. 최종 메시지 조립 및 카카오톡 전송
 def send_kakao_briefing():
-    print("1. 카카오 액세스 토큰 준비 중 (Gist 자동 갱신)...")
+    print("1. 카카오 액세스 토큰 준비 중...")
     access_token = get_kakao_access_token()
     if not access_token:
         print("❌ 카카오 발송 토큰을 얻지 못했습니다.")
