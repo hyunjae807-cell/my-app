@@ -443,8 +443,18 @@ div[data-testid="stTabs"] [aria-selected="true"] {
 # =============================================================
 
 try:
-    GIST_ID = st.secrets.get("GIST_ID", "")
-    GITHUB_TOKEN = st.secrets.get("GITHUB_TOKEN", "")
+    GIST_ID = (
+        st.secrets.get("GIST_ID", "") 
+        or os.environ.get("GIST_ID", "") 
+        or os.environ.get("GISTID", "")
+    )
+    # GIST_TOKEN 또는 GITHUB_TOKEN 둘 다 호환 지원
+    GITHUB_TOKEN = (
+        st.secrets.get("GITHUB_TOKEN", "") 
+        or st.secrets.get("GIST_TOKEN", "") 
+        or os.environ.get("GITHUB_TOKEN", "") 
+        or os.environ.get("GIST_TOKEN", "")
+    )
 except Exception:
     GIST_ID = ""
     GITHUB_TOKEN = ""
@@ -569,11 +579,6 @@ def get_next_trading_day(target_date: date) -> date:
     return target_date
 
 def calculate_korea_ex_dividend(record_date: date) -> dict:
-    """
-    한국 배당기준일(Record Date) 기준
-    - 1영업일 전: 배당락일 (Ex-Dividend Date)
-    - 2영업일 전: 최종 매수 마감일 (Last Buying Date, T+2 기준)
-    """
     cur = record_date - timedelta(days=1)
     while cur.weekday() >= 5:
         cur -= timedelta(days=1)
@@ -590,7 +595,6 @@ def calculate_korea_ex_dividend(record_date: date) -> dict:
         "last_buy_date": str(last_buy_date)
     }
 
-# 🌟 최신 증시·거시경제 주요 일정
 FIXED_GENERAL_EVENTS = [
     {"id": "fixed_macro_fomc_sept", "date": "2026-09-17", "type": "거시 경제", "title": "미국 9월 FOMC 기준금리 발표 및 경제전망 요약", "auto_stock": "글로벌 증시 전반"},
     {"id": "fixed_macro_fomc_mins", "date": "2026-10-08", "type": "거시 경제", "title": "연준 9월 FOMC 의사록 공개", "auto_stock": "글로벌 증시 전반"},
@@ -598,7 +602,6 @@ FIXED_GENERAL_EVENTS = [
     {"id": "fixed_deriv_witching_dec", "date": "2026-12-10", "type": "파생 만기", "title": "국내 선물·옵션 동시 만기일 (쿼드러플 위칭데이)", "auto_stock": "KOSPI 200 전반"}
 ]
 
-# 🌟 보유 종목별 향후 일정 정밀 자동 생성기
 def generate_portfolio_catalysts(portfolio_items):
     today = date.today()
     catalysts = []
@@ -616,13 +619,12 @@ def generate_portfolio_catalysts(portfolio_items):
                     "id": f"cat_498400_div_{target_first.strftime('%Y%m%d')}",
                     "date": str(target_first),
                     "type": "배당 입금",
-                    "title": f"KODEX 커버드콜 월 분배금(약 23.3만 원) 입금 예정일",
+                    "title": "KODEX 커버드콜 월 분배금 입금 예정일",
                     "auto_stock": "KODEX 200타겟위클리커버드콜 (498400)"
                 })
 
     # 2. SK하이닉스 (000660) & AI 반도체
     if "000660" in active_tickers:
-        # 3분기 잠정 실적 발표 (10월 중순~하순 예상)
         catalysts.append({
             "id": "cat_000660_earnings_3q",
             "date": "2026-10-22",
@@ -678,7 +680,7 @@ def generate_portfolio_catalysts(portfolio_items):
             "auto_stock": "한화에어로스페이스 (012450)"
         })
 
-    # 7. PLUS 고배당주 (161510) : 3분기 결산 분배금 점검
+    # 7. PLUS 고배당주 (161510)
     if "161510" in active_tickers:
         div_info = calculate_korea_ex_dividend(date(2026, 9, 30))
         catalysts.append({
@@ -697,14 +699,7 @@ def generate_portfolio_catalysts(portfolio_items):
 
 @st.cache_data(ttl=600)
 def fetch_timetree_schedules():
-    """
-    TimeTree 일정을 가져와 표준 일정 리스트로 변환
-    1) Gist에 아침 브리핑 스크립트가 저장해 둔 'timetree_events'가 있으면 즉시 로드
-    2) 또는 Streamlit Secrets의 TIMETREE_TOKEN / CALENDAR_ID를 통해 직접 수집
-    """
     events = []
-    
-    # 1. Gist 원격 캐시 확인 (send_daily_briefing.py와의 연동)
     remote = get_remote_storage()
     if remote and "timetree_events" in remote and isinstance(remote["timetree_events"], list):
         for it in remote["timetree_events"]:
@@ -718,7 +713,6 @@ def fetch_timetree_schedules():
         if events:
             return events
 
-    # 2. TimeTree Direct API (Secrets 연동 시)
     try:
         tt_token = st.secrets.get("TIMETREE_TOKEN", "")
         tt_cal_id = st.secrets.get("TIMETREE_CALENDAR_ID", "")
@@ -753,10 +747,6 @@ def fetch_timetree_schedules():
 # =============================================================
 
 def sync_and_load_calendar_events(current_portfolio):
-    """
-    TimeTree + 포트폴리오 + 고정 구독료 + 사용자 일정을 통합하며,
-    지나간 일정(오늘 이전)은 자동으로 필터링 및 정리합니다.
-    """
     deleted_ids = load_deleted_event_ids()
     custom_events = []
 
@@ -794,7 +784,7 @@ def sync_and_load_calendar_events(current_portfolio):
         if te["id"] not in deleted_ids:
             final_events.append(te)
 
-    # 4. 고정 구독료 지출 일정 (오늘 이후 향후 2개월 롤링 생성)
+    # 4. 고정 구독료 지출 일정
     subs = load_subscriptions()
     today_dt = datetime.now(KST)
     cur_d = today_dt.date()
@@ -805,7 +795,7 @@ def sync_and_load_calendar_events(current_portfolio):
             t_month = today_dt.month + m_offset
             t_year = today_dt.year + ((t_month - 1) // 12)
             t_month = ((t_month - 1) % 12) + 1
-            max_day = calendar.monthrange(t_year, t_month)[1]
+            max_day = calendar.monthrange(t_year, t_month)
             actual_day = min(p_day, max_day)
             ev_date = date(t_year, t_month, actual_day)
 
@@ -823,7 +813,6 @@ def sync_and_load_calendar_events(current_portfolio):
     # 5. 사용자 직접 입력 일정
     final_events.extend(custom_events)
 
-    # 🌟 [핵심] 오늘 이전의 지나간 일정은 모두 삭제(제외)하고 오늘 및 미래 일정만 보존
     active_events = []
     for ev in final_events:
         try:
@@ -835,7 +824,6 @@ def sync_and_load_calendar_events(current_portfolio):
 
     active_events.sort(key=lambda x: x.get("date", "9999-12-31"))
 
-    # 저장소에 최신 유효 일정만 영구 반영
     update_remote_storage("calendar_events", active_events)
     try:
         with open(CALENDAR_FILE, "w", encoding="utf-8") as f:
@@ -952,6 +940,7 @@ def save_location(loc_data):
             json.dump(loc_data, f, ensure_ascii=False, indent=2)
     except Exception: pass
 
+# 🌟 [완벽 개선] Gist에 저장된 실제 포트폴리오 그대로 보존 (하드코딩 덮어쓰기 완전 제거)
 def load_portfolio():
     remote = get_remote_storage()
     data = None
@@ -963,31 +952,21 @@ def load_portfolio():
                 data = json.load(f)
         except Exception: pass
 
-    if isinstance(data, list) and len(data) >= 8:
-        for item in data:
-            t = str(item.get("티커", "")).strip()
-            matched = next((d for d in EXACT_KIWOOM_PORTFOLIO if d["티커"] == t or d["종목명"] == item.get("종목명")), None)
-            if matched:
-                item["매입단가"] = matched["매입단가"]
-                item["보유수량"] = matched["보유수량"]
-                if t == "161510" or "PLUS" in item.get("종목명", ""):
-                    item["현재가"] = 25575.0
-                elif t == "395160" or "AI반도체" in item.get("종목명", ""):
-                    item["현재가"] = 41000.0
-                elif t == "448290" or "레버리지" in item.get("종목명", ""):
-                    item["현재가"] = 9780.0
-                elif "현재가" not in item or float(item.get("현재가", 0)) <= 0:
-                    item["현재가"] = matched["현재가"]
+    # Gist 또는 로컬에 저장된 데이터가 있으면 그대로 반환
+    if isinstance(data, list) and len(data) > 0:
         return data
-    return EXACT_KIWOOM_PORTFOLIO
+        
+    return [dict(d) for d in EXACT_KIWOOM_PORTFOLIO]
 
 def save_portfolio(data):
-    update_remote_storage("portfolio", data)
+    ok = update_remote_storage("portfolio", data)
     try:
         with open(PORTFOLIO_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
-    except Exception as e: st.error(f"저장 오류: {e}")
-    # 🌟 포트폴리오 변경 즉시 캘린더 동기화
+    except Exception as e: 
+        st.error(f"저장 오류: {e}")
+    if not ok:
+        st.warning("⚠️ Gist에 저장되지 않았습니다. Streamlit Secrets의 GIST_ID 및 GIST_TOKEN 설정을 확인해 주세요.")
     sync_and_load_calendar_events(data)
 
 def load_deleted_event_ids():
@@ -1064,7 +1043,6 @@ def get_weekly_filtered_events(events, current_dt):
             diff_days = (ev_date - today_date).days
             if 0 <= diff_days <= 7:
                 dday_str = "오늘 (D-Day)" if diff_days == 0 else f"D-{diff_days}"
-                # 🌟 [연도 포함]
                 date_label = f"{ev_date.year}년 {ev_date.month}월 {ev_date.day}일({weekdays_kr[ev_date.weekday()]})"
                 weekly.append({
                     "id": ev.get("id"),
@@ -1081,7 +1059,6 @@ def get_weekly_filtered_events(events, current_dt):
     weekly.sort(key=lambda x: x["raw_date"])
     return weekly
 
-# 🌟 상단 4단 위젯 D-Day 동적 자동 추출
 def get_top_widget_dday_info():
     today_dt = datetime.now(KST).date()
     try:
@@ -1197,7 +1174,6 @@ def save_subscriptions(subs):
         with open(SUBS_FILE, "w", encoding="utf-8") as f:
             json.dump(subs, f, ensure_ascii=False, indent=2)
     except Exception as e: st.error(f"구독 정보 저장 오류: {e}")
-    # 🌟 구독 정보 변경 즉시 캘린더 동기화
     sync_and_load_calendar_events(load_portfolio())
 
 def load_blog_stats():
@@ -1217,7 +1193,7 @@ def save_blog_stats(stats):
     try:
         with open(BLOG_STATS_FILE, "w", encoding="utf-8") as f:
             json.dump(stats, f, ensure_ascii=False, indent=2)
-    except Exception: pass
+    except Exception as e: pass
 
 def load_blog_posts():
     remote = get_remote_storage()
@@ -1236,7 +1212,7 @@ def save_blog_posts(posts):
     try:
         with open(BLOG_POSTS_FILE, "w", encoding="utf-8") as f:
             json.dump(posts, f, ensure_ascii=False, indent=2)
-    except Exception: pass
+    except Exception as e: pass
 
 # =============================================================
 # 10. 실시간 시세 연동 엔진
@@ -1374,14 +1350,13 @@ def compute_portfolio_summary(portfolio, live_prices_map, usd_krw=1380.0, cash_b
             "수익률 (기준가 대비)": profit_rate_formatted
         })
 
-    adjusted_buy_krw = 40767449.0 if abs(total_buy_krw - 40767419.0) < 50 else total_buy_krw
-    total_profit_krw = total_eval_krw - adjusted_buy_krw
-    total_profit_rate = (total_profit_krw / adjusted_buy_krw * 100.0) if adjusted_buy_krw > 0 else 0.0
+    total_profit_krw = total_eval_krw - total_buy_krw
+    total_profit_rate = (total_profit_krw / total_buy_krw * 100.0) if total_buy_krw > 0 else 0.0
     total_net_assets_krw = total_eval_krw + float(cash_balance)
 
     return {
         "total_eval_krw": total_eval_krw,
-        "total_buy_krw": adjusted_buy_krw,
+        "total_buy_krw": total_buy_krw,
         "total_profit_krw": total_profit_krw,
         "total_profit_rate": total_profit_rate,
         "total_monthly_div_krw": total_monthly_div_krw,
@@ -1526,7 +1501,7 @@ def fetch_news_feed(query, max_results=8):
         return []
 
 # =============================================================
-# 11. 최신 Gemini AI 연동 엔진
+# 11. 최신 Gemini AI 연동 엔진 (안정적인 모델 우선순위 보장)
 # =============================================================
 
 @st.cache_data(ttl=1800)
@@ -1541,22 +1516,21 @@ def get_available_gemini_models(clean_key):
                 methods = m.get("supportedGenerationMethods", [])
                 if "generateContent" in methods:
                     m_name = m.get("name", "").replace("models/", "")
-                    if not any(old in m_name for old in ["1.5-", "2.0-", "gemini-pro"]):
-                        valid_models.append(m_name)
+                    valid_models.append(m_name)
             if valid_models:
                 def model_sort_key(name):
                     n = name.lower()
-                    if "3.7" in n: return 0
-                    if "3.5" in n: return 1
-                    if "3.1" in n: return 2
-                    if "3" in n: return 3
-                    if "2.5" in n and "flash" in n: return 4
-                    return 5
+                    if "2.5-flash" in n: return 0
+                    if "3.5-flash" in n: return 1
+                    if "3.1-flash" in n: return 2
+                    if "2.0-flash" in n: return 3
+                    if "1.5-flash" in n: return 4
+                    return 10
                 valid_models.sort(key=model_sort_key)
                 return valid_models
     except Exception:
         pass
-    return ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-3.7-flash", "gemini-2.5-flash", "gemini-2.5-pro"]
+    return ["gemini-2.5-flash", "gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash"]
 
 def call_gemini_api(prompt_text, api_key, system_instruction=None, image_bytes=None, chat_contents=None):
     if not api_key or not str(api_key).strip():
@@ -1567,11 +1541,11 @@ def call_gemini_api(prompt_text, api_key, system_instruction=None, image_bytes=N
     
     discovered = get_available_gemini_models(clean_key)
     candidate_models = discovered if discovered else [
+        "gemini-2.5-flash",
         "gemini-3.5-flash",
         "gemini-3.1-flash-lite",
-        "gemini-3.7-flash",
-        "gemini-2.5-flash",
-        "gemini-2.5-pro"
+        "gemini-2.0-flash",
+        "gemini-1.5-flash"
     ]
     
     sanitized_contents = []
@@ -1632,40 +1606,6 @@ def call_gemini_api(prompt_text, api_key, system_instruction=None, image_bytes=N
         except Exception as e:
             last_err = str(e)
             
-    inline_contents = []
-    for c in sanitized_contents:
-        inline_parts = []
-        for p in c.get("parts", []):
-            if "text" in p:
-                inline_parts.append({"text": p["text"]})
-            elif "inlineData" in p:
-                inline_parts.append({"inlineData": p["inlineData"]})
-            elif "inline_data" in p:
-                inline_parts.append({"inlineData": p["inline_data"]})
-        inline_contents.append({"role": c["role"], "parts": inline_parts})
-        
-    if system_instruction and inline_contents:
-        if inline_contents[0]["parts"] and "text" in inline_contents[0]["parts"][0]:
-            inline_contents[0]["parts"][0]["text"] = f"[{system_instruction.strip()}]\n\n" + inline_contents[0]["parts"][0]["text"]
-        
-    for model_name in ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-2.5-flash", "gemini-2.5-pro"]:
-        for api_ver in ["v1beta", "v1"]:
-            url = f"https://generativelanguage.googleapis.com/{api_ver}/models/{model_name}:generateContent?key={clean_key}"
-            payload = {"contents": inline_contents}
-            try:
-                res = requests.post(url, json=payload, headers=headers, timeout=25)
-                if res.status_code == 200:
-                    resp_json = res.json()
-                    candidates = resp_json.get('candidates', [])
-                    if candidates:
-                        parts = candidates[0].get('content', {}).get('parts', [])
-                        text_parts = [p.get('text', '') for p in parts if 'text' in p]
-                        text = "".join(text_parts).strip()
-                        if text:
-                            return text, "SUCCESS"
-            except Exception:
-                pass
-                
     return None, f"AI 생성 오류: {last_err}"
 
 def analyze_portfolio_image(image_bytes, api_key):
@@ -1712,10 +1652,7 @@ def generate_ai_briefing(news_headlines, portfolio_items, api_key):
     - 오늘 장을 주도할 핵심 테마 및 섹터(반도체, 자동차, 방산, 전력 인프라 등) 동향
 
     ## 3. 보유 포트폴리오 종목별 1:1 맞춤 영향 분석
-    - **SK하이닉스 & 반도체 ETF**: 엔비디아 및 글로벌 반도체 실적/수급과의 연동성, HBM 공급망 관점 상세 분석
-    - **현대차 & 완성차**: 글로벌 수출 실적 및 환율 효과, 밸류업 관점 분석
-    - **LS ELECTRIC & 한화에어로스페이스**: 북미 변압기 수주 잔고 및 K-방산 수주 모멘텀 분석
-    - **KODEX 200타겟위클리커버드콜 & PLUS 고배당주**: 배당/분배금 방어 전략 및 횡보장 대응력 점검
+    - 투자자가 보유한 종목들을 1:1로 직접 거론하며, 외인/기관 수급 및 오늘 장 대응 전략을 구체적으로 분석해주세요.
 
     ## 4. 금일 실전 매매 & 리스크 관리 전략
     - 단기 변동성에 대비한 구체적인 분할 매수/홀딩 관점의 체크포인트 3가지
@@ -1723,7 +1660,6 @@ def generate_ai_briefing(news_headlines, portfolio_items, api_key):
     문단 간 구분을 명확히 하고, 전문 용어에 대한 배경 설명을 충분히 곁들여 풍부한 분량으로 작성해주세요.
     """
     return call_gemini_api(prompt, api_key)
-
 
 def generate_team_briefing(team_name, sports_type, league, team_news, api_key):
     news_text = "\n".join([f"- {h['title']} ({h.get('source', '')})" for h in team_news[:10]]) if team_news else f"{team_name} 최신 경기 일정"
@@ -1747,8 +1683,6 @@ def generate_team_briefing(team_name, sports_type, league, team_news, api_key):
     """
     text, status = call_gemini_api(prompt, api_key)
     return text if status == "SUCCESS" else None
-
-
 
 def ask_gemini_chat(chat_history, user_msg, portfolio_items, api_key):
     stock_list_str = ", ".join([f"{item['종목명']} ({item['티커']})" for item in portfolio_items]) if portfolio_items else "SK하이닉스, 현대차, KODEX AI반도체, KODEX 커버드콜"
@@ -1865,7 +1799,7 @@ def render_daily_hub():
         monthly_div = summary['total_monthly_div_krw']
 
         with st.container(border=True):
-            st.markdown(f"**월 배당(분배금) 예상 수령액** : **{monthly_div:,.0f}원** (KODEX 커버드콜 863주 기준)")
+            st.markdown(f"**월 배당(분배금) 예상 수령액** : **{monthly_div:,.0f}원** (KODEX 커버드콜 기준)")
 
         col_tt_head, col_tt_btn = st.columns([0.7, 0.3])
         with col_tt_head:
@@ -1886,16 +1820,12 @@ def render_daily_hub():
             try:
                 ev_d = datetime.strptime(ev["date"], "%Y-%m-%d").date()
                 diff_d = (ev_d - today_d).days
-                
-                # 지나간 일정(과거)은 표시하지 않고 제외
                 if diff_d < 0:
                     continue
                 elif diff_d == 0:
                     d_tag = "오늘 (D-Day)"
                 else:
                     d_tag = f"D-{diff_d}"
-                    
-                # 연도 포함 서식 (예: 2026년 9월 17일(목))
                 d_label = f"{ev_d.year}년 {ev_d.month}월 {ev_d.day}일({weekdays_kr[ev_d.weekday()]})"
             except Exception:
                 continue
@@ -2031,6 +1961,7 @@ def render_daily_hub():
                     current_todos.append(new_todo.strip())
                     save_todos(current_todos)
                     st.rerun()
+
 # -------------------------------------------------------------
 # 2. [주식 & 금융 허브 모듈]
 # -------------------------------------------------------------
@@ -2126,6 +2057,49 @@ def render_stock_hub():
 
         render_live_portfolio_content()
 
+        # 🌟 [신규] 종목 직접 추가 및 삭제 기능 (Gist 영구 반영)
+        with st.expander("➕ 종목 직접 추가 / 🗑️ 보유 종목 삭제"):
+            tab_add, tab_del = st.tabs(["새 종목 추가", "종목 삭제"])
+            with tab_add:
+                with st.form("manual_add_stock_form", clear_on_submit=True):
+                    c_add1, c_add2 = st.columns(2)
+                    with c_add1:
+                        in_s_name = st.text_input("종목명", placeholder="예: 삼성전자")
+                        in_s_ticker = st.text_input("티커 (국내 6자리 또는 미국 티커)", placeholder="예: 005930 또는 AAPL")
+                    with c_add2:
+                        in_s_qty = st.number_input("보유 수량", min_value=1, value=10, step=1)
+                        in_s_price = st.number_input("매입 단가 (원 또는 달러)", min_value=0.0, value=70000.0, step=1000.0)
+                    
+                    if st.form_submit_button("포트폴리오에 추가 및 Gist 저장"):
+                        if in_s_name.strip() and in_s_ticker.strip():
+                            new_stock = {
+                                "종목명": in_s_name.strip(),
+                                "티커": in_s_ticker.strip(),
+                                "매입단가": float(in_s_price),
+                                "보유수량": int(in_s_qty),
+                                "현재가": float(in_s_price)
+                            }
+                            updated_p = [item for item in user_portfolio if item.get("티커") != in_s_ticker.strip()]
+                            updated_p.append(new_stock)
+                            save_portfolio(updated_p)
+                            st.success(f"'{in_s_name}' 종목이 포트폴리오에 저장되었습니다!")
+                            st.rerun()
+
+            with tab_del:
+                if user_portfolio:
+                    del_stock_idx = st.selectbox(
+                        "삭제할 종목 선택",
+                        range(len(user_portfolio)),
+                        format_func=lambda x: f"{user_portfolio[x].get('종목명')} ({user_portfolio[x].get('티커')})"
+                    )
+                    if st.button("선택한 종목 삭제", key="btn_del_stock_manual"):
+                        removed = user_portfolio.pop(del_stock_idx)
+                        save_portfolio(user_portfolio)
+                        st.success(f"'{removed.get('종목명')}' 종목이 삭제되었습니다.")
+                        st.rerun()
+                else:
+                    st.caption("등록된 종목이 없습니다.")
+
         col_p1, col_p2 = st.columns(2)
         with col_p1:
             with st.expander("💵 예수금(현금 잔고) 및 환율 설정"):
@@ -2206,7 +2180,7 @@ def render_stock_hub():
         today_prefix = datetime.now(KST).strftime('%Y-%m-%d')
         active_key = st.session_state.saved_gemini_key
         
-        # 🌟 [자동 생성] 오늘 브리핑이 없으면 접속 시 1회 자동 생성
+        # [자동 생성] 오늘 브리핑이 없으면 접속 시 1회 자동 생성
         if (not saved_b or not saved_t or not saved_t.startswith(today_prefix)) and active_key:
             with st.spinner("오늘자 모닝 증시 브리핑을 자동으로 생성하는 중입니다..."):
                 b_res, status = generate_ai_briefing(recent_news, user_portfolio, active_key)
@@ -2224,6 +2198,7 @@ def render_stock_hub():
                         b_res, status = generate_ai_briefing(recent_news, user_portfolio, active_key)
                         if status == "SUCCESS" and b_res:
                             save_briefing(b_res, datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S'))
+                            st.success("실시간 브리핑이 성공적으로 갱신되었습니다!")
                             st.rerun()
                         else:
                             st.error(f"브리핑 생성 오류: {status}")
@@ -2283,7 +2258,7 @@ def render_stock_hub():
             st.session_state.chat_messages.append({"role": "user", "content": u_text})
             active_key = st.session_state.saved_gemini_key
             if active_key:
-                with st.spinner("Gemini 3.x AI 분석 중..."):
+                with st.spinner("Gemini AI 분석 중..."):
                     reply = ask_gemini_chat(st.session_state.chat_messages, u_text, load_portfolio(), active_key)
                     st.session_state.chat_messages.append({"role": "assistant", "content": reply})
                     st.rerun()
@@ -2316,7 +2291,7 @@ def render_sports_hub():
     team_briefing_data = sports_briefings.get(team_key, {})
     last_updated = team_briefing_data.get("updated_at", "")
 
-    # 🌟 [자동 생성] 오늘 구단 브리핑이 없으면 탭 접속 시 1회 자동 생성
+    # [자동 생성] 오늘 구단 브리핑이 없으면 탭 접속 시 1회 자동 생성
     if (not team_briefing_data or not last_updated.startswith(today_prefix)) and active_key:
         with st.spinner(f"오늘자 {team_key} 구단 브리핑을 자동 생성하는 중입니다..."):
             b_txt = generate_team_briefing(current_team['팀명'], current_team['종목'], current_team['리그'], team_news, active_key)
