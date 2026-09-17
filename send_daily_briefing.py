@@ -75,7 +75,6 @@ def get_kakao_access_token():
         }
         res = requests.post(url, data=data, timeout=5).json()
         if "access_token" in res:
-            # 새 리프레시 토큰이 같이 오면 Gist에 업데이트
             if "refresh_token" in res:
                 save_gist_key("kakao_refresh_token", res["refresh_token"])
             return res["access_token"]
@@ -102,34 +101,25 @@ def get_kakao_access_token():
 # 5. TimeTree 웹 자동 수집 엔진
 def sync_timetree_events():
     if not TIMETREE_EMAIL or not TIMETREE_PASSWORD or not TIMETREE_CALENDAR_CODE:
-        return
+        return []
     try:
         import subprocess
         import sys
         import re
-        import os
 
-        # 환경 변수 설정
         env = os.environ.copy()
         env["TIMETREE_EMAIL"] = TIMETREE_EMAIL
         env["TIMETREE_PASSWORD"] = TIMETREE_PASSWORD
 
-        # timetree-exporter 실행하여 ics 파일 생성
         ics_path = "timetree.ics"
         cmd = [sys.executable, "-m", "timetree_exporter", "-c", TIMETREE_CALENDAR_CODE, "-o", ics_path]
         res = subprocess.run(cmd, env=env, capture_output=True, text=True)
-
-        if res.returncode != 0:
-            err = res.stderr or res.stdout
-            print(f"TimeTree 수집 건너뜀 (내부 오류): {err.strip()}")
-            return
 
         extracted = []
         if os.path.exists(ics_path):
             with open(ics_path, "r", encoding="utf-8", errors="ignore") as f:
                 content = f.read()
 
-            # ics 파일에서 일정 제목과 날짜 추출
             events = re.findall(r"BEGIN:VEVENT(.*?)END:VEVENT", content, re.DOTALL)
             for ev in events:
                 summary_match = re.search(r"^SUMMARY:(.*)$", ev, re.MULTILINE)
@@ -153,8 +143,10 @@ def sync_timetree_events():
             if extracted:
                 save_gist_key("timetree_events", extracted)
                 print(f"TimeTree 일정 {len(extracted)}건 수집 완료")
+                return extracted
     except Exception as e:
         print(f"TimeTree 수집 건너뜀 (오류 또는 라이브러리 부재): {e}")
+    return []
 
 # 6. 실시간 날씨 및 간밤 증시 데이터 수집
 def get_weather():
@@ -176,13 +168,11 @@ def get_weather():
 
 def get_market_summary():
     try:
-        # 네이버 금융 증시 지표
         url_sox = "https://m.stock.naver.com/front-api/marketIndex/prices?category=worldIndex&reutersCode=.SOX"
         res = requests.get(url_sox, headers={'User-Agent': 'Mozilla/5.0'}, timeout=4).json()
         sox_result = res.get("result", [])
         sox_ratio = float(sox_result[0].get("fluctuationsRatio", 0.0)) if sox_result else 1.5
         
-        # 엔비디아 시세
         url_nvda = "https://m.stock.naver.com/api/stock/NVDA.O/basic"
         res_n = requests.get(url_nvda, headers={'User-Agent': 'Mozilla/5.0'}, timeout=4).json()
         nvda_ratio = float(res_n.get("fluctuationsRatio", 2.0)) if res_n else 2.0
@@ -191,44 +181,91 @@ def get_market_summary():
     except Exception:
         return 1.2, 1.8
 
-# 7. 제미나이 1줄 시그널 생성 (30자 엄수)
-def generate_ai_signal(sox_pct, nvda_pct):
+# 7. 제미나이 고밀도 상세 브리핑 생성 (850~950자)
+def generate_detailed_briefing(weather_str, sox_pct, nvda_pct, today_events):
+    events_text = "\n".join([f"• {ev.get('title')}" for ev in today_events if ev.get("date") == today_str])
+    if not events_text:
+        events_text = "오늘 예정된 주요 외부 일정은 없습니다."
+
     if not GEMINI_API_KEY:
-        return "반도체 견조한 흐름 예상 ☀️"
-        prompt = f"""
+        return f"[MORI 데일리 브리핑] {today_str}({today_weekday})\n\n🌤️ 오늘 날씨: {weather_str}\n📅 오늘의 일정:\n{events_text}\n📈 반도체: SOX {sox_pct:+.2f}%, NVDA {nvda_pct:+.2f}%\n\n좋은 하루 보내세요!"
+
+    prompt = f"""
     당신은 직장인 투자자 이현재 님의 스마트 비서 AI 'MORI'입니다.
     오늘자 아침 카카오톡 브리핑을 공백 포함 **850자 ~ 950자 사이**로 풍부하고 상세하게 작성해주세요. (1,000자 초과 금지)
 
     [수집 데이터]
-    - 오늘 날씨: {weather_info}
-    - 오늘의 TimeTree 일정: {timetree_info}
+    - 오늘 날짜: {today_str} ({today_weekday}요일)
+    - 오늘 날씨: {weather_str}
+    - 오늘의 TimeTree 일정:
+    {events_text}
+    - 간밤 증시 지표: 필라델피아 반도체 지수 {sox_pct:+.2f}%, 엔비디아 {nvda_pct:+.2f}%
     - 보유 종목: SK하이닉스, 현대차, 이수페타시스, LS ELECTRIC, 한화에어로스페이스, KODEX 200타겟위클리커버드콜
-    - 관심 구단: 맨체스터 유나이티드
+    - 관심 구단: 맨체스터 유나이티드 (축구)
 
     [작성 항목]
-    1. 오늘 날씨 & 출근길 복장 조언 (상세히)
-    2. 오늘의 TimeTree 일정 체크
-    3. 글로벌 증시 마감 총평 및 보유 종목별(반도체 HBM, 완성차, 방산, 커버드콜 배당) 맞춤 분석
-    4. 맨체스터 유나이티드 다음 경기 일정(KST 시간) 및 최근 이슈
+    [MORI 모닝 인텔리전스] {today_str}({today_weekday})
+
+    🌤️ 오늘 날씨 & 출근길 가이드
+    (기온, 날씨 특성, 권장 옷차림 상세 조언)
+
+    📅 오늘의 TimeTree 일정
+    (제공된 일정 요약 또는 개인 루틴 점검)
+
+    📈 글로벌 증시 마감 & 보유 종목 핵심 분석
+    (뉴욕 증시 및 반도체 지수 마감 총평)
+    - SK하이닉스 & 반도체: AI HBM 수요 및 외인 수급 관점
+    - 현대차 & 방산/전력: 원/달러 환율과 수출 수주 모멘텀
+    - 커버드콜/고배당주: 배당 방어력 및 월 분배금 흐름
+
+    ⚽ 맨체스터 유나이티드 소식
+    (다음 경기 일정 KST 시간 표기 및 최근 구단 핵심 이슈 1~2줄)
+
+    💡 상세 포트폴리오 분석 리포트는 아래 앱에서 확인하실 수 있습니다.
     """
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
-    try:
-        res = requests.post(url, json={"contents": [{"parts": [{"text": prompt}]}]}, timeout=6).json()
-        txt = res['candidates'][0]['content']['parts'][0]['text'].strip()
-        return txt[:32]
-    except Exception:
-        return "반도체 맑음 ☀️ (하이닉스 긍정)"
+    for model_name in ["gemini-2.5-flash", "gemini-3.5-flash", "gemini-3.1-flash-lite"]:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={GEMINI_API_KEY}"
+        payload = {"contents": [{"role": "user", "parts": [{"text": prompt}]}]}
+        headers = {"Content-Type": "application/json"}
+        try:
+            res = requests.post(url, json=payload, headers=headers, timeout=25)
+            if res.status_code == 200:
+                candidates = res.json().get('candidates', [])
+                if candidates:
+                    txt = candidates[0]['content']['parts'][0]['text'].strip()
+                    # 1,000자 초과 방지 안전 슬라이싱
+                    if len(txt) > 950:
+                        txt = txt[:940] + "\n...(자세한 내용은 MORI 앱 참조)"
+                    return txt
+        except Exception:
+            pass
+
+    return f"[MORI 모닝 브리핑] {today_str}({today_weekday})\n\n🌤️ 오늘 날씨: {weather_str}\n📅 오늘의 일정:\n{events_text}"
 
 # 8. 최종 메시지 조립 및 카카오톡 전송
 def send_kakao_briefing():
-def send_kakao_briefing(final_text, access_token):
+    print("1. 카카오 액세스 토큰 준비 중 (Gist 자동 갱신)...")
+    access_token = get_kakao_access_token()
+    if not access_token:
+        print("❌ 카카오 발송 토큰을 얻지 못했습니다.")
+        return
+
+    print("2. 날씨, 증시 및 TimeTree 일정 수집 중...")
+    weather_info = get_weather()
+    sox_ratio, nvda_ratio = get_market_summary()
+    timetree_events = sync_timetree_events() or []
+
+    print("3. 제미나이 상세 브리핑 생성 중...")
+    briefing_text = generate_detailed_briefing(weather_info, sox_ratio, nvda_ratio, timetree_events)
+
+    print("4. 카카오톡 메시지 전송 실행...")
     send_url = "https://kapi.kakao.com/v2/api/talk/memo/default/send"
     headers = {"Authorization": f"Bearer {access_token}"}
     
     template = {
         "object_type": "text",
-        "text": final_text,
+        "text": briefing_text,
         "link": {
             "web_url": "https://hj-app.streamlit.app",
             "mobile_web_url": "https://hj-app.streamlit.app"
@@ -239,10 +276,8 @@ def send_kakao_briefing(final_text, access_token):
     res = requests.post(send_url, headers=headers, data={"template_object": json.dumps(template)}, timeout=10)
     if res.status_code == 200:
         print("✅ 카카오톡 발송 성공!")
-        return True
     else:
         print(f"❌ 카카오톡 발송 실패 ({res.status_code}): {res.text}")
-        return False
 
 if __name__ == "__main__":
     send_kakao_briefing()
