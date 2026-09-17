@@ -15,10 +15,7 @@ GIST_ID = os.environ.get("GIST_ID", "")
 GIST_TOKEN = os.environ.get("GIST_TOKEN", "")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 KAKAO_REST_KEY = os.environ.get("KAKAO_REST_KEY", "") or "98117624d9baa3910b9d03fb295cc27c"
-KAKAO_AUTH_CODE = (
-    os.environ.get("KAKAO_AUTH_CODE", "")
-    or "mitfc9wAAKfgQ8Hr7vsXy4x7sv3Raki62PsPvCmWsQf-KDJ16WIjFQAAAAQKFxItAAABoKzUOyZAPV-WDrAHcw"
-)
+KAKAO_AUTH_CODE = os.environ.get("KAKAO_AUTH_CODE", "") or "mitfc9wAAKfgQ8Hr7vsXy4x7sv3Raki62PsPvCmWsQf-KDJ16WIjFQAAAAQKFxItAAABoKzUOyZAPV-WDrAHcw"
 
 TIMETREE_EMAIL = os.environ.get("TIMETREE_EMAIL", "")
 TIMETREE_PASSWORD = os.environ.get("TIMETREE_PASSWORD", "")
@@ -63,43 +60,64 @@ def save_gist_key(key, val):
     except Exception as e:
         print(f"Gist 저장 실패: {e}")
 
-# 4. Gist에서 실제 등록된 포트폴리오 추출
+# 4. Gist 연동 계좌 및 포트폴리오 지능형 자동 추출 엔진
 def extract_portfolio_info(gist_data):
-    portfolio_raw = (
-        gist_data.get("portfolio")
-        or gist_data.get("stocks")
-        or gist_data.get("my_stocks")
-        or gist_data.get("holdings")
-        or []
-    )
-    if not portfolio_raw:
-        for k, v in gist_data.items():
-            if any(term in k.lower() for term in ["stock", "portfolio", "asset"]):
-                portfolio_raw = v
-                break
-
-    items = []
-    if isinstance(portfolio_raw, list):
-        for it in portfolio_raw:
-            if isinstance(it, dict):
-                name = it.get("name") or it.get("stock_name") or it.get("ticker")
-                qty = it.get("quantity") or it.get("shares") or it.get("count")
-                price = it.get("buy_price") or it.get("purchase_price") or it.get("avg_price")
-                detail = f"{name}"
-                extra = []
-                if qty: extra.append(f"{qty}주")
-                if price: extra.append(f"평단가 {price:,}원" if isinstance(price, (int, float)) else f"평단가 {price}")
-                if extra: detail += f" ({', '.join(extra)})"
-                if name: items.append(detail)
-            elif isinstance(it, str) and it.strip():
-                items.append(it.strip())
-    elif isinstance(portfolio_raw, dict):
-        for k, v in portfolio_raw.items():
-            items.append(f"{k}: {v}")
-
-    if items:
-        return "\n".join([f"• {p}" for p in items])
-    return "등록된 보유 종목 정보 없음 (대표 시장 지수 중심 브리핑)"
+    found_stocks = []
+    EXCLUDED_PARENT_KEYS = {'timetree_events', 'events', 'schedule', 'headers', 'files'}
+    
+    def search(obj, parent_key=''):
+        if parent_key in EXCLUDED_PARENT_KEYS:
+            return
+            
+        if isinstance(obj, dict):
+            # TimeTree 및 캘린더 일정 제외
+            if 'date' in obj and ('auto_stock' in obj or obj.get('type') == '가족 일정'):
+                return
+                
+            name = (obj.get('name') or obj.get('stock_name') or obj.get('종목명') or 
+                    obj.get('item_name') or obj.get('ticker') or obj.get('title'))
+            qty = (obj.get('quantity') or obj.get('shares') or obj.get('count') or 
+                   obj.get('holdings') or obj.get('수량') or obj.get('보유수량'))
+            price = (obj.get('buy_price') or obj.get('purchase_price') or obj.get('avg_price') or 
+                     obj.get('평균단가') or obj.get('매입가') or obj.get('price'))
+            
+            if name and isinstance(name, str) and len(name) < 30 and not name.startswith('http'):
+                if not any(stop in name.lower() for stop in ['timetree', 'token', 'mori', 'gist', 'briefing', '날씨']):
+                    # 자식 객체에 종목 리스트를 품고 있는 계좌 객체 자체는 종목으로 오인하지 않음
+                    has_nested = any(k in obj for k in ['stocks', 'holdings', 'items', 'positions', '종목', '종목들'])
+                    if not has_nested:
+                        detail = f"{name}"
+                        extra = []
+                        if qty is not None and str(qty) not in ('0', ''):
+                            extra.append(f"{qty}주" if str(qty).isdigit() else f"{qty}")
+                        if price is not None and str(price) not in ('0', ''):
+                            try:
+                                extra.append(f"평단가 {int(float(price)):,}원")
+                            except Exception:
+                                extra.append(f"평단가 {price}")
+                        if extra:
+                            detail += f" ({', '.join(extra)})"
+                        found_stocks.append(detail)
+            
+            for k, v in obj.items():
+                search(v, k)
+        elif isinstance(obj, list):
+            for item in obj:
+                search(item, parent_key)
+                
+    search(gist_data)
+    
+    # 중복 제거
+    seen = set()
+    unique = []
+    for s in found_stocks:
+        if s not in seen:
+            seen.add(s)
+            unique.append(s)
+            
+    if unique:
+        return "\n".join([f"• {p}" for p in unique])
+    return "등록된 보유 종목 정보 없음"
 
 # 5. 카카오 토큰 무한 자동 갱신 엔진
 def get_kakao_access_token():
@@ -222,7 +240,7 @@ def get_market_summary():
     except Exception:
         return 1.2, 1.8
 
-# 8. 제미나이 고밀도 상세 브리핑 생성 (850~950자) - 내 실제 포트폴리오 반영
+# 8. 제미나이 고밀도 상세 브리핑 생성 (850~950자) - 내 실제 연동 계좌 포트폴리오 반영
 def generate_detailed_briefing(weather_str, sox_pct, nvda_pct, today_events, portfolio_str):
     events_text = "\n".join([f"• {ev.get('title')}" for ev in today_events if ev.get("date") == today_str])
     if not events_text:
@@ -241,7 +259,7 @@ def generate_detailed_briefing(weather_str, sox_pct, nvda_pct, today_events, por
     - 오늘의 TimeTree 일정:
     {events_text}
     - 간밤 증시 지표: 필라델피아 반도체 지수 {sox_pct:+.2f}%, 엔비디아 {nvda_pct:+.2f}%
-    - 사용자의 실제 MORI 보유 포트폴리오 (Gist 연동):
+    - 사용자의 실제 MORI 연동 계좌 포트폴리오:
     {portfolio_str}
     - 관심 구단: 맨체스터 유나이티드 (축구)
 
@@ -256,7 +274,7 @@ def generate_detailed_briefing(weather_str, sox_pct, nvda_pct, today_events, por
 
     📈 글로벌 증시 마감 & 내 실제 보유 종목 분석
     (뉴욕 증시 및 반도체 지수 마감 총평)
-    - 사용자가 실제로 보유 중인 포트폴리오 종목들을 직접 호명하며, 각 종목의 업종 특성에 맞춘 간밤 외인/기관 수급 및 오늘 장 대응 전략을 구체적으로 분석해주세요.
+    - 위 '사용자의 실제 MORI 연동 계좌 포트폴리오'에 나열된 종목들을 직접 호명하며, 각 종목의 업종 특성(반도체, 전력/인프라, 방산, 배당/커버드콜 등)에 맞춘 간밤 외인/기관 수급 및 오늘 장 대응 전략을 구체적으로 분석해주세요.
 
     ⚽ 맨체스터 유나이티드 소식
     (다음 경기 일정 KST 시간 표기 및 최근 구단 핵심 이슈 1~2줄)
@@ -295,8 +313,9 @@ def send_kakao_briefing():
     sox_ratio, nvda_ratio = get_market_summary()
     timetree_events = sync_timetree_events() or []
 
-    # Gist에서 사용자 실제 포트폴리오 추출
+    # Gist에서 연동 계좌 실제 포트폴리오 지능형 추출
     gist_data = get_gist_data()
+    print(f"🔍 DEBUG Gist 저장 키 목록: {list(gist_data.keys())}")
     portfolio_str = extract_portfolio_info(gist_data)
     print(f"📊 수집된 실제 포트폴리오:\n{portfolio_str}")
 
