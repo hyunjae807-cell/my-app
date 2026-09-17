@@ -796,7 +796,21 @@ def sync_and_load_calendar_events(current_portfolio):
             t_year = today_dt.year + ((t_month - 1) // 12)
             t_month = ((t_month - 1) % 12) + 1
             max_day = calendar.monthrange(t_year, t_month)
-            actual_day = min(p_day, max_day)
+           # p_day를 안전하게 정수(int)로 변환
+try:
+    if isinstance(p_day, str):
+        # '25일' 같은 문자열 처리: 숫자만 추출 후 변환
+        clean_day = "".join(filter(str.isdigit, p_day))
+        p_day_int = int(clean_day) if clean_day else 1
+    elif p_day is None:
+        p_day_int = 1
+    else:
+        p_day_int = int(p_day)
+except (ValueError, TypeError):
+    p_day_int = 1
+
+# 1일부터 max_day 사이로 보정
+actual_day = max(1, min(p_day_int, max_day))
             ev_date = date(t_year, t_month, actual_day)
 
             if ev_date >= cur_d:
