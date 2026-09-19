@@ -32,7 +32,9 @@ jobs:
           KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
           KAKAO_REFRESH_TOKEN: ${{ secrets.KAKAO_REFRESH_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          TIMETREE_TOKEN: ${{ secrets.TIMETREE_TOKEN }}
+          TIMETREE_EMAIL: ${{ secrets.TIMETREE_EMAIL }} # ← 추가 확인
+          TIMETREE_PASSWORD: ${{ secrets.TIMETREE_PASSWORD }} # ← 추가 확인
+          TIMETREE_CALENDAR_CODE: ${{ secrets.TIMETREE_CALENDAR_CODE }}
           TIMETREE_CALENDAR_ID: ${{ secrets.TIMETREE_CALENDAR_ID }}
           GIST_ID: ${{ secrets.GIST_ID }}
           GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
