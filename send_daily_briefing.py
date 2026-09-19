@@ -168,54 +168,87 @@ def get_kakao_access_token():
     return None
 
 # 6. TimeTree 웹 자동 수집 엔진
+# 6. TimeTree 웹 자동 수집 엔진 (디버깅 강화 버전)
 def sync_timetree_events():
-    if not TIMETREE_EMAIL or not TIMETREE_PASSWORD or not TIMETREE_CALENDAR_CODE:
-        return []
-    try:
-        import subprocess
-        import sys
-        import re
-
-        env = os.environ.copy()
-        env["TIMETREE_EMAIL"] = TIMETREE_EMAIL
-        env["TIMETREE_PASSWORD"] = TIMETREE_PASSWORD
-
-        ics_path = "timetree.ics"
-        cmd = [sys.executable, "-m", "timetree_exporter", "-c", TIMETREE_CALENDAR_CODE, "-o", ics_path]
-        res = subprocess.run(cmd, env=env, capture_output=True, text=True)
-
-        extracted = []
-        if os.path.exists(ics_path):
-            with open(ics_path, "r", encoding="utf-8", errors="ignore") as f:
-                content = f.read()
-
-            events = re.findall(r"BEGIN:VEVENT(.*?)END:VEVENT", content, re.DOTALL)
-            for ev in events:
-                summary_match = re.search(r"^SUMMARY:(.*)$", ev, re.MULTILINE)
-                title = summary_match.group(1).strip() if summary_match else ""
-
-                dt_match = re.search(r"^DTSTART.*?:(\d{4})(\d{2})(\d{2})", ev, re.MULTILINE)
-                if dt_match:
-                    start_at = f"{dt_match.group(1)}-{dt_match.group(2)}-{dt_match.group(3)}"
-                else:
-                    start_at = ""
-
-                if start_at and title:
-                    extracted.append({
-                        "id": f"tt_{start_at}_{title}",
-                        "date": start_at,
-                        "type": "가족 일정",
-                        "title": title,
-                        "auto_stock": "-"
-                    })
-
-            if extracted:
-                save_gist_key("timetree_events", extracted)
-                print(f"TimeTree 일정 {len(extracted)}건 수집 완료")
-                return extracted
-    except Exception as e:
-        print(f"TimeTree 수집 건너뜀 (오류 또는 라이브러리 부재): {e}")
+  # 1. 환경변수 전달 여부 확인 및 로깅
+  if not TIMETREE_EMAIL or not TIMETREE_PASSWORD or not TIMETREE_CALENDAR_CODE:
+    print(
+        f"⚠️ TimeTree 환경변수 누락: EMAIL={'있음' if TIMETREE_EMAIL else '없음'}, PWD={'있음' if TIMETREE_PASSWORD else '없음'}, CODE={'있음' if TIMETREE_CALENDAR_CODE else '없음'}"
+    )
     return []
+
+  try:
+    import re
+    import subprocess
+    import sys
+
+    env = os.environ.copy()
+    env["TIMETREE_EMAIL"] = TIMETREE_EMAIL
+    env["TIMETREE_PASSWORD"] = TIMETREE_PASSWORD
+
+    ics_path = "timetree.ics"
+    cmd = [
+        sys.executable,
+        "-m",
+        "timetree_exporter",
+        "-c",
+        TIMETREE_CALENDAR_CODE,
+        "-o",
+        ics_path,
+    ]
+    res = subprocess.run(cmd, env=env, capture_output=True, text=True)
+
+    # 2. timetree-exporter 실행 실패 시 에러 내용 출력
+    if res.returncode != 0:
+      print(
+          f"⚠️ TimeTree Exporter 실행 실패 (반환코드 {res.returncode}):"
+          f" {res.stderr.strip()}"
+      )
+      return []
+
+    extracted = []
+    if os.path.exists(ics_path):
+      with open(ics_path, "r", encoding="utf-8", errors="ignore") as f:
+        content = f.read()
+
+      events = re.findall(r"BEGIN:VEVENT(.*?)END:VEVENT", content, re.DOTALL)
+      for ev in events:
+        summary_match = re.search(r"^SUMMARY:(.*)$", ev, re.MULTILINE)
+        title = summary_match.group(1).strip() if summary_match else ""
+
+        dt_match = re.search(
+            r"^DTSTART.*?:(\d{4})(\d{2})(\d{2})", ev, re.MULTILINE
+        )
+        if dt_match:
+          start_at = (
+              f"{dt_match.group(1)}-{dt_match.group(2)}-{dt_match.group(3)}"
+          )
+        else:
+          start_at = ""
+
+        if start_at and title:
+          extracted.append({
+              "id": f"tt_{start_at}_{title}",
+              "date": start_at,
+              "type": "가족 일정",
+              "title": title,
+              "auto_stock": "-",
+          })
+
+      if extracted:
+        save_gist_key("timetree_events", extracted)
+        print(f"✅ TimeTree 일정 {len(extracted)}건 수집 완료")
+        return extracted
+      else:
+        print(
+            "ℹ️ TimeTree ics 파일은 생성되었으나 예정된 일정이 없습니다."
+        )
+    else:
+      print(f"⚠️ TimeTree ics 파일 생성 실패: {res.stderr.strip()}")
+  except Exception as e:
+    print(f"⚠️ TimeTree 수집 오류 발생: {e}")
+
+  return []
 
 # 7. 실시간 날씨 및 간밤 증시 데이터 수집
 def get_weather():
