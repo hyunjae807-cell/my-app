@@ -23,17 +23,17 @@ jobs:
       - name: 필수 라이브러리 설치
         run: |
           python -m pip install --upgrade pip
-          pip install requests
+          pip install requests timetree-exporter
 
       - name: 카카오톡 브리핑 생성 및 발송
         env:
-          # 🌟 Secrets에 어떤 이름으로 등록되어 있어도 둘 다 매핑되도록 처리
-          KAKAO_CLIENT_ID: ${{ secrets.KAKAO_CLIENT_ID || secrets.KAKAO_REST_API_KEY }}
+          # 🌟 Secrets에 등록된 이름(KAKAO_REST_KEY 포함) 호환 매핑
+          KAKAO_CLIENT_ID: ${{ secrets.KAKAO_CLIENT_ID || secrets.KAKAO_REST_API_KEY || secrets.KAKAO_REST_KEY }}
           KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
           KAKAO_REFRESH_TOKEN: ${{ secrets.KAKAO_REFRESH_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          TIMETREE_EMAIL: ${{ secrets.TIMETREE_EMAIL }} # ← 추가 확인
-          TIMETREE_PASSWORD: ${{ secrets.TIMETREE_PASSWORD }} # ← 추가 확인
+          TIMETREE_EMAIL: ${{ secrets.TIMETREE_EMAIL }}
+          TIMETREE_PASSWORD: ${{ secrets.TIMETREE_PASSWORD }}
           TIMETREE_CALENDAR_CODE: ${{ secrets.TIMETREE_CALENDAR_CODE }}
           TIMETREE_CALENDAR_ID: ${{ secrets.TIMETREE_CALENDAR_ID }}
           GIST_ID: ${{ secrets.GIST_ID }}
