@@ -1227,80 +1227,135 @@ def save_blog_posts(posts):
     except Exception as e: pass
 
 # =============================================================
-# 10. 실시간 시세 연동 엔진
+# 10. 실시간 시세 연동 엔진 (강화 버전)
 # =============================================================
 
-@st.cache_data(ttl=2)
+@st.cache_data(ttl=10)  # 과도한 반복 호출 방지를 위해 TTL을 10초로 안정화
 def get_live_market_data(ticker_symbol, fallback_price=None):
-    clean_code = str(ticker_symbol).replace(".KS", "").replace(".KQ", "").strip()
+  if not ticker_symbol:
+    return float(fallback_price) if is_valid_price(fallback_price) else None, 0.0
 
-    # 1. 환율
-    if clean_code in ("USDKRW=X", "KRW=X", "USD/KRW", "FX_USDKRW"):
-        try:
-            url_fx = "https://m.stock.naver.com/front-api/marketIndex/prices?category=exchange&reutersCode=FX_USDKRW"
-            req_fx = urllib.request.Request(url_fx, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req_fx, timeout=2.0) as resp:
-                fx_json = json.loads(resp.read().decode('utf-8'))
-                fx_result = fx_json.get("result", [])
-                if fx_result:
-                    cur_fx = float(str(fx_result[0].get("closePrice", "1380")).replace(",", ""))
-                    delta_fx = float(str(fx_result[0].get("fluctuationsRatio", "0.0")).replace(",", ""))
-                    if is_valid_price(cur_fx):
-                        return cur_fx, delta_fx
-        except Exception:
-            pass
+  t_str = str(ticker_symbol).strip()
+  clean_code = (
+      t_str.replace(".KS", "")
+      .replace(".KQ", "")
+      .replace(".O", "")
+      .replace(".K", "")
+      .strip()
+  )
 
-    # 2. 국내 주식 및 ETF (6자리 숫자)
-    if clean_code.isdigit() and len(clean_code) == 6:
-        try:
-            url = f"https://m.stock.naver.com/api/stock/{clean_code}/basic"
-            req = urllib.request.Request(url, headers={
-                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15',
-                'Referer': f'https://m.stock.naver.com/domestic/stock/{clean_code}/total'
-            })
-            with urllib.request.urlopen(req, timeout=2.0) as resp:
-                data = json.loads(resp.read().decode('utf-8'))
-                raw_price = data.get("nowPrice") or data.get("closePrice")
-                if raw_price:
-                    cur_p = float(str(raw_price).replace(",", "").strip())
-                    raw_pct = data.get("fluctuationsRatio")
-                    delta_pct = float(raw_pct) if raw_pct is not None else 0.0
-                    if is_valid_price(cur_p):
-                        return cur_p, delta_pct
-        except Exception:
-            pass
-
-    # 3. 미국 지수 및 해외 주식 (yfinance)
+  # 1. 원/달러 환율
+  if clean_code.upper() in ("USDKRW=X", "KRW=X", "USD/KRW", "FX_USDKRW"):
     try:
-        yf_symbol = ticker_symbol
-        if clean_code.isdigit() and len(clean_code) == 6 and not (yf_symbol.endswith(".KS") or yf_symbol.endswith(".KQ")):
-            yf_symbol = f"{clean_code}.KS"
-        t = yf.Ticker(yf_symbol)
-        hist = t.history(period="5d")
-        if not hist.empty and 'Close' in hist:
-            valid_closes = hist['Close'].dropna()
-            if len(valid_closes) >= 2:
-                current = float(valid_closes.iloc[-1])
-                prev = float(valid_closes.iloc[-2])
-                if is_valid_price(current) and is_valid_price(prev) and prev > 0:
-                    delta_pct = ((current - prev) / prev) * 100
-                    return current, delta_pct
-            elif len(valid_closes) == 1:
-                current = float(valid_closes.iloc[-1])
-                if is_valid_price(current):
-                    return current, 0.0
+      url_fx = (
+          "https://m.stock.naver.com/front-api/marketIndex/prices?category=exchange&reutersCode=FX_USDKRW"
+      )
+      req_fx = urllib.request.Request(
+          url_fx, headers={"User-Agent": "Mozilla/5.0"}
+      )
+      with urllib.request.urlopen(req_fx, timeout=4.0) as resp:
+        fx_json = json.loads(resp.read().decode("utf-8"))
+        fx_result = fx_json.get("result", [])
+        if fx_result:
+          cur_fx = float(
+              str(fx_result[0].get("closePrice", "1380")).replace(",", "")
+          )
+          delta_fx = float(
+              str(fx_result[0].get("fluctuationsRatio", "0.0")).replace(",", "")
+          )
+          if is_valid_price(cur_fx):
+            return cur_fx, delta_fx
     except Exception:
-        pass
+      pass
 
-    if clean_code in US_MARKET_FALLBACKS:
-        return US_MARKET_FALLBACKS[clean_code]
-    elif ticker_symbol in US_MARKET_FALLBACKS:
-        return US_MARKET_FALLBACKS[ticker_symbol]
+  # 2. 국내 주식 및 ETF (숫자 티커 - 6자리 자동 zfill 보정)
+  if clean_code.isdigit():
+    code_6 = clean_code.zfill(6)  # 660 -> 000660 자동 보정
+    try:
+      url = f"https://m.stock.naver.com/api/stock/{code_6}/basic"
+      req = urllib.request.Request(
+          url,
+          headers={
+              "User-Agent": (
+                  "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X)"
+                  " AppleWebKit/605.1.15"
+              ),
+              "Referer": (
+                  f"https://m.stock.naver.com/domestic/stock/{code_6}/total"
+              ),
+          },
+      )
+      with urllib.request.urlopen(req, timeout=4.0) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+        # nowPrice -> closePrice 순차 탐색
+        raw_price = (
+            data.get("nowPrice")
+            or data.get("closePrice")
+            or data.get("stockItem", {}).get("nowPrice")
+        )
+        if raw_price:
+          cur_p = float(str(raw_price).replace(",", "").strip())
+          raw_pct = data.get("fluctuationsRatio") or data.get(
+              "stockItem", {}
+          ).get("fluctuationsRatio")
+          delta_pct = float(raw_pct) if raw_pct is not None else 0.0
+          if is_valid_price(cur_p):
+            return cur_p, delta_pct
+    except Exception:
+      pass
 
-    if is_valid_price(fallback_price):
-        return float(fallback_price), 0.0
+  # 3. 미국 주식 및 지수 (네이버 해외주식 API 우선 조회로 야후 차단 회피)
+  if clean_code.isalpha() and len(clean_code) <= 5:
+    for suffix in [".O", ".K", ""]:  # 나스닥(.O), 뉴욕(.K)
+      try:
+        url_us = (
+            f"https://api.stock.naver.com/stock/{clean_code.upper()}{suffix}/basic"
+        )
+        req_us = urllib.request.Request(
+            url_us, headers={"User-Agent": "Mozilla/5.0"}
+        )
+        with urllib.request.urlopen(req_us, timeout=3.0) as resp:
+          data_us = json.loads(resp.read().decode("utf-8"))
+          raw_p = data_us.get("nowPrice") or data_us.get("closePrice")
+          if raw_p:
+            cur_p = float(str(raw_p).replace(",", "").strip())
+            delta_pct = float(data_us.get("fluctuationsRatio", 0.0))
+            if is_valid_price(cur_p):
+              return cur_p, delta_pct
+      except Exception:
+        continue
 
-    return None, None
+  # 4. yfinance 백업 (최종 보루)
+  try:
+    yf_symbol = t_str
+    if clean_code.isdigit():
+      code_6 = clean_code.zfill(6)
+      yf_symbol = f"{code_6}.KQ" if t_str.endswith(".KQ") else f"{code_6}.KS"
+
+    t = yf.Ticker(yf_symbol)
+    hist = t.history(period="3d")
+    if not hist.empty and "Close" in hist:
+      valid_closes = hist["Close"].dropna()
+      if len(valid_closes) >= 2:
+        current = float(valid_closes.iloc[-1])
+        prev = float(valid_closes.iloc[-2])
+        if is_valid_price(current) and is_valid_price(prev) and prev > 0:
+          return current, ((current - prev) / prev) * 100
+      elif len(valid_closes) == 1:
+        current = float(valid_closes.iloc[-1])
+        if is_valid_price(current):
+          return current, 0.0
+  except Exception:
+    pass
+
+  # 5. 미국 하드코딩 대체치
+  if clean_code.upper() in US_MARKET_FALLBACKS:
+    return US_MARKET_FALLBACKS[clean_code.upper()]
+
+  if is_valid_price(fallback_price):
+    return float(fallback_price), 0.0
+
+  return None, None
 
 def get_batch_market_data(portfolio_items):
     results = {}
