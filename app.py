@@ -1230,7 +1230,7 @@ def save_blog_posts(posts):
 # 10. 실시간 시세 연동 엔진 (강화 버전)
 # =============================================================
 
-@st.cache_data(ttl=10)  # 과도한 반복 호출 방지를 위해 TTL을 10초로 안정화
+@st.cache_data(ttl=10)
 def get_live_market_data(ticker_symbol, fallback_price=None):
   if not ticker_symbol:
     return float(fallback_price) if is_valid_price(fallback_price) else None, 0.0
@@ -1244,12 +1244,10 @@ def get_live_market_data(ticker_symbol, fallback_price=None):
       .strip()
   )
 
-  # 1. 원/달러 환율
+  # 1. 환율
   if clean_code.upper() in ("USDKRW=X", "KRW=X", "USD/KRW", "FX_USDKRW"):
     try:
-      url_fx = (
-          "https://m.stock.naver.com/front-api/marketIndex/prices?category=exchange&reutersCode=FX_USDKRW"
-      )
+      url_fx = "https://m.stock.naver.com/front-api/marketIndex/prices?category=exchange&reutersCode=FX_USDKRW"
       req_fx = urllib.request.Request(
           url_fx, headers={"User-Agent": "Mozilla/5.0"}
       )
@@ -1268,34 +1266,31 @@ def get_live_market_data(ticker_symbol, fallback_price=None):
     except Exception:
       pass
 
-  # 2. 국내 주식 및 ETF (숫자 티커 - 6자리 자동 zfill 보정)
+  # 2. 국내 주식 및 ETF (네이버 basic + integration 이중 파싱)
   if clean_code.isdigit():
-    code_6 = clean_code.zfill(6)  # 660 -> 000660 자동 보정
+    code_6 = clean_code.zfill(6)
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X)"
+            " AppleWebKit/605.1.15"
+        ),
+        "Referer": f"https://m.stock.naver.com/domestic/stock/{code_6}/total",
+    }
+
+    # 1차: basic API
     try:
-      url = f"https://m.stock.naver.com/api/stock/{code_6}/basic"
-      req = urllib.request.Request(
-          url,
-          headers={
-              "User-Agent": (
-                  "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X)"
-                  " AppleWebKit/605.1.15"
-              ),
-              "Referer": (
-                  f"https://m.stock.naver.com/domestic/stock/{code_6}/total"
-              ),
-          },
-      )
-      with urllib.request.urlopen(req, timeout=4.0) as resp:
-        data = json.loads(resp.read().decode("utf-8"))
-        # nowPrice -> closePrice 순차 탐색
-        raw_price = (
-            data.get("nowPrice")
-            or data.get("closePrice")
-            or data.get("stockItem", {}).get("nowPrice")
+      url_basic = f"https://m.stock.naver.com/api/stock/{code_6}/basic"
+      req_b = urllib.request.Request(url_basic, headers=headers)
+      with urllib.request.urlopen(req_b, timeout=3.5) as resp:
+        data_b = json.loads(resp.read().decode("utf-8"))
+        raw_p = (
+            data_b.get("nowPrice")
+            or data_b.get("closePrice")
+            or data_b.get("stockItem", {}).get("nowPrice")
         )
-        if raw_price:
-          cur_p = float(str(raw_price).replace(",", "").strip())
-          raw_pct = data.get("fluctuationsRatio") or data.get(
+        if raw_p:
+          cur_p = float(str(raw_p).replace(",", "").strip())
+          raw_pct = data_b.get("fluctuationsRatio") or data_b.get(
               "stockItem", {}
           ).get("fluctuationsRatio")
           delta_pct = float(raw_pct) if raw_pct is not None else 0.0
@@ -1304,13 +1299,29 @@ def get_live_market_data(ticker_symbol, fallback_price=None):
     except Exception:
       pass
 
-  # 3. 미국 주식 및 지수 (네이버 해외주식 API 우선 조회로 야후 차단 회피)
+    # 2차: integration API (ETF 장외 종가 및 거래원 정보 보강)
+    try:
+      url_integ = f"https://m.stock.naver.com/api/stock/{code_6}/integration"
+      req_i = urllib.request.Request(url_integ, headers=headers)
+      with urllib.request.urlopen(req_i, timeout=3.5) as resp:
+        data_i = json.loads(resp.read().decode("utf-8"))
+        deal_info = data_i.get("dealTrendInfos", [])
+        if deal_info:
+          raw_p = deal_info[0].get("closePrice")
+          if raw_p:
+            cur_p = float(str(raw_p).replace(",", "").strip())
+            raw_pct = deal_info[0].get("fluctuationsRatio")
+            delta_pct = float(raw_pct) if raw_pct is not None else 0.0
+            if is_valid_price(cur_p):
+              return cur_p, delta_pct
+    except Exception:
+      pass
+
+  # 3. 미국 주식 및 지수
   if clean_code.isalpha() and len(clean_code) <= 5:
-    for suffix in [".O", ".K", ""]:  # 나스닥(.O), 뉴욕(.K)
+    for suffix in [".O", ".K", ""]:
       try:
-        url_us = (
-            f"https://api.stock.naver.com/stock/{clean_code.upper()}{suffix}/basic"
-        )
+        url_us = f"https://api.stock.naver.com/stock/{clean_code.upper()}{suffix}/basic"
         req_us = urllib.request.Request(
             url_us, headers={"User-Agent": "Mozilla/5.0"}
         )
@@ -1325,13 +1336,12 @@ def get_live_market_data(ticker_symbol, fallback_price=None):
       except Exception:
         continue
 
-  # 4. yfinance 백업 (최종 보루)
+  # 4. yfinance 백업
   try:
     yf_symbol = t_str
     if clean_code.isdigit():
       code_6 = clean_code.zfill(6)
       yf_symbol = f"{code_6}.KQ" if t_str.endswith(".KQ") else f"{code_6}.KS"
-
     t = yf.Ticker(yf_symbol)
     hist = t.history(period="3d")
     if not hist.empty and "Close" in hist:
@@ -1348,7 +1358,6 @@ def get_live_market_data(ticker_symbol, fallback_price=None):
   except Exception:
     pass
 
-  # 5. 미국 하드코딩 대체치
   if clean_code.upper() in US_MARKET_FALLBACKS:
     return US_MARKET_FALLBACKS[clean_code.upper()]
 
@@ -1675,25 +1684,54 @@ def call_gemini_api(prompt_text, api_key, system_instruction=None, image_bytes=N
             
     return None, f"AI 생성 오류: {last_err}"
 
+# =============================================================
+# 국내 주요 ETF 공식 티커 매핑 맵 (AI 티커 오추출 방지)
+# =============================================================
+ETF_TICKER_MAP = {
+    "TIGER 배당커버드콜액티브": "472150",
+    "TIGER 미국테크TOP10타겟커버드콜": "474220",
+    "TIGER 미국테크TOP10+10%프리미엄": "474220",
+    "KODEX 200타겟위클리커버드콜": "498400",
+    "PLUS 고배당주": "161510",
+    "KODEX AI반도체TOP2플러스": "395160",
+    "KODEX SK하이닉스단일종목레버리지": "448290",
+    "SOL 미국배당다우존스": "446720",
+    "TIGER 미국배당다우존스타겟커버드콜1호": "458750",
+    "TIGER 미국배당다우존스타겟커버드콜2호": "458760",
+    "TIGER 미국나스닥100타겟데일리커버드콜": "486290",
+    "TIGER 미국S&P500타겟데일리커버드콜": "482730",
+}
+
+
 def analyze_portfolio_image(image_bytes, api_key):
-    prompt = """
+  prompt = """
     이 이미지는 키움증권/영웅문S# 등의 증권사 주식 잔고 화면입니다.
     종목명, 한국거래소 6자리 티커, 매입단가(숫자), 보유수량(정수), 현재가(숫자)를 정확히 추출해주세요.
     반드시 순수 JSON 배열 형식으로만 응답해주세요:
     [
         {"종목명": "SK하이닉스", "티커": "000660", "매입단가": 821714.0, "보유수량": 5, "현재가": 1667000.0},
-        {"종목명": "현대차", "티커": "005380", "매입단가": 610000.0, "보유수량": 6, "현재가": 459500.0}
+        {"종목명": "TIGER 배당커버드콜액티브", "티커": "472150", "매입단가": 20000.0, "보유수량": 100, "현재가": 20500.0}
     ]
     """
-    raw_text, status = call_gemini_api(prompt, api_key, image_bytes=image_bytes)
-    if status == "SUCCESS" and raw_text:
-        try:
-            clean_json = raw_text.replace("```json", "").replace("```", "").strip()
-            return json.loads(clean_json), "SUCCESS"
-        except Exception as e:
-            return None, f"JSON 파싱 실패: {e}"
-    return None, raw_text if raw_text else status
+  raw_text, status = call_gemini_api(prompt, api_key, image_bytes=image_bytes)
+  if status == "SUCCESS" and raw_text:
+    try:
+      clean_json = raw_text.replace("```json", "").replace("```", "").strip()
+      parsed_list = json.loads(clean_json)
 
+      # 🌟 종목명 기반으로 공식 티커 강제 매핑 및 앞자리 0 보정
+      if isinstance(parsed_list, list):
+        for item in parsed_list:
+          name = item.get("종목명", "").strip()
+          if name in ETF_TICKER_MAP:
+            item["티커"] = ETF_TICKER_MAP[name]
+          elif str(item.get("티커", "")).isdigit():
+            item["티커"] = str(item["티커"]).strip().zfill(6)
+
+      return parsed_list, "SUCCESS"
+    except Exception as e:
+      return None, f"JSON 파싱 실패: {e}"
+  return None, raw_text if raw_text else status
 def generate_ai_briefing(news_headlines, portfolio_items, api_key):
     stock_list_str = ", ".join([f"{item['종목명']} ({item['티커']})" for item in portfolio_items]) if portfolio_items else "SK하이닉스, 현대차, KODEX AI반도체, KODEX 커버드콜"
     news_text = "\n".join([f"- {h['title']} ({h.get('source', '')})" for h in news_headlines[:15]]) if news_headlines else "국내외 주요 증시 시황 및 반도체 뉴스"
